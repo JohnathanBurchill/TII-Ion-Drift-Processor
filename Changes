@@ -1,0 +1,7 @@
+0302:
+	Fixed attributes for latitude and longituge, which were swapped.
+	Restored data from occasional gaps.
+0303:
+	New calibration results incorporated from Summer 2021 testing.
+	Fix for CDF file zipping not to include file path.
+	Fix for CDF file attribute.		
