@@ -142,11 +142,11 @@ int main(int argc, char* argv[])
     }
     if (analysisType == CALIBRATION_ANALYSIS_TIMEGAP)
     {
-        fprintf(stdout, "Time gap analysis: \n  Number of files: %d\n  Number of points: %d\n  Number of gaps: %d (%.3f%%)\n", nFiles, totalCounts, gapCounts, (float)gapCounts / (float)totalCounts * 100.0);
+        fprintf(stdout, "Time gap analysis: \n  Number of files: %ld\n  Number of points: %ld\n  Number of gaps: %ld (%.3f%%)\n", nFiles, totalCounts, gapCounts, (float)gapCounts / (float)totalCounts * 100.0);
     }
     if (analysisType == CALIBRATION_ANALYSIS_TIMEGAPSUMMARY)
     {
-        fprintf(stdout, "Time gap summary: \n  Number of files: %d\n  Number of points: %d\n  Number of gaps > 0.5 s: %d (%.3f%%)\n  Number of gaps > 5.0 s: %d\n", nFiles, totalCounts, gapCounts, (float)gapCounts / (float)totalCounts * 100.0, largeGapCounts);
+        fprintf(stdout, "Time gap summary: \n  Number of files: %ld\n  Number of points: %ld\n  Number of gaps > 0.5 s: %ld (%.3f%%)\n  Number of gaps > 5.0 s: %ld\n", nFiles, totalCounts, gapCounts, (float)gapCounts / (float)totalCounts * 100.0, largeGapCounts);
     }
     closedir(dir);
 
