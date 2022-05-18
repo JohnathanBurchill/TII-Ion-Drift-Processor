@@ -1,4 +1,3 @@
-
 /*
 
     TII Cross-Track Ion Drift Processor: CrossTrackCalibration.c

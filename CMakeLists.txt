@@ -20,8 +20,6 @@ PROJECT(TCT)
 
 CMAKE_MINIMUM_REQUIRED(VERSION 3.3)
 
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/CMake")
-
 ADD_DEFINITIONS(-DHAVE_GETOPT_H)
 
 if(CMAKE_BUILD_TYPE STREQUAL Debug)
@@ -58,5 +56,4 @@ install(TARGETS CrossTrackCalibration DESTINATION $ENV{HOME}/bin)
 install(TARGETS CrossTrackValidation DESTINATION $ENV{HOME}/bin)
 install(TARGETS CrossTrackQualityFlagDetermination DESTINATION $ENV{HOME}/bin)
 
-install(PROGRAMS process_TCT.sh parallel_process_TCT.sh compress_TCT.sh parallel_compress_TCT.sh cdf_files_to_compress.sh DESTINATION $ENV{HOME}/bin)
 

@@ -1,0 +1,36 @@
+This software is licensed under the GNU GENERAL PUBLIC LICENSE Version 3. Read the file COPYING for details.
+
+The TII Cross-Track Ion Drift software links to the NASA CDF C library. Its source code is available online through a search engine (or directly from https://cdf.gsfc.nasa.gov). That library comes with the following Copyright notice:
+
+"Space Physics Data Facility
+NASA/Goddard Space Flight Center
+This software may be copied or redistributed as long as it is not sold for profit, but it can be incorporated into any other substantive product with or without modifications for profit or non-profit. If the software is modified, it must include the following notices:
+
+The software is not the original (for protection of the original author's reputations from any problems introduced by others)
+Change history (e.g. date, functionality, etc.)
+
+This copyright notice must be reproduced on each copy made. This software is provided as is without any express or implied warranties whatsoever."
+
+
+The TII Cross-Track Ion Drift software links to the GNU Scientific Library (GSL). Its source code is available online through a search engine (or directly from https://www.gnu.org/software/gsl/). GSL comes with the following licensing notice:
+
+"GSL is distributed under the terms of the GNU General Public License (GPL).
+
+The reasons why the GNU Project uses the GPL are described in the following articles:
+
+Copyleft: Pragmatic Idealism by Richard Stallman
+Why you should not use the Lesser GPL for your next library by Richard Stallman
+Additional information for researchers is available in the following article:
+
+Releasing Free Software if you work at a University by Richard Stallman
+Some answers to common questions about the license:
+
+If I write an application which uses GSL, am I forced to distribute that application?
+No. The license gives you the option to distribute your application if you want to. You do not have to exercise this option in the license.
+
+If I wanted to distribute an application which uses GSL, what license would I need to use?
+The GNU General Public License (GPL).
+
+The bottom line for commercial users:
+
+GSL can be used internally ("in-house") without restriction, but only redistributed in other software that is under the GNU GPL."
