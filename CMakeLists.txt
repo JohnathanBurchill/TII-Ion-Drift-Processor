@@ -1,6 +1,22 @@
-# CMakeLists.txt file for processor
+# TII Cross-Track Ion Drift Processor: CMakeLists.txt
 
-PROJECT(CrossTrackCalibration)
+# Copyright (C) 2022  Johnathan K Burchill
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+
+PROJECT(TCT)
 
 CMAKE_MINIMUM_REQUIRED(VERSION 3.3)
 
@@ -24,35 +40,23 @@ FIND_LIBRARY(MATH m)
 SET(LIBS ${LIBS} ${MATH} ${GSL_LIBRARY} )
 
 
-INCLUDE_DIRECTORIES(${INCLUDE_DIRS} ${GSL_INCLUDE_DIRS} /sw/include/gsl)
+INCLUDE_DIRECTORIES(${INCLUDE_DIRS} ${GSL_INCLUDE_DIRS})
 
 ADD_EXECUTABLE(CrossTrackCalibration CrossTrackCalibration.c utilities.c)
-TARGET_INCLUDE_DIRECTORIES(CrossTrackCalibration PRIVATE /Applications/cdf/cdf/include)
-TARGET_LINK_LIBRARIES(CrossTrackCalibration ${LIBS})
+TARGET_INCLUDE_DIRECTORIES(CrossTrackCalibration PRIVATE)
+TARGET_LINK_LIBRARIES(CrossTrackCalibration ${LIBS} -lgslcblas -lcdf)
 
 ADD_EXECUTABLE(CrossTrackValidation CrossTrackValidation.c utilities.c)
-TARGET_INCLUDE_DIRECTORIES(CrossTrackValidation PRIVATE /Applications/cdf/cdf/include)
-TARGET_LINK_LIBRARIES(CrossTrackValidation ${LIBS})
+TARGET_INCLUDE_DIRECTORIES(CrossTrackValidation PRIVATE)
+TARGET_LINK_LIBRARIES(CrossTrackValidation ${LIBS} -lgslcblas -lcdf)
 
 ADD_EXECUTABLE(CrossTrackQualityFlagDetermination CrossTrackQualityFlagDetermination.c utilities.c)
-TARGET_INCLUDE_DIRECTORIES(CrossTrackQualityFlagDetermination PRIVATE /Applications/cdf/cdf/include)
-TARGET_LINK_LIBRARIES(CrossTrackQualityFlagDetermination ${LIBS})
-
-if (${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
-    message("-- Darwin linking")
-    TARGET_LINK_LIBRARIES(CrossTrackCalibration -lgslcblas /Applications/cdf/cdf/lib/libcdf.a)
-    TARGET_LINK_LIBRARIES(CrossTrackValidation -lgslcblas /Applications/cdf/cdf/lib/libcdf.a)
-    TARGET_LINK_LIBRARIES(CrossTrackQualityFlagDetermination -lgslcblas /Applications/cdf/cdf/lib/libcdf.a)
-endif()
-if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
-    message("-- Linux linking")
-    TARGET_LINK_LIBRARIES(CrossTrackCalibration -lgslcblas -lcdf)
-    TARGET_LINK_LIBRARIES(CrossTrackValidation -lgslcblas -lcdf)
-    TARGET_LINK_LIBRARIES(CrossTrackQualityFlagDetermination -lgslcblas -lcdf)
-endif ()
+TARGET_INCLUDE_DIRECTORIES(CrossTrackQualityFlagDetermination PRIVATE )
+TARGET_LINK_LIBRARIES(CrossTrackQualityFlagDetermination ${LIBS} -lgslcblas -lcdf)
 
 install(TARGETS CrossTrackCalibration DESTINATION $ENV{HOME}/bin)
 install(TARGETS CrossTrackValidation DESTINATION $ENV{HOME}/bin)
 install(TARGETS CrossTrackQualityFlagDetermination DESTINATION $ENV{HOME}/bin)
+
 install(PROGRAMS process_TCT.sh parallel_process_TCT.sh compress_TCT.sh parallel_compress_TCT.sh cdf_files_to_compress.sh DESTINATION $ENV{HOME}/bin)
 

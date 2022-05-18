@@ -1,3 +1,20 @@
+# TII Cross-Track Ion Drift Processor: Docker/Dockerfile
+
+# Copyright (C) 2022  Johnathan K Burchill
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 FROM ubuntu
 RUN apt -y update
 RUN apt -y upgrade
@@ -17,22 +34,24 @@ RUN apt -y install gdb
 RUN apt -y install cgdb
 RUN apt -y install vim
 RUN apt -y install pkg-config
+RUN apt -y install zip
+RUN apt -y install unzip
 RUN addgroup science
 RUN useradd -G science dataflow
 USER dataflow
 WORKDIR /home/dataflow/src
-COPY cdf38_0-dist-cdf.tar.gz /home/dataflow/.
-RUN cd /home/dataflow && tar xf cdf38_0-dist-cdf.tar.gz
-COPY Makefile.cdf380.docker /home/dataflow/cdf38_0-dist/Makefile
-RUN cd /home/dataflow/cdf38_0-dist && \
+RUN cd /home/dataflow && \
+wget https://spdf.gsfc.nasa.gov/pub/software/cdf/dist/cdf38_1/linux/cdf38_1-dist-cdf.tar.gz && \
+tar xf cdf38_1-dist-cdf.tar.gz && \
+cd cdf38_1-dist && \
 make OS=linux ENV=gnu CURSES=no all
 USER root
-RUN cd /home/dataflow/cdf38_0-dist && \
+RUN cd /home/dataflow/cdf38_1-dist && \
 make INSTALLDIR=/usr/local install && \
 ldconfig
 USER dataflow
 RUN cd /home/dataflow && \
-rm -rf cdf38_0-dist*
+rm -rf cdf38_1-dist*
 VOLUME ["/home/dataflow/src"]
 ENTRYPOINT ["/bin/bash"]
 

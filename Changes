@@ -1,3 +1,6 @@
+# TII Cross-Track Ion Drift Processor: Changes
+# Copyright (C) 2022  Johnathan K Burchill
+
 0302:
 	Fixed attributes for latitude and longituge, which were swapped.
 	Restored data from occasional gaps.
