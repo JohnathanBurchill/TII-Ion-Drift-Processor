@@ -22,9 +22,7 @@
 #include "settings.h"
 #include "utilities.h"
 #include "processing.h"
-
 #include "indexing.h"
-
 
 #include <stdio.h>
 #include <string.h>
