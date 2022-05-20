@@ -1,6 +1,6 @@
 /*
 
-    TII Cross-Track Ion Drift Processor: CrossTrackQualityFlagDetermination.c
+    TII Cross-Track Ion Drift Processor: tiictqualityflags.c
 
     Copyright (C) 2022  Johnathan K Burchill
 
@@ -29,12 +29,11 @@
 #include <dirent.h>
 
 #include "utilities.h"
-#include "CrossTrackQualityFlagDetermination.h"
+#include "tiictqualityflags.h"
 #include <cdf.h>
 
 // https://www.gnu.org/software/gsl/doc/html/
 #include <gsl/gsl_errno.h>
-//#include <gsl/gsl_fit.h>
 #include <gsl/gsl_multifit.h>
 #include <gsl/gsl_statistics_double.h>
 
@@ -52,7 +51,7 @@ int main(int argc, char* argv[])
     snprintf(date, strlen(dateString), "%s", dateString);
     if (argc != 3)
     {
-        fprintf(stdout, "usage: CrossTrackQualityFlagDetermination directory satelliteLetter\n");
+        fprintf(stdout, "usage: %s directory satelliteLetter\n", argv[0]);
         exit(1);
     }
     const char *directory = argv[1];

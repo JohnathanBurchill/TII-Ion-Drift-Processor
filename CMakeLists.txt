@@ -16,7 +16,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 
-PROJECT(TCT)
+PROJECT(TIICT)
 
 CMAKE_MINIMUM_REQUIRED(VERSION 3.3)
 
@@ -40,20 +40,20 @@ SET(LIBS ${LIBS} ${MATH} ${GSL_LIBRARY} )
 
 INCLUDE_DIRECTORIES(${INCLUDE_DIRS} ${GSL_INCLUDE_DIRS})
 
-ADD_EXECUTABLE(CrossTrackCalibration CrossTrackCalibration.c utilities.c)
-TARGET_INCLUDE_DIRECTORIES(CrossTrackCalibration PRIVATE)
-TARGET_LINK_LIBRARIES(CrossTrackCalibration ${LIBS} -lgslcblas -lcdf)
+ADD_EXECUTABLE(tiict tiict.c utilities.c processing.c)
+TARGET_INCLUDE_DIRECTORIES(tiict PRIVATE)
+TARGET_LINK_LIBRARIES(tiict ${LIBS} -lgslcblas -lcdf)
 
-ADD_EXECUTABLE(CrossTrackValidation CrossTrackValidation.c utilities.c)
-TARGET_INCLUDE_DIRECTORIES(CrossTrackValidation PRIVATE)
-TARGET_LINK_LIBRARIES(CrossTrackValidation ${LIBS} -lgslcblas -lcdf)
+ADD_EXECUTABLE(tiictinspect tiictinspect.c utilities.c)
+TARGET_INCLUDE_DIRECTORIES(tiictinspect PRIVATE)
+TARGET_LINK_LIBRARIES(tiictinspect ${LIBS} -lgslcblas -lcdf)
 
-ADD_EXECUTABLE(CrossTrackQualityFlagDetermination CrossTrackQualityFlagDetermination.c utilities.c)
-TARGET_INCLUDE_DIRECTORIES(CrossTrackQualityFlagDetermination PRIVATE )
-TARGET_LINK_LIBRARIES(CrossTrackQualityFlagDetermination ${LIBS} -lgslcblas -lcdf)
+ADD_EXECUTABLE(tiictqualityflags tiictqualityflags.c utilities.c)
+TARGET_INCLUDE_DIRECTORIES(tiictqualityflags PRIVATE )
+TARGET_LINK_LIBRARIES(tiictqualityflags ${LIBS} -lgslcblas -lcdf)
 
-install(TARGETS CrossTrackCalibration DESTINATION $ENV{HOME}/bin)
-install(TARGETS CrossTrackValidation DESTINATION $ENV{HOME}/bin)
-install(TARGETS CrossTrackQualityFlagDetermination DESTINATION $ENV{HOME}/bin)
+install(TARGETS tiict DESTINATION $ENV{HOME}/bin)
+install(TARGETS tiictinspect DESTINATION $ENV{HOME}/bin)
+install(TARGETS tiictqualityflags DESTINATION $ENV{HOME}/bin)
 
 

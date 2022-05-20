@@ -1,6 +1,6 @@
 /*
 
-    TII Cross-Track Ion Drift Processor: CrossTrackValidation.c
+    TII Cross-Track Ion Drift Processor: tiictinspect.c
 
     Copyright (C) 2022  Johnathan K Burchill
 
@@ -29,7 +29,7 @@
 #include <dirent.h>
 
 #include "utilities.h"
-#include "CrossTrackValidation.h"
+#include "tiictinspect.h"
 #include <cdf.h>
 
 // https://www.gnu.org/software/gsl/doc/html/
@@ -52,7 +52,7 @@ int main(int argc, char* argv[])
     snprintf(date, strlen(dateString), "%s", dateString);
     if (argc != 4)
     {
-        fprintf(stdout, "usage: CrossTrackValidation directory satelliteLetter type\n");
+        fprintf(stdout, "usage: %s directory satelliteLetter type\n", argv[0]);
         exit(1);
     }
     const char *directory = argv[1];
