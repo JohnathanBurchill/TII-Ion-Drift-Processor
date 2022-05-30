@@ -83,7 +83,7 @@ int main(int argc, char* argv[])
     }
     char *filename;
 
-    long nFlag4 = 0, nTotal = 0, nHighLat = 0;
+    long nFlag4 = 0, nTotal = 0, nHighLat = 0, nTotalRecs = 0;
 
     // Count number of files in directory:
     long nFiles = 0;
@@ -133,9 +133,9 @@ int main(int argc, char* argv[])
             if (counter % statusInterval == 0)
             {
                 fprintf(stdout, "\r%3.0lf%%", 100.0 * (double)counter / (double)nFiles);
-		fflush(stdout);
-	    }
-	    counter++;
+        		fflush(stdout);
+            }
+	        counter++;
 
             // Do the processing
             CDFstatus status;
@@ -151,6 +151,7 @@ int main(int argc, char* argv[])
             sprintf(fullPath, "%s/%s", directory, filename);
             bool fourByteCalFlag = false;
             loadCrossTrackData(fullPath, dataBuffers, &nRecs, &fourByteCalFlag);
+            nTotalRecs += nRecs;
             long timeIndex = 0;
 
             // Number of records
@@ -160,7 +161,7 @@ int main(int argc, char* argv[])
                 nTotal++;
                 if (fabsf(QDLAT()) > 50.0)
                 {
-	            nHighLat++;
+    	            nHighLat++;
                     if (FLAG() == 4)
                     {
                         nFlag4++;
@@ -226,7 +227,7 @@ void loadCrossTrackData(const char * filename, uint8_t **dataBuffers, long *numb
         CDFcloseCDF(calCdfId);
         return;
     }
-    long nRecs, memorySize = 0;
+    long nRecs = 0, memorySize = 0;
     status = CDFgetzVarAllocRecords(calCdfId, CDFgetVarNum(calCdfId, "Timestamp"), &nRecs);
     if (status != CDF_OK)
     {
