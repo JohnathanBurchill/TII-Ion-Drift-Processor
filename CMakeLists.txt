@@ -50,7 +50,7 @@ TARGET_LINK_LIBRARIES(tiictinspect ${LIBS} -lgslcblas -lcdf)
 
 ADD_EXECUTABLE(tiictqualityflags tiictqualityflags.c utilities.c)
 TARGET_INCLUDE_DIRECTORIES(tiictqualityflags PRIVATE )
-TARGET_LINK_LIBRARIES(tiictqualityflags ${LIBS} -lgslcblas -lcdf)
+TARGET_LINK_LIBRARIES(tiictqualityflags ${MATH} -lcdf)
 
 ADD_EXECUTABLE(tiictvariability tiictvariability.c utilities.c)
 TARGET_INCLUDE_DIRECTORIES(tiictvariability PRIVATE )
