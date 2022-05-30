@@ -29,8 +29,14 @@
 #include <dirent.h>
 
 #include "utilities.h"
-#include "tiictqualityflags.h"
+#include "tiictvariability.h"
 #include <cdf.h>
+
+// https://www.gnu.org/software/gsl/doc/html/
+#include <gsl/gsl_errno.h>
+#include <gsl/gsl_multifit.h>
+#include <gsl/gsl_statistics_double.h>
+
 
 char infoHeader[50];
 
@@ -48,7 +54,7 @@ int main(int argc, char* argv[])
     {
         if (strcmp(argv[i], "--about") == 0)
         {
-            fprintf(stdout, "tiictqualityflags - prints info about quality flags produced by the TII Cross-track ion drift processor, version %s.\n", SOFTWARE_VERSION);
+            fprintf(stdout, "tiictvariability - prints info about quality flags produced by the TII Cross-track ion drift processor, version %s.\n", SOFTWARE_VERSION);
             fprintf(stdout, "Copyright (C) 2022  Johnathan K Burchill\n");
             fprintf(stdout, "This program comes with ABSOLUTELY NO WARRANTY.\n");
             fprintf(stdout, "This is free software, and you are welcome to redistribute it\n");
@@ -67,11 +73,8 @@ int main(int argc, char* argv[])
     const char *directory = argv[1];
     const char *satelliteLetter = argv[2];
 
-    if (satelliteLetter[0] == 'C')
-    {
-        fprintf(stdout, "Swarm C TCT version 0302 quality is not flagged.\n");
-        exit(0);
-    }
+    // Turn off GSL failsafe error handler. We typically check the GSL return codes.
+    gsl_set_error_handler_off();
 
 
     DIR *dir = opendir(directory);
@@ -82,39 +85,6 @@ int main(int argc, char* argv[])
         exit(1);
     }
     char *filename;
-
-    long nFlag4 = 0, nTotal = 0;
-
-    // Count number of files in directory:
-    long nFiles = 0;
-    while ((entry = readdir(dir)) != NULL)
-    {
-        filename = entry->d_name;
-        uint16_t length = strlen(filename);
-        if (length != 59)
-        {
-            continue;
-        }
-        if (strcmp(filename+length-3, "cdf") != 0)
-        {
-            continue;
-        }
-        const char satellite = *(filename+strlen(filename)-48);
-        if (satellite == satelliteLetter[0])
-            nFiles++;
-    }
-
-    if (nFiles == 0)
-    {
-        closedir(dir);
-        fprintf(stdout, "Swarm %c: no TCT CDF files found.\n", satelliteLetter[0]);
-        exit(0);
-    }
-
-    // Process the files
-    rewinddir(dir);
-    long statusInterval = (long) (STATUS_INTERVAL_FRACTION * (double) nFiles);
-    long counter = 0;
     while ((entry = readdir(dir)) != NULL)
     {
         filename = entry->d_name;
@@ -130,10 +100,6 @@ int main(int argc, char* argv[])
         const char satellite = *(filename+strlen(filename)-48);
         if (satellite == satelliteLetter[0])
         {
-
-            if (counter++ % statusInterval == 0)
-                fprintf(stdout, "%3.0lf%%", (double)counter / (double)nFiles);
-
             // Do the processing
             CDFstatus status;
 
@@ -148,32 +114,69 @@ int main(int argc, char* argv[])
             sprintf(fullPath, "%s/%s", directory, filename);
             bool fourByteCalFlag = false;
             loadCrossTrackData(fullPath, dataBuffers, &nRecs, &fourByteCalFlag);
-            long timeIndex = 0;
+            double *pEpoch = (double*) dataBuffers[0];
+            long long timeIndex = 0;
 
+            // The macros TIME(), QDLAT(), etc. give the value at index timeIndex.
+            double epoch0 = TIME();
+
+            uint8_t minorVersion = getMinorVersion(filename);
             // Number of records
             // Include all measurements for Swarm C, which are set to 0 flag always
+            long nFlag4 = 0, nTotal = 0;
             for (timeIndex = 0; timeIndex < nRecs; timeIndex++)
             {
-                if (fabs(QDLAT()) > 50.0)
+                nTotal++;
+
+                if (FLAG() == 4 || (satellite == 'C' && minorVersion == 1) || (satellite == 'C' && fourByteCalFlag == true && (CALFLAG() == 0)))
                 {
-                    nTotal++;
-                    if (FLAG() == 4)
-                    {
-                        nFlag4++;
-                    }
+                    nFlag4++;
                 }
             }
+
+            // Allocate arrays
+            double * time = malloc((size_t)((long)nFlag4 * sizeof(double)));
+            double * viy4 = malloc((size_t)((long)nFlag4 * sizeof(double)));
+            double * gslWorkspace = malloc((size_t)((long)nFlag4 * sizeof(double)));
+
+            nFlag4 = 0;
+            double meanTime = 0.;
+            for (timeIndex = 0; timeIndex < nRecs; timeIndex++)
+            {
+                if (FLAG() == 4 || (satellite == 'C' && minorVersion == 1) || (satellite == 'C' && fourByteCalFlag == true && (CALFLAG() == 0)))
+                {
+                    time[nFlag4] = TIME()/1000.;
+                    meanTime += time[nFlag4];
+                    viy4[nFlag4] = (double)VIY();
+                    nFlag4++;
+                }
+            }
+            meanTime /= (double)nFlag4;
+            double viyMad = gsl_stats_mad(viy4, 1, nFlag4, gslWorkspace);
+            fprintf(stdout, "%f %ld %ld %f\n", meanTime, nTotal, nFlag4, viyMad);
 
             // free memory
             for (uint8_t i = 0; i < NUM_DATA_VARIABLES; i++)
             {
                 free(dataBuffers[i]);
             }
+            free(time);
+            free(viy4);
+            free(gslWorkspace);
         }
     }
     closedir(dir);
 
-    fprintf(stdout, "Swarm %c: %ld %ld %lf\n", satelliteLetter[0], nTotal, nFlag4, (double)nFlag4 / (double)nTotal);
+}
+
+void closeCdf(CDFid id)
+{
+    CDFstatus status;
+    status = CDFcloseCDF(id);
+    if (status != CDF_OK)
+    {
+        printErrorMessage(status);
+    }
 
 }
 
@@ -215,7 +218,7 @@ void loadCrossTrackData(const char * filename, uint8_t **dataBuffers, long *numb
     {
         printErrorMessage(status);
         fprintf(stdout, "%sProblem with data file. Skipping this file.\n", infoHeader);
-        CDFcloseCDF(calCdfId);
+        closeCdf(calCdfId);
         return;
     }
     long nRecs, memorySize = 0;
@@ -224,7 +227,7 @@ void loadCrossTrackData(const char * filename, uint8_t **dataBuffers, long *numb
     {
         printErrorMessage(status);
         fprintf(stdout, "%sProblem with data file. Skipping this file.\n", infoHeader);
-        CDFcloseCDF(calCdfId);
+        closeCdf(calCdfId);
         return;
     }
 
@@ -233,7 +236,10 @@ void loadCrossTrackData(const char * filename, uint8_t **dataBuffers, long *numb
     char* variables[NUM_DATA_VARIABLES] = {
         "Timestamp",
         "QDLatitude",
-        "Quality_flags"
+        "Viy",
+        "Viy_error",
+        "Quality_flags",
+        "Calibration_flags"
     };
     if (minorVersion == 1)
     {
@@ -246,7 +252,7 @@ void loadCrossTrackData(const char * filename, uint8_t **dataBuffers, long *numb
         {
             printErrorMessage(status);
             fprintf(stdout, "%sError reading variable %s. Skipping this file.\n", infoHeader, variables[i]);
-            CDFcloseCDF(calCdfId);
+            closeCdf(calCdfId);
             exit(1);
         }
     }
@@ -261,7 +267,7 @@ void loadCrossTrackData(const char * filename, uint8_t **dataBuffers, long *numb
         {
             printErrorMessage(varNum);
             fprintf(stdout, "%sError reading variable ID for %s. Skipping this file.\n", infoHeader, variables[i]);
-            CDFcloseCDF(calCdfId);
+            closeCdf(calCdfId);
             exit(1);
         }
         status = CDFgetzVarNumDims(calCdfId, varNum, &numDims);
@@ -286,14 +292,14 @@ void loadCrossTrackData(const char * filename, uint8_t **dataBuffers, long *numb
         {
             printErrorMessage(status);
             fprintf(stdout, "%sError loading data for %s. Skipping this file.\n", infoHeader, variables[i]);
-            CDFcloseCDF(calCdfId);
+            closeCdf(calCdfId);
             return;
         }
     }
     // close CDF
-    CDFcloseCDF(calCdfId);
+    closeCdf(calCdfId);
     // Update number of records found and memory allocated
-    *numberOfRecords = *numberOfRecords + nRecs;
+    *numberOfRecords = nRecs;
 
 }
 

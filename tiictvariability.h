@@ -1,6 +1,6 @@
 /*
 
-    TII Cross-Track Ion Drift Processor: tiictqualityflags.h
+    TII Cross-Track Ion Drift Processor: tiictvariability.h
 
     Copyright (C) 2022  Johnathan K Burchill
 
@@ -28,11 +28,9 @@
 #include <cdf.h>
 
 #define SOFTWARE_VERSION "1.0"
-#define SOFTWARE_VERSION_STRING "tiictqualityflags 2022-05-30"
+#define SOFTWARE_VERSION_STRING "tiictvariability 2022-05-30"
 
-#define NUM_DATA_VARIABLES 3
-
-#define STATUS_INTERVAL_FRACTION 0.05
+#define NUM_DATA_VARIABLES 6
 
 void closeCdf(CDFid id);
 

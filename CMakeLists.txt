@@ -52,6 +52,10 @@ ADD_EXECUTABLE(tiictqualityflags tiictqualityflags.c utilities.c)
 TARGET_INCLUDE_DIRECTORIES(tiictqualityflags PRIVATE )
 TARGET_LINK_LIBRARIES(tiictqualityflags ${LIBS} -lgslcblas -lcdf)
 
+ADD_EXECUTABLE(tiictvariability tiictvariability.c utilities.c)
+TARGET_INCLUDE_DIRECTORIES(tiictvariability PRIVATE )
+TARGET_LINK_LIBRARIES(tiictvariability ${LIBS} -lgslcblas -lcdf)
+
 install(TARGETS tiict DESTINATION $ENV{HOME}/bin)
 install(TARGETS tiictinspect DESTINATION $ENV{HOME}/bin)
 install(TARGETS tiictqualityflags DESTINATION $ENV{HOME}/bin)
