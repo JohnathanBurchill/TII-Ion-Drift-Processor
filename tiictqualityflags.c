@@ -83,7 +83,7 @@ int main(int argc, char* argv[])
     }
     char *filename;
 
-    long nFlag4 = 0, nTotal = 0;
+    long nFlag4 = 0, nTotal = 0, nHighLat = 0;
 
     // Count number of files in directory:
     long nFiles = 0;
@@ -130,9 +130,12 @@ int main(int argc, char* argv[])
         const char satellite = *(filename+strlen(filename)-48);
         if (satellite == satelliteLetter[0])
         {
-
-            if (counter++ % statusInterval == 0)
-                fprintf(stdout, "%3.0lf%%", (double)counter / (double)nFiles);
+            if (counter % statusInterval == 0)
+            {
+                fprintf(stdout, "\r%3.0lf%%", 100.0 * (double)counter / (double)nFiles);
+		fflush(stdout);
+	    }
+	    counter++;
 
             // Do the processing
             CDFstatus status;
@@ -154,9 +157,10 @@ int main(int argc, char* argv[])
             // Include all measurements for Swarm C, which are set to 0 flag always
             for (timeIndex = 0; timeIndex < nRecs; timeIndex++)
             {
-                if (fabs(QDLAT()) > 50.0)
+                nTotal++;
+                if (fabsf(QDLAT()) > 50.0)
                 {
-                    nTotal++;
+	            nHighLat++;
                     if (FLAG() == 4)
                     {
                         nFlag4++;
@@ -173,7 +177,11 @@ int main(int argc, char* argv[])
     }
     closedir(dir);
 
-    fprintf(stdout, "Swarm %c: %ld %ld %lf\n", satelliteLetter[0], nTotal, nFlag4, (double)nFlag4 / (double)nTotal);
+    fprintf(stdout, "\rSwarm %c\n", satelliteLetter[0]);
+    fprintf(stdout, "Total records:\t\t%ld\n", nTotal);
+    fprintf(stdout, "High-lat records:\t%ld\n", nFlag4);
+    fprintf(stdout, "Good high-lat fraction:\t%.3lf\n", (double)nFlag4 / (double)nHighLat);
+    fprintf(stdout, "Good total fraction:\t%.3lf\n", (double)nFlag4 / (double)nTotal);
 
 }
 
