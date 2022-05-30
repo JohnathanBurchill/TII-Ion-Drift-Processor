@@ -222,7 +222,7 @@ void loadCrossTrackData(const char * filename, uint8_t **dataBuffers, long *numb
         return;
     }
     long nRecs, memorySize = 0;
-    status = CDFgetzVarAllocRecords(calCdfId, CDFgetVarNum(calCdfId, "Time"), &nRecs);
+    status = CDFgetzVarAllocRecords(calCdfId, CDFgetVarNum(calCdfId, "Timestamp"), &nRecs);
     if (status != CDF_OK)
     {
         printErrorMessage(status);
@@ -234,10 +234,10 @@ void loadCrossTrackData(const char * filename, uint8_t **dataBuffers, long *numb
     // Variables
     uint8_t nVars = NUM_DATA_VARIABLES;
     char* variables[NUM_DATA_VARIABLES] = {
-        "Time",
+        "Timestamp",
         "QDLatitude"
         "Viy",
-        "Viy_error_experimental",
+        "Viy_error",
         "Quality_flags",
         "Calibration_flags"
     };
