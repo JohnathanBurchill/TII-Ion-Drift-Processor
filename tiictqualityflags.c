@@ -49,6 +49,22 @@ int main(int argc, char* argv[])
     char * dateString = asctime(timeParts);
     char date[255];
     snprintf(date, strlen(dateString), "%s", dateString);
+
+    for (int i = 1; i < argc; i++)
+    {
+        if (strcmp(argv[i], "--about") == 0)
+        {
+            fprintf(stdout, "tiictqualityflags - prints info about quality flags produced by the TII Cross-track ion drift processor, version %s.\n", SOFTWARE_VERSION);
+            fprintf(stdout, "Copyright (C) 2022  Johnathan K Burchill\n");
+            fprintf(stdout, "This program comes with ABSOLUTELY NO WARRANTY.\n");
+            fprintf(stdout, "This is free software, and you are welcome to redistribute it\n");
+            fprintf(stdout, "under the terms of the GNU General Public License.\n");
+
+            exit(0);
+        }
+    }
+
+
     if (argc != 3)
     {
         fprintf(stdout, "usage: %s directory satelliteLetter\n", argv[0]);

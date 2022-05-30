@@ -27,6 +27,7 @@
 
 #include <cdf.h>
 
+#define SOFTWARE_VERSION "1.0"
 #define SOFTWARE_VERSION_STRING "tiictqualityflags 2022-05-19"
 
 #define NUM_DATA_VARIABLES 6
