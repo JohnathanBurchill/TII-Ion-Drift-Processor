@@ -43,10 +43,7 @@ void loadCrossTrackData(const char * filename, uint8_t **dataBuffers, long *numb
 #define MEAS(n, m) ((float)(*(ADDR(n, m))))
 #define TIME() ((double)*((double*)dataBuffers[0]+(timeIndex)))
 #define QDLAT() (MEAS(1, 0))
-#define VIY() (MEAS(2, 0))
-#define VIYERROR() (MEAS(3, 0))
-#define FLAG() ((uint16_t)*((uint16_t*)dataBuffers[4]+(timeIndex)))
-#define CALFLAG() ((uint32_t)*((uint32_t*)dataBuffers[5]+(timeIndex)))
+#define FLAG() ((uint16_t)*((uint16_t*)dataBuffers[2]+(timeIndex)))
 
 
 uint8_t getMinorVersion(const char *filename);
