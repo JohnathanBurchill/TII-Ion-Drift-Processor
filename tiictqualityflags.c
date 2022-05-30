@@ -235,7 +235,7 @@ void loadCrossTrackData(const char * filename, uint8_t **dataBuffers, long *numb
     uint8_t nVars = NUM_DATA_VARIABLES;
     char* variables[NUM_DATA_VARIABLES] = {
         "Timestamp",
-        "QDLatitude"
+        "QDLatitude",
         "Viy",
         "Viy_error",
         "Quality_flags",
