@@ -1,6 +1,6 @@
 /*
 
-    TII Cross-Track Ion Drift Processor: tiictqualityflags.c
+    TII Cross-Track Ion Drift Processor: tiictvariability.c
 
     Copyright (C) 2022  Johnathan K Burchill
 
