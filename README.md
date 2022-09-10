@@ -1,4 +1,4 @@
-# TIICT
+# TII Ion Drift Processor
 
 This is the Swarm Thermal Ion Imager (TII) Cross-track ion drift processor.
 
