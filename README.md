@@ -12,7 +12,8 @@ Details on the processing method and output file format are available from the [
 
 Copyright (C) 2022   Johnathan K Burchill
 
-Developed at the University of Calgary (2020-2022) with support of the Canadian Space Agency.
+Developed at the University of Calgary (2020-2022) with support of the Canadian Space Agency. 
+Alexei Kouznetsov and David Knudsen contributed to the development of the processing methology.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
