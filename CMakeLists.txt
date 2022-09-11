@@ -56,7 +56,7 @@ ADD_EXECUTABLE(tiictvariability tiictvariability.c utilities.c)
 TARGET_INCLUDE_DIRECTORIES(tiictvariability PRIVATE )
 TARGET_LINK_LIBRARIES(tiictvariability ${LIBS} -lgslcblas -lcdf)
 
-ADD_EXECUTABLE(tiictbin tiictbin.c utilities.c)
+ADD_EXECUTABLE(tiictbin tiictbin.c utilities.c statistics.c)
 TARGET_INCLUDE_DIRECTORIES(tiictbin PRIVATE )
 TARGET_LINK_LIBRARIES(tiictbin ${LIBS} -lgslcblas -lcdf)
 

@@ -32,6 +32,7 @@ RUN apt -y install libgsl-dev
 RUN apt -y install git
 RUN apt -y install gdb
 RUN apt -y install cgdb
+RUN apt -y install valgrind
 RUN apt -y install vim
 RUN apt -y install pkg-config
 RUN apt -y install zip

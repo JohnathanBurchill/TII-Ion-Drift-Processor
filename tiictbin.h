@@ -58,5 +58,6 @@ void loadCrossTrackData(const char *filename, uint8_t **dataBuffers, long *numbe
 
 uint8_t getMinorVersion(const char *filename);
 
+void usage(char *name);
 
 #endif // _TIICTBIN_H

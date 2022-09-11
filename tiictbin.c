@@ -30,12 +30,12 @@
 
 #include "utilities.h"
 #include "tiictbin.h"
+#include "statistics.h"
 #include <cdf.h>
 
 // https://www.gnu.org/software/gsl/doc/html/
 #include <gsl/gsl_errno.h>
-#include <gsl/gsl_multifit.h>
-#include <gsl/gsl_statistics_double.h>
+#include <gsl/gsl_math.h>
 
 #include <time.h>
 
@@ -57,7 +57,7 @@ int main(int argc, char* argv[])
     {
         if (strcmp(argv[i], "--about") == 0)
         {
-            fprintf(stdout, "tiictbin - prints specified parameter binned in QD latitude and MLT within specified limits. Version %s.\n", SOFTWARE_VERSION);
+            fprintf(stdout, "tiictbin - Calculates and prints requested statistics of specified parameter per QD latitude and MLT bin. Version %s.\n", SOFTWARE_VERSION);
             fprintf(stdout, "Copyright (C) 2022  Johnathan K Burchill\n");
             fprintf(stdout, "This program comes with ABSOLUTELY NO WARRANTY.\n");
             fprintf(stdout, "This is free software, and you are welcome to redistribute it\n");
@@ -67,32 +67,54 @@ int main(int argc, char* argv[])
         }
         if (strcmp(argv[i], "--viy-to-eastward") == 0)
             viyToEastward = true;
+
+        if (strcmp(argv[i], "--available-statistics") == 0)
+        {
+            fprintf(stderr, "Available statistics:\n");
+            printAvailableStatistics(stderr);
+            exit(1);
+        }
+
+        if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-help") == 0)
+        {
+            usage(argv[0]);
+            exit(1);
+        }
     }
 
 
-    if (argc < 10 || argc > 13)
+    if (argc < 11 || argc > 14)
     {
-        fprintf(stdout, "usage: %s directory satelliteLetter parameterName qdlatmin qdlatmax deltaqdlat mltmin mltmax deltamlt [firstDate] [lastDate][--viy-to-eastward]\n", argv[0]);
+        usage(argv[0]);
         exit(1);
     }
     const char *directory = argv[1];
     const char *satelliteLetter = argv[2];
     const char *parameterName = argv[3];
-    double qdlatmin = atof(argv[4]);
-    double qdlatmax = atof(argv[5]);
-    double deltaqdlat = atof(argv[6]);
-    double mltmin = atof(argv[7]);
-    double mltmax = atof(argv[8]);
-    double deltamlt = atof(argv[9]);
+    const char *statistic = argv[4];
+    if (!validStatistic(statistic))
+    {
+        fprintf(stderr, "Invalid statistic '%s'\n", statistic);
+        fprintf(stderr, "Must be one of:\n");
+        printAvailableStatistics(stderr);
+        exit(1);
+    }
+
+    float qdlatmin = atof(argv[5]);
+    float qdlatmax = atof(argv[6]);
+    float deltaqdlat = atof(argv[7]);
+    float mltmin = atof(argv[8]);
+    float mltmax = atof(argv[9]);
+    float deltamlt = atof(argv[10]);
     char *firstDate = "20131208";
     char lastDate[255] = {0};
     time_t today = time(NULL);
     timeParts = gmtime(&today);
     sprintf(lastDate, "%4d%02d%02d", timeParts->tm_year + 1900, timeParts->tm_mon + 1, timeParts->tm_mday);
-    if (argc > 10)
-        firstDate = argv[10];
     if (argc > 11 && strncmp(argv[11], "--", 2) != 0)
-        sprintf(lastDate, "%s", argv[11]);
+        firstDate = argv[11];
+    if (argc > 12 && strncmp(argv[12], "--", 2) != 0)
+        sprintf(lastDate, "%s", argv[12]);
 
     if (strcmp(parameterName, "Viy") != 0)
         viyToEastward = false;
@@ -125,15 +147,14 @@ int main(int argc, char* argv[])
     }
 
     // Allocate memory for binning
-    double *bins = (double *)malloc((size_t)(nQDLats * nMLTs) * sizeof(double));
-    long *binNumbers = (long *)malloc((size_t)(nQDLats * nMLTs) * sizeof(long));
-    if (bins == NULL || binNumbers == NULL)
+    float **binStorage = NULL;
+    size_t *binSizes = NULL;
+    size_t *binMaxSizes = NULL;
+    if (allocateBinStorage(&binStorage, &binSizes, &binMaxSizes, nMLTs, nQDLats, BIN_STORAGE_BLOCK_SIZE))
     {
-        fprintf(stderr, "Unable to allocate memory.\n");
-        exit(0);
+        fprintf(stderr, "Could not allocate bin storage memory.\n");
+        exit(1);
     }
-    bzero(bins, (size_t)(nQDLats * nMLTs) * sizeof(double));
-    bzero(binNumbers, (size_t)(nQDLats * nMLTs) * sizeof(double));
     // Access bins with bins[mltIndex * nQDLats + qdlatIndex];
 
 
@@ -171,9 +192,11 @@ int main(int argc, char* argv[])
         exit(1);
     }
     long processedFiles = 0;
-    double percentDone = 0.0;
-    int percentCheck = (int) ceil(0.1 * (double)nFiles);
-    double value = 0.0;
+    float percentDone = 0.0;
+    int percentCheck = (int) ceil(0.1 * (float)nFiles);
+    float value = 0.0;
+
+    size_t index = 0;
     while ((entry = readdir(dir)) != NULL)
     {
         filename = entry->d_name;
@@ -234,8 +257,18 @@ int main(int argc, char* argv[])
                                     value = -value;
                                 }
                             }
-                            bins[mltIndex * nQDLats + qdlatIndex] += value;
-                            binNumbers[mltIndex * nQDLats + qdlatIndex] += 1;
+                            index = mltIndex * nQDLats + qdlatIndex;
+                            if (binSizes[index] >= binMaxSizes[index])
+                            {
+                                if(adjustBinStorage(binStorage, binMaxSizes, index, BIN_STORAGE_BLOCK_SIZE))
+                                {
+                                    fprintf(stderr, "Unable to allocate additional bin storage.\n");
+                                    exit(1);
+                                }
+ 
+                            }
+                            binStorage[index][binSizes[index]] = value;
+                            binSizes[index]++;
                         }
                     }
                 }
@@ -247,36 +280,35 @@ int main(int argc, char* argv[])
                 free(dataBuffers[i]);
             }
             processedFiles++;
-            percentDone = (double)processedFiles / (double)nFiles * 100.0;
+            percentDone = (float)processedFiles / (float)nFiles * 100.0;
             if (processedFiles % percentCheck == 0)
                 fprintf(stderr, "Processed %ld of %ld files (%3.0f%%)\n", processedFiles, nFiles, percentDone);
         }
     }
-
-    double qdlat = 0.0;
-    double mlt = 0.0;
+ 
+    float qdlat = 0.0;
+    float mlt = 0.0;
+    float result = 0.0;
     long nVals = 0;
-    fprintf(stdout, "QDLat\tMLT\tmean(%s)\tCount\n", parameterName);
+    fprintf(stdout, "QDLat\tMLT\t%s(%s)\tCount\n", statistic, parameterName);
 
-    for (int q = 0; q < nQDLats; q++)
+    for (size_t q = 0; q < nQDLats; q++)
     {
-        for (int m = 0; m < nMLTs; m++)
+        for (size_t m = 0; m < nMLTs; m++)
         {
-            nVals += binNumbers[m * nQDLats + q];
-            if (binNumbers[m * nQDLats + q] > 0)
-                bins[m * nQDLats + q] /= (double) binNumbers[m * nQDLats + q];
-
-            qdlat = qdlatmin + deltaqdlat * ((double)q + 0.5);
-            mlt = mltmin + deltamlt* ((double)m + 0.5);
-
-            fprintf(stdout, "%.2lf\t%.2lf\t%.2lf\t%ld\n", qdlat, mlt, bins[m * nQDLats + q], binNumbers[m * nQDLats + q]);
+            index = m * nQDLats + q;
+            qdlat = qdlatmin + deltaqdlat * ((float)q + 0.5);
+            mlt = mltmin + deltamlt* ((float)m + 0.5);
+            if (calculateStatistic(statistic, binStorage, binSizes, index, (void*) &result))
+                result = GSL_NAN;
+            nVals += binSizes[index];
+            fprintf(stdout, "%.2f\t%.2f\t%.2f\t%ld\n", qdlat, mlt, result, binSizes[index]);
         }
     }
 
     fprintf(stderr, "%ld values binned.\n", nVals);
 
-    free(bins);
-    free(binNumbers);
+    freeBinStorage(binStorage, binSizes, binMaxSizes, nMLTs, nQDLats);
 
     closedir(dir);
 
@@ -423,4 +455,16 @@ uint8_t getMinorVersion(const char *filename)
     char minorVersionChar = *(filename + strlen(filename)-5);
     uint8_t minorVersion = (uint8_t) strtol(&minorVersionChar, NULL, 10);
     return minorVersion;
+}
+
+void usage(char *name)
+{
+    fprintf(stdout, "usage: %s directory satelliteLetter parameterName statistic qdlatmin qdlatmax deltaqdlat mltmin mltmax deltamlt [firstDate] [lastDate][--viy-to-eastward]\n", name);
+    fprintf(stdout, "Options:\n");
+    fprintf(stdout, "\t--help or -h\t\tprints this message.\n");
+    fprintf(stdout, "\t--about \t\tdescribes the program, declares license.\n");
+    fprintf(stdout, "\t--available-statistics\tprints a list of statistics to calculate. Pass one statistic per call.\n");
+    fprintf(stdout, "\t--viy-to-eastward\tflips sign of Viy for descending part of the orbit so that positive ion drift is always eastward.\n");
+
+    return;    
 }
