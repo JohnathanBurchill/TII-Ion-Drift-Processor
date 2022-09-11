@@ -37,6 +37,7 @@
 #include <gsl/gsl_multifit.h>
 #include <gsl/gsl_statistics_double.h>
 
+#include <time.h>
 
 char infoHeader[50];
 
@@ -45,7 +46,7 @@ int main(int argc, char* argv[])
     time_t currentTime;
     struct tm * timeParts;
     time(&currentTime);
-    timeParts = localtime(&currentTime);
+    timeParts = gmtime(&currentTime);
     char * dateString = asctime(timeParts);
     char date[255];
     snprintf(date, strlen(dateString), "%s", dateString);
@@ -65,9 +66,9 @@ int main(int argc, char* argv[])
     }
 
 
-    if (argc != 10)
+    if (argc < 10 || argc > 12)
     {
-        fprintf(stdout, "usage: %s directory satelliteLetter parameterName qdlatmin qdlatmax deltaqdlat mltmin mltmax deltamlt\n", argv[0]);
+        fprintf(stdout, "usage: %s directory satelliteLetter parameterName qdlatmin qdlatmax deltaqdlat mltmin mltmax deltamlt <firstDate> <lastDate>\n", argv[0]);
         exit(1);
     }
     const char *directory = argv[1];
@@ -79,6 +80,16 @@ int main(int argc, char* argv[])
     double mltmin = atof(argv[7]);
     double mltmax = atof(argv[8]);
     double deltamlt = atof(argv[9]);
+    char *firstDate = "20131208";
+    char lastDate[255] = {0};
+    time_t today = time(NULL);
+    timeParts = gmtime(&today);
+    sprintf(lastDate, "%4d%02d%02d", timeParts->tm_year + 1900, timeParts->tm_mon + 1, timeParts->tm_mday);
+    if (argc > 10)
+        firstDate = argv[10];
+    if (argc > 11)
+        sprintf(lastDate, "%s", argv[11]);
+
     int qdlatIndex = 0;
     int mltIndex = 0;
 
@@ -140,8 +151,8 @@ int main(int argc, char* argv[])
             continue;
         if (strcmp(filename+length-3, "cdf") != 0)
             continue;
-        const char satellite = *(filename+strlen(filename)-48);
-        if (satellite == satelliteLetter[0])
+        const char satellite = *(filename+length-48);
+        if (satellite == satelliteLetter[0] && strncmp(filename + length - 40, firstDate, 8) >=0 && strncmp(filename + length - 40, lastDate, 8) <= 0)
             nFiles++;
     }
     closedir(dir);
@@ -168,7 +179,7 @@ int main(int argc, char* argv[])
             continue;
         }
         const char satellite = *(filename+strlen(filename)-48);
-        if (satellite == satelliteLetter[0])
+        if (satellite == satelliteLetter[0] && strncmp(filename + length - 40, firstDate, 8) >=0 && strncmp(filename + length - 40, lastDate, 8) <= 0)
         {
             // Do the processing
             CDFstatus status;
@@ -228,6 +239,8 @@ int main(int argc, char* argv[])
     double qdlat = 0.0;
     double mlt = 0.0;
 
+    fprintf(stdout, "QDLat\tMLT\tmean(%s)\tCount\n", parameterName);
+
     for (int q = 0; q < nQDLats; q++)
     {
         for (int m = 0; m < nMLTs; m++)
@@ -238,7 +251,7 @@ int main(int argc, char* argv[])
             qdlat = qdlatmin + deltaqdlat * ((double)q + 0.5);
             mlt = mltmin + deltamlt* ((double)m + 0.5);
 
-            fprintf(stdout, "QD: %lf MLT: %lf VAL: %lf N: %ld\n", qdlat, mlt, bins[m * nQDLats + q], binNumbers[m * nQDLats + q]);
+            fprintf(stdout, "%.2lf\t%.2lf\t%.2lf\t%ld\n", qdlat, mlt, bins[m * nQDLats + q], binNumbers[m * nQDLats + q]);
         }
     }
 
