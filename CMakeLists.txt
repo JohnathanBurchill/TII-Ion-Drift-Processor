@@ -56,8 +56,18 @@ ADD_EXECUTABLE(tiictvariability tiictvariability.c utilities.c)
 TARGET_INCLUDE_DIRECTORIES(tiictvariability PRIVATE )
 TARGET_LINK_LIBRARIES(tiictvariability ${LIBS} -lgslcblas -lcdf)
 
+ADD_EXECUTABLE(tiictbin tiictbin.c utilities.c)
+TARGET_INCLUDE_DIRECTORIES(tiictbin PRIVATE )
+TARGET_LINK_LIBRARIES(tiictbin ${LIBS} -lgslcblas -lcdf)
+
+# ADD_EXECUTABLE(tiictfitstatistics tiictfitstatistics.c)
+# TARGET_INCLUDE_DIRECTORIES(tiictfitstatistics PRIVATE )
+# TARGET_LINK_LIBRARIES(tiictfitstatistics ${MATH})
+
 install(TARGETS tiict DESTINATION $ENV{HOME}/bin)
 install(TARGETS tiictinspect DESTINATION $ENV{HOME}/bin)
 install(TARGETS tiictqualityflags DESTINATION $ENV{HOME}/bin)
+install(TARGETS tiictbin DESTINATION $ENV{HOME}/bin)
+# install(TARGETS tiictfitstatistics DESTINATION $ENV{HOME}/bin)
 
 
