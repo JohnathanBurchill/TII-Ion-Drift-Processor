@@ -151,7 +151,8 @@ int main(int argc, char* argv[])
         exit(1);
     }
     long processedFiles = 0;
-    int percentDone = 0;
+    double percentDone = 0.0;
+    int percentCheck = (int) ceil(0.05 * (double)nFiles);
     while ((entry = readdir(dir)) != NULL)
     {
         filename = entry->d_name;
@@ -216,9 +217,9 @@ int main(int argc, char* argv[])
                 free(dataBuffers[i]);
             }
             processedFiles++;
-            percentDone = (int) floor((double)processedFiles / (double)nFiles * 100.0);
-            if (percentDone % 5 == 0)
-                fprintf(stderr, "Processed %ld of %ld files (%d%%)\n", processedFiles, nFiles, percentDone);
+            percentDone = (double)processedFiles / (double)nFiles * 100.0;
+            if (processedFiles % percentCheck == 0)
+                fprintf(stderr, "Processed %ld of %ld files (%3.0f%%)\n", processedFiles, nFiles, percentDone);
         }
     }
 
