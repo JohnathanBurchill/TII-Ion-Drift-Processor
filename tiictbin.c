@@ -397,7 +397,7 @@ CDFstatus loadCrossTrackData(const char *filename, uint8_t **dataBuffers, long *
     variables[NUM_DATA_VARIABLES-1] = (char *) parameterName;
     if (minorVersion == 1)
     {
-        variables[2] = "flags";
+        variables[3] = "flags";
     }
     for (uint8_t i = 0; (i<nVars-1) || (i == nVars-1 && minorVersion == 2); i++)
     {
