@@ -114,6 +114,8 @@ int main(int argc, char* argv[])
         fprintf(stderr, "Unable to allocate memory.\n");
         exit(0);
     }
+    bzero(bins, (size_t)(nQDLats * nMLTs) * sizeof(double));
+    bzero(binNumbers, (size_t)(nQDLats * nMLTs) * sizeof(double));
     // Access bins with bins[mltIndex * nQDLats + qdlatIndex];
 
 
