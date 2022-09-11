@@ -127,7 +127,7 @@ int main(int argc, char* argv[])
     // Allocate memory for binning
     double *bins = (double *)malloc((size_t)(nQDLats * nMLTs) * sizeof(double));
     long *binNumbers = (long *)malloc((size_t)(nQDLats * nMLTs) * sizeof(long));
-    if (bins == NULL)
+    if (bins == NULL || binNumbers == NULL)
     {
         fprintf(stderr, "Unable to allocate memory.\n");
         exit(0);
@@ -255,13 +255,14 @@ int main(int argc, char* argv[])
 
     double qdlat = 0.0;
     double mlt = 0.0;
-
+    long nVals = 0;
     fprintf(stdout, "QDLat\tMLT\tmean(%s)\tCount\n", parameterName);
 
     for (int q = 0; q < nQDLats; q++)
     {
         for (int m = 0; m < nMLTs; m++)
         {
+            nVals += binNumbers[m * nQDLats + q];
             if (binNumbers[m * nQDLats + q] > 0)
                 bins[m * nQDLats + q] /= (double) binNumbers[m * nQDLats + q];
 
@@ -271,6 +272,11 @@ int main(int argc, char* argv[])
             fprintf(stdout, "%.2lf\t%.2lf\t%.2lf\t%ld\n", qdlat, mlt, bins[m * nQDLats + q], binNumbers[m * nQDLats + q]);
         }
     }
+
+    fprintf(stderr, "%ld values binned.\n", nVals);
+
+    free(bins);
+    free(binNumbers);
 
     closedir(dir);
 
