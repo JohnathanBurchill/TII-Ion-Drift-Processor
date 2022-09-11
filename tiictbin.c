@@ -225,7 +225,11 @@ int main(int argc, char* argv[])
             char fullPath[CDF_PATHNAME_LEN];
             sprintf(fullPath, "%s/%s", directory, filename);
             bool fourByteCalFlag = false;
-            loadCrossTrackData(fullPath, dataBuffers, &nRecs, &fourByteCalFlag, parameterName);
+            status = loadCrossTrackData(fullPath, dataBuffers, &nRecs, &fourByteCalFlag, parameterName);
+            if (status != CDF_OK)
+            {
+                continue;
+            }
             double *pEpoch = (double*) dataBuffers[0];
             long long timeIndex = 0;
 
@@ -325,24 +329,27 @@ void closeCdf(CDFid id)
 
 }
 
-void loadCrossTrackData(const char *filename, uint8_t **dataBuffers, long *numberOfRecords, bool *fourByteCalFlag, const char *parameterName)
+CDFstatus loadCrossTrackData(const char *filename, uint8_t **dataBuffers, long *numberOfRecords, bool *fourByteCalFlag, const char *parameterName)
 {
+    CDFstatus status = CDF_OK;
     char validationFileName[CDF_PATHNAME_LEN];
     snprintf(validationFileName, strlen(filename)-3, "%s", filename);
+
+    if (numberOfRecords != NULL)
+        *numberOfRecords = 0;
 
     uint8_t minorVersion = getMinorVersion(filename);
 
     // Open the CDF file with validation
     CDFsetValidate(VALIDATEFILEon);
     CDFid calCdfId;
-    CDFstatus status;
     status = CDFopenCDF(validationFileName, &calCdfId);
     if (status != CDF_OK) 
     {
         printErrorMessage(status);
         // Not necessarily an error. For example, some dates will have not calibration data.
-        fprintf(stdout, "%sSkipping this file.\n", infoHeader);
-        return;
+        fprintf(stderr, "%sSkipping this file.\n", infoHeader);
+        return status;
     }
 
     // Attributes
@@ -364,7 +371,7 @@ void loadCrossTrackData(const char *filename, uint8_t **dataBuffers, long *numbe
         printErrorMessage(status);
         fprintf(stdout, "%sProblem with data file. Skipping this file.\n", infoHeader);
         closeCdf(calCdfId);
-        return;
+        return status;
     }
     long nRecs, memorySize = 0;
     status = CDFgetzVarAllocRecords(calCdfId, CDFgetVarNum(calCdfId, "Timestamp"), &nRecs);
@@ -373,7 +380,7 @@ void loadCrossTrackData(const char *filename, uint8_t **dataBuffers, long *numbe
         printErrorMessage(status);
         fprintf(stdout, "%sProblem with data file. Skipping this file.\n", infoHeader);
         closeCdf(calCdfId);
-        return;
+        return status;
     }
 
     // Variables
@@ -400,7 +407,7 @@ void loadCrossTrackData(const char *filename, uint8_t **dataBuffers, long *numbe
             printErrorMessage(status);
             fprintf(stdout, "%sError reading variable %s. Skipping this file.\n", infoHeader, variables[i]);
             closeCdf(calCdfId);
-            exit(1);
+            return status;
         }
     }
     
@@ -415,7 +422,7 @@ void loadCrossTrackData(const char *filename, uint8_t **dataBuffers, long *numbe
             printErrorMessage(varNum);
             fprintf(stdout, "%sError reading variable ID for %s. Skipping this file.\n", infoHeader, variables[i]);
             closeCdf(calCdfId);
-            exit(1);
+            return status;
         }
         status = CDFgetzVarNumDims(calCdfId, varNum, &numDims);
         status = CDFgetzVarDimSizes(calCdfId, varNum, dimSizes);
@@ -440,14 +447,16 @@ void loadCrossTrackData(const char *filename, uint8_t **dataBuffers, long *numbe
             printErrorMessage(status);
             fprintf(stdout, "%sError loading data for %s. Skipping this file.\n", infoHeader, variables[i]);
             closeCdf(calCdfId);
-            return;
+            return status;
         }
     }
     // close CDF
     closeCdf(calCdfId);
     // Update number of records found and memory allocated
-    *numberOfRecords = nRecs;
+    if (numberOfRecords != NULL)
+        *numberOfRecords = nRecs;
 
+    return status;
 }
 
 uint8_t getMinorVersion(const char *filename)

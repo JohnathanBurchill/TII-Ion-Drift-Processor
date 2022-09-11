@@ -34,7 +34,7 @@
 
 void closeCdf(CDFid id);
 
-void loadCrossTrackData(const char *filename, uint8_t **dataBuffers, long *numberOfRecords, bool *fourByteCalFlag, const char *parameterName);
+CDFstatus loadCrossTrackData(const char *filename, uint8_t **dataBuffers, long *numberOfRecords, bool *fourByteCalFlag, const char *parameterName);
 
 #define ADDR(n, m, d) (((float*)dataBuffers[(n)]+(d*timeIndex + m)))
 #define MEAS(n, m, d) ((float)(*(ADDR(n, m, d))))
