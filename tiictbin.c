@@ -172,7 +172,7 @@ int main(int argc, char* argv[])
     }
     long processedFiles = 0;
     double percentDone = 0.0;
-    int percentCheck = (int) ceil(0.05 * (double)nFiles);
+    int percentCheck = (int) ceil(0.1 * (double)nFiles);
     double value = 0.0;
     while ((entry = readdir(dir)) != NULL)
     {
