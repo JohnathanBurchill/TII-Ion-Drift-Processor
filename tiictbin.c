@@ -120,7 +120,7 @@ int main(int argc, char* argv[])
     // Turn off GSL failsafe error handler. We typically check the GSL return codes.
     gsl_set_error_handler_off();
 
-
+    // Count files to process
     DIR *dir = opendir(directory);
     struct dirent *entry;
     if (dir == NULL)
@@ -129,6 +129,29 @@ int main(int argc, char* argv[])
         exit(1);
     }
     char *filename;
+    long nFiles = 0;
+    while ((entry = readdir(dir)) != NULL)
+    {
+        filename = entry->d_name;
+        uint16_t length = strlen(filename);
+        if (length != 59)
+            continue;
+        if (strcmp(filename+length-3, "cdf") != 0)
+            continue;
+        const char satellite = *(filename+strlen(filename)-48);
+        if (satellite == satelliteLetter[0])
+            nFiles++;
+    }
+    closedir(dir);
+    // Process files
+    dir = opendir(directory);
+    if (dir == NULL)
+    {
+        fprintf(stdout, "Could not open directory %s for reading.\n", directory);
+        exit(1);
+    }
+    long processedFiles = 0;
+    int percentDone = 0;
     while ((entry = readdir(dir)) != NULL)
     {
         filename = entry->d_name;
@@ -173,13 +196,16 @@ int main(int argc, char* argv[])
                 if (FLAG() == 4 || (satellite == 'C' && minorVersion == 1) || (satellite == 'C' && fourByteCalFlag == true && (CALFLAG() == 0)))
                 {
                     // Access bins with bins[mltIndex * nQDLats + qdlatIndex];
-                    mltIndex = (int) floor((MLT() - mltmin) / deltamlt);
-                    qdlatIndex = (int) floor((QDLAT() - qdlatmin) / deltaqdlat);
-                    if (mltIndex >= 0 && mltIndex < nMLTs && qdlatIndex >=0 && qdlatIndex < nQDLats)
+                    if (isfinite(PARAMETER()))
                     {
-                        // TODO handle vector parameters
-                        bins[mltIndex * nQDLats + qdlatIndex] += PARAMETER();
-                        binNumbers[mltIndex * nQDLats + qdlatIndex] += 1;
+                        mltIndex = (int) floor((MLT() - mltmin) / deltamlt);
+                        qdlatIndex = (int) floor((QDLAT() - qdlatmin) / deltaqdlat);
+                        if (mltIndex >= 0 && mltIndex < nMLTs && qdlatIndex >=0 && qdlatIndex < nQDLats)
+                        {
+                            // TODO handle vector parameters
+                            bins[mltIndex * nQDLats + qdlatIndex] += PARAMETER();
+                            binNumbers[mltIndex * nQDLats + qdlatIndex] += 1;
+                        }
                     }
                 }
             }
@@ -189,6 +215,10 @@ int main(int argc, char* argv[])
             {
                 free(dataBuffers[i]);
             }
+            processedFiles++;
+            percentDone = (int) floor((double)processedFiles / (double)nFiles * 100.0);
+            if (percentDone % 5 == 0)
+                fprintf(stderr, "Processed %ld of %ld files (%d%%)\n", processedFiles, nFiles, percentDone);
         }
     }
 
