@@ -30,7 +30,7 @@
 #define SOFTWARE_VERSION "1.0"
 #define SOFTWARE_VERSION_STRING "tiictbin 2022-09-10"
 
-#define NUM_DATA_VARIABLES 6
+#define NUM_DATA_VARIABLES 7
 
 void closeCdf(CDFid id);
 
@@ -44,14 +44,16 @@ void loadCrossTrackData(const char *filename, uint8_t **dataBuffers, long *numbe
 #define FLAG() ((uint16_t)*((uint16_t*)dataBuffers[3]+(timeIndex)))
 #define CALFLAG() ((uint32_t)*((uint32_t*)dataBuffers[4]+(timeIndex)))
 
-#define PARAMETER() (MEAS(5, 0, 1))
+#define VSATN() (MEAS(5, 0, 1))
 
-#define PARAMETERVEC2X() (MEAS(5, 0, 2))
-#define PARAMETERVEC2Y() (MEAS(5, 1, 2))
+#define PARAMETER() (MEAS(6, 0, 1))
 
-#define PARAMETERVEC3X() (MEAS(5, 0, 3))
-#define PARAMETERVEC3Y() (MEAS(5, 1, 3))
-#define PARAMETERVEC3Z() (MEAS(5, 2, 3))
+#define PARAMETERVEC2X() (MEAS(6, 0, 2))
+#define PARAMETERVEC2Y() (MEAS(6, 1, 2))
+
+#define PARAMETERVEC3X() (MEAS(6, 0, 3))
+#define PARAMETERVEC3Y() (MEAS(6, 1, 3))
+#define PARAMETERVEC3Z() (MEAS(6, 2, 3))
 
 
 uint8_t getMinorVersion(const char *filename);

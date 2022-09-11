@@ -51,6 +51,8 @@ int main(int argc, char* argv[])
     char date[255];
     snprintf(date, strlen(dateString), "%s", dateString);
 
+    bool viyToEastward = false;
+
     for (int i = 1; i < argc; i++)
     {
         if (strcmp(argv[i], "--about") == 0)
@@ -63,12 +65,14 @@ int main(int argc, char* argv[])
 
             exit(0);
         }
+        if (strcmp(argv[i], "--viy-to-eastward") == 0)
+            viyToEastward = true;
     }
 
 
-    if (argc < 10 || argc > 12)
+    if (argc < 10 || argc > 13)
     {
-        fprintf(stdout, "usage: %s directory satelliteLetter parameterName qdlatmin qdlatmax deltaqdlat mltmin mltmax deltamlt <firstDate> <lastDate>\n", argv[0]);
+        fprintf(stdout, "usage: %s directory satelliteLetter parameterName qdlatmin qdlatmax deltaqdlat mltmin mltmax deltamlt [firstDate] [lastDate][--viy-to-eastward]\n", argv[0]);
         exit(1);
     }
     const char *directory = argv[1];
@@ -87,8 +91,11 @@ int main(int argc, char* argv[])
     sprintf(lastDate, "%4d%02d%02d", timeParts->tm_year + 1900, timeParts->tm_mon + 1, timeParts->tm_mday);
     if (argc > 10)
         firstDate = argv[10];
-    if (argc > 11)
+    if (argc > 11 && strncmp(argv[11], "--", 2) != 0)
         sprintf(lastDate, "%s", argv[11]);
+
+    if (strcmp(parameterName, "Viy") != 0)
+        viyToEastward = false;
 
     int qdlatIndex = 0;
     int mltIndex = 0;
@@ -166,6 +173,7 @@ int main(int argc, char* argv[])
     long processedFiles = 0;
     double percentDone = 0.0;
     int percentCheck = (int) ceil(0.05 * (double)nFiles);
+    double value = 0.0;
     while ((entry = readdir(dir)) != NULL)
     {
         filename = entry->d_name;
@@ -217,7 +225,16 @@ int main(int argc, char* argv[])
                         if (mltIndex >= 0 && mltIndex < nMLTs && qdlatIndex >=0 && qdlatIndex < nQDLats)
                         {
                             // TODO handle vector parameters
-                            bins[mltIndex * nQDLats + qdlatIndex] += PARAMETER();
+                            value = PARAMETER();
+                            if (viyToEastward)
+                            {
+                                // Flip sign of Viy to make positive viy always eastward as requested 
+                                if (VSATN() < 0)
+                                {
+                                    value = -value;
+                                }
+                            }
+                            bins[mltIndex * nQDLats + qdlatIndex] += value;
                             binNumbers[mltIndex * nQDLats + qdlatIndex] += 1;
                         }
                     }
@@ -329,6 +346,7 @@ void loadCrossTrackData(const char *filename, uint8_t **dataBuffers, long *numbe
         "QDLatitude",
         "Quality_flags",
         "Calibration_flags",
+        "VsatN"
         ""
     };
     variables[NUM_DATA_VARIABLES-1] = (char *) parameterName;
