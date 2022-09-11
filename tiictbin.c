@@ -199,7 +199,7 @@ int main(int argc, char* argv[])
             long long timeIndex = 0;
 
             // The macros TIME(), QDLAT(), etc. give the value at index timeIndex.
-            double epoch0 = TIME();
+            double epoch0 = TIME()/1000.0;
 
             uint8_t minorVersion = getMinorVersion(filename);
             // Number of records
@@ -366,7 +366,7 @@ void loadCrossTrackData(const char *filename, uint8_t **dataBuffers, long *numbe
         status = CDFgetzVarDataType(calCdfId, varNum, &dataType);
         // Calculate new size of memory to allocate
         status = CDFgetDataTypeSize(dataType, &numVarBytes);
-        if (i == 3 && numVarBytes == 4)
+        if (i == 4 && numVarBytes == 4)
         {
             *fourByteCalFlag = true;            
         }
