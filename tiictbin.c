@@ -116,9 +116,6 @@ int main(int argc, char* argv[])
     if (argc > 12 && strncmp(argv[12], "--", 2) != 0)
         sprintf(lastDate, "%s", argv[12]);
 
-    if (strcmp(parameterName, "Viy") != 0)
-        viyToEastward = false;
-
     int qdlatIndex = 0;
     int mltIndex = 0;
 
