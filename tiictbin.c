@@ -465,7 +465,7 @@ uint8_t getMinorVersion(const char *filename)
 
 void usage(char *name)
 {
-    fprintf(stdout, "usage: %s directory satelliteLetter parameterName statistic qdlatmin qdlatmax deltaqdlat mltmin mltmax deltamlt [firstDate] [lastDate][--viy-to-eastward]\n", name);
+    fprintf(stdout, "usage: %s directory satelliteLetter parameterName statistic qdlatmin qdlatmax deltaqdlat mltmin mltmax deltamlt [firstDate] [lastDate] [--viy-to-eastward] [--help] [--about]\n", name);
     fprintf(stdout, "Options:\n");
     fprintf(stdout, "\t--help or -h\t\tprints this message.\n");
     fprintf(stdout, "\t--about \t\tdescribes the program, declares license.\n");
