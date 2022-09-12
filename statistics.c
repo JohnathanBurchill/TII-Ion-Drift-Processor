@@ -30,7 +30,10 @@
 static char *availableStatistics[NSTATISTICS] = {
     "Mean",
     "Median",
-    "StandardDeviation"
+    "StandardDeviation",
+    "MedianAbsoluteDeviation",
+    "Min",
+    "Max"
 };
 
 int allocateBinStorage(float ***bins, size_t **binSizes, size_t **binMaxSizes, size_t nMLTs, size_t nQDLats, size_t sizePerBin)
@@ -123,6 +126,31 @@ int calculateStatistic(const char *statistic, float **bins, size_t *binSizes, si
     else if (strcmp(statistic, "Median")==0)
     {
         *(float*)returnValue = gsl_stats_float_median(bins[mltQdIndex], 1, binSizes[mltQdIndex]);
+    }
+    else if (strcmp(statistic, "StandardDeviation")==0)
+    {
+        *(float*)returnValue = gsl_stats_float_sd(bins[mltQdIndex], 1, binSizes[mltQdIndex]);
+    }
+    else if (strcmp(statistic, "MedianAbsoluteDeviation")==0)
+    {
+        double *data = (double*)malloc(binSizes[mltQdIndex] * sizeof(double));
+        if (data == NULL)
+        {
+            status = STATISTICS_MEM;
+        }
+        else
+        {
+            *(float*)returnValue = gsl_stats_float_mad(bins[mltQdIndex], 1, binSizes[mltQdIndex], data);
+            free(data);
+        }
+    }
+    else if (strcmp(statistic, "Min")==0)
+    {
+        *(float*)returnValue = gsl_stats_float_min(bins[mltQdIndex], 1, binSizes[mltQdIndex]);
+    }
+    else if (strcmp(statistic, "Max")==0)
+    {
+        *(float*)returnValue = gsl_stats_float_max(bins[mltQdIndex], 1, binSizes[mltQdIndex]);
     }
     else
     {

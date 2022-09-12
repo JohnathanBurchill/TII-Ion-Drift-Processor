@@ -27,7 +27,7 @@
 
 #define BIN_STORAGE_BLOCK_SIZE 1024 // Number of elements to increment bin storage by
 
-#define NSTATISTICS 3
+#define NSTATISTICS 6
 
 enum STATISTICS_STATUS
 {
