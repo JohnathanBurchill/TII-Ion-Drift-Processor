@@ -151,8 +151,6 @@ int main(int argc, char *argv[])
 		printf("Could not init pthread attributes.\n");
 		exit(EXIT_FAILURE);
 	}
-	int completed = 0;
-	int queued = 0;
 
 	time_t startTime = time(NULL);
 	time_t currentTime = 0;
@@ -165,9 +163,14 @@ int main(int argc, char *argv[])
 
 	char *satellites[3] = {"A", "B", "C"};
 
-	for (int i = 0; i < 3; i++)
+	int completed = 0;
+	int queued = 0;
+	for (int sat = 0; sat < 3; sat++)
 	{
-		mvprintw(SAT_ORIGIN, "Swarm %s: %d threads", satellites[i], nThreads);
+		completed = 0;
+		queued =0;
+		erase();
+		mvprintw(SAT_ORIGIN, "Swarm %s: %d threads", satellites[sat], nThreads);
 		mvprintw(START_DATE_ORIGIN, "From: %s\n", startDate);
 		mvprintw(END_DATE_ORIGIN, "  To: %s\n", endDate);
 		mvprintw(START_TIME_ORIGIN, "Started: %4d%02d%02d %02d:%02d:%02d", now->tm_year+1900, now->tm_mon+1, now->tm_mday, now->tm_hour, now->tm_min, now->tm_sec);
@@ -175,6 +178,7 @@ int main(int argc, char *argv[])
 		mvprintw(PROCESSING_STATUS_ORIGIN, "%d/%d processed (%4.1f%%)", completed, days, (float)completed / (float)days * 100.0);
 
 		mvprintw(KEYBOARD_ORIGIN, "[q] - quit");
+		clrtobot();
 		refresh();
 
 		int keyboard = 0;
@@ -205,7 +209,7 @@ int main(int argc, char *argv[])
 					if (queued < days)
 					{
 						commandArgs[i].threadRunning = true;
-						commandArgs[i].satLetter = satellites[i];
+						commandArgs[i].satLetter = satellites[sat];
 						commandArgs[i].calVersion = calVersion;
 						commandArgs[i].exportVersion = exportVersion;
 						commandArgs[i].calDir = calDir;
