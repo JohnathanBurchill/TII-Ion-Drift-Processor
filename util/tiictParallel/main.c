@@ -167,6 +167,8 @@ int main(int argc, char *argv[])
 	int queued = 0;
 	for (int sat = 0; sat < 3; sat++)
 	{
+		free(date);
+		date = strdup(startDate);
 		completed = 0;
 		queued =0;
 		erase();
@@ -263,6 +265,7 @@ int main(int argc, char *argv[])
 exit:
 	status = pthread_attr_destroy(&attr);
 	free(commandArgs);
+	free(date);
 	endwin();
 	printf("Days processed: %d / %d\n", completed, days);
 	printf("Total time: %02d:%02d:%02d\n", hours, minutes, seconds);
