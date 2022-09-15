@@ -64,6 +64,9 @@ TARGET_LINK_LIBRARIES(tiictbin ${LIBS} -lgslcblas -lcdf)
 # TARGET_INCLUDE_DIRECTORIES(tiictfitstatistics PRIVATE )
 # TARGET_LINK_LIBRARIES(tiictfitstatistics ${MATH})
 
+
+add_subdirectory(util)
+
 install(TARGETS tiict DESTINATION $ENV{HOME}/bin)
 install(TARGETS tiictinspect DESTINATION $ENV{HOME}/bin)
 install(TARGETS tiictqualityflags DESTINATION $ENV{HOME}/bin)
