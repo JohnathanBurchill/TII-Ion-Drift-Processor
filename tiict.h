@@ -71,5 +71,6 @@ void exportTCT02Cdfs(double startTime, double stopTime, const char *exportDir, c
 // Returns true if a full 8 samples were downsampled to 1 sample, false otherwise
 bool downSampleHalfSecond(long *index, long storageIndex, double t0, long maxIndex, uint8_t **dataBuffers, float *ectFieldH, float *ectFieldV, float *bctField, float *viErrors, uint16_t *flags, uint32_t *fitInfo);
 
+void zipCdfFile(char *cdfFileName);
 
 #endif // TIICT_H

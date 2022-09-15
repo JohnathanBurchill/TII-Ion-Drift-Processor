@@ -1202,6 +1202,8 @@ void exportTCT16Cdfs(double startTime, double stopTime, const char *exportDir, c
         fprintf(stdout, "%sExported %ld records to %s.cdf\n", infoHeader, (stopIndex - startIndex + 1), cdfFileName);
         fflush(stdout);
 
+        zipCdfFile(cdfFileName);
+
     }
 }
 
@@ -1310,6 +1312,8 @@ void exportTCT02Cdfs(double startTime, double stopTime, const char *exportDir, c
         closeCdf(exportCdfId);
         fprintf(stdout, "%sExported %ld records to %s.cdf\n", infoHeader, (stopIndex - startIndex + 1), cdfFileName);
         fflush(stdout);
+
+        zipCdfFile(cdfFileName);
 
     }
 }
@@ -1429,3 +1433,32 @@ bool downSampleHalfSecond(long *index, long storageIndex, double t0, long maxInd
 
 }
 
+void zipCdfFile(char *cdfFileName)
+{
+    // Archive the CDF and HDR files in a ZIP file
+    int sysStatus = system(NULL);
+    if (sysStatus == 0)
+    {
+        fprintf(stderr, "%sSystem shell call not available. Not archiving CDF.\n", infoHeader);
+        return;
+    }
+    sysStatus = system("zip -q 1 > /dev/null");
+    if (WIFEXITED(sysStatus) && WEXITSTATUS(sysStatus) == 12)
+    {
+        char command[5*FILENAME_MAX + 100];
+        sprintf(command, "zip -Z store -q -r -j %s.ZIP %s.cdf", cdfFileName, cdfFileName);
+        sysStatus = system(command);
+        if (WIFEXITED(sysStatus) && (WEXITSTATUS(sysStatus) == 0))
+        {
+            fprintf(stdout, "%sStored CDF file in %s.ZIP\n", infoHeader, cdfFileName);
+        }
+        else
+        {
+            fprintf(stderr, "%sFailed to archive CDF file.\n", infoHeader);
+        }
+    }
+    else
+    {
+        fprintf(stderr, "zip is unusable. Not archiving CDF.\n");
+    }    
+}
