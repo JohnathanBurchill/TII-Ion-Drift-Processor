@@ -27,12 +27,15 @@
 #include <unistd.h>
 
 #include <pthread.h>
+#include <signal.h>
 
 #include <time.h>
 #include <curses.h>
 
 
 #define SOFTWARE_VERSION "1.0"
+#define CALIBRATION_FILE_VERSION "0302"
+#define EXPORT_VERSION "0302"
 
 #define THREAD_MANAGER_WAIT 100000 // uSeconds
 
@@ -96,9 +99,9 @@ int main(int argc, char *argv[])
         }
     }
 
-	if (argc !=  9)
+	if (argc !=  4)
 	{
-		printf("usage:\t%s satellite calVersion exportVersion calDirectory exportDirectory startyyyymmdd endyyyymmdd nthreads\n\t\tparallel processes Swarm TII data to generate TIICT product for specified satellite and date.\n", argv[0]);
+		printf("usage:\t%s startyyyymmdd endyyyymmdd nthreads\n\t\tparallel processes Swarm TII data to generate TIICT product for specified satellite and date.\n", argv[0]);
 		printf("\t%s --about\n\t\tprints copyright and license information.\n", argv[0]);
 		exit(0);
 	}
@@ -107,18 +110,18 @@ int main(int argc, char *argv[])
 	initScreen();
 	clear();
 
-	char *satelliteLetter = argv[1];
-	char *calVersion = argv[2];
-	char *exportVersion = argv[3];
-	char *calDir = argv[4];
-	char *exportDir = argv[5];
-	char *startDate = argv[6];
-	char *endDate = argv[7];
-	int nThreads = atoi(argv[8]);
+	char *startDate = argv[1];
+	char *endDate = argv[2];
+	int nThreads = atoi(argv[3]);
 	if (nThreads > MAX_THREADS)
 	{
 		nThreads = MAX_THREADS;
 	}
+
+	char *calVersion = CALIBRATION_FILE_VERSION;
+	char *exportVersion = EXPORT_VERSION;
+	char *calDir = "/efirepo/EfiCalCdfs";
+	char *exportDir = "/databases/TCT";
 
 	char *date = strdup(startDate);
 	char *d1 = strdup(startDate);
@@ -158,89 +161,101 @@ int main(int argc, char *argv[])
 	int seconds = 0;
 	int minutes = 0;
 	int hours = 0;
-	mvprintw(TIICT_LABEL, "TIICT processor");
-	mvprintw(SAT_ORIGIN, "Swarm %s (%d threads)", satelliteLetter, nThreads);
-	mvprintw(START_DATE_ORIGIN, "From: %s\n", startDate);
-	mvprintw(END_DATE_ORIGIN, "  To: %s\n", endDate);
-	mvprintw(START_TIME_ORIGIN, "Started: %4d%02d%02d %02d:%02d:%02d", now->tm_year+1900, now->tm_mon+1, now->tm_mday, now->tm_hour, now->tm_min, now->tm_sec);
-	mvprintw(PROCESSING_TIME_ORIGIN, "Total time: %02d:%02d:%02d", 0, 0, 0);
-	mvprintw(PROCESSING_STATUS_ORIGIN, "%d/%d processed (%4.1f%%)", completed, days, (float)completed / (float)days * 100.0);
+	mvprintw(TIICT_LABEL, "TIICT parallel processor");
 
-	mvprintw(KEYBOARD_ORIGIN, "[q] - quit");
-	refresh();
+	char *satellites[3] = {"A", "B", "C"};
 
-	int keyboard = 0;
-	int year = 0;
-	int month = 0;
-	int day = 0;
-
-	while (completed < days)
+	for (int i = 0; i < 3; i++)
 	{
-		for (int i = 0; i < nThreads && completed < days; i++)
+		mvprintw(SAT_ORIGIN, "Swarm %s: %d threads", satellites[i], nThreads);
+		mvprintw(START_DATE_ORIGIN, "From: %s\n", startDate);
+		mvprintw(END_DATE_ORIGIN, "  To: %s\n", endDate);
+		mvprintw(START_TIME_ORIGIN, "Started: %4d%02d%02d %02d:%02d:%02d", now->tm_year+1900, now->tm_mon+1, now->tm_mday, now->tm_hour, now->tm_min, now->tm_sec);
+		mvprintw(PROCESSING_TIME_ORIGIN, "Total time: %02d:%02d:%02d", 0, 0, 0);
+		mvprintw(PROCESSING_STATUS_ORIGIN, "%d/%d processed (%4.1f%%)", completed, days, (float)completed / (float)days * 100.0);
+
+		mvprintw(KEYBOARD_ORIGIN, "[q] - quit");
+		refresh();
+
+		int keyboard = 0;
+		int year = 0;
+		int month = 0;
+		int day = 0;
+
+		while (completed < days)
 		{
-			if (!commandArgs[i].threadRunning)
+			for (int i = 0; i < nThreads && completed < days; i++)
 			{
-				// Get return value from completed thread if applicable
-				if (threadIds[i] > 0)
+				if (!commandArgs[i].threadRunning)
 				{
-					status = pthread_join(threadIds[i], NULL);
-					if (status == 0)
+					// Get return value from completed thread if applicable
+					if (threadIds[i] > 0)
 					{
-						completed++;
-						commandArgs[i].threadRunning = false;
-						mvprintw(PROCESSING_STATUS_ORIGIN, "%d/%d processed (%4.1f%%)", completed, days, (float)completed / (float)days * 100.0);
-						clrtoeol();
-						threadIds[i] = 0;
+						status = pthread_join(threadIds[i], NULL);
+						if (status == 0)
+						{
+							completed++;
+							commandArgs[i].threadRunning = false;
+							mvprintw(PROCESSING_STATUS_ORIGIN, "%d/%d processed (%4.1f%%)", completed, days, (float)completed / (float)days * 100.0);
+							clrtoeol();
+							threadIds[i] = 0;
+						}
+					}
+					// start a new thread
+					if (queued < days)
+					{
+						commandArgs[i].threadRunning = true;
+						commandArgs[i].satLetter = satellites[i];
+						commandArgs[i].calVersion = calVersion;
+						commandArgs[i].exportVersion = exportVersion;
+						commandArgs[i].calDir = calDir;
+						commandArgs[i].exportDir = exportDir;
+						ymd(date, &year, &month, &day);
+						commandArgs[i].year = year;
+						commandArgs[i].month = month;
+						commandArgs[i].day = day;
+						commandArgs[i].returnValue = 0;
+						pthread_create(&threadIds[i], &attr, &runThread, (void*) &commandArgs[i]);
+						incrementDate(date);
+						queued++;
 					}
 				}
-				// start a new thread
-				if (queued < days)
+			}
+			currentTime = time(NULL);
+			t = (long)currentTime - (long)startTime;
+			hours = t / 3600;
+			minutes = (t - 3600*hours) / 60;
+			seconds = t - 3600*hours - 60 * minutes;
+
+			keyboard = getch();
+			if (keyboard != ERR)
+			{
+				switch (keyboard)
 				{
-					commandArgs[i].threadRunning = true;
-					commandArgs[i].satLetter = satelliteLetter;
-					commandArgs[i].calVersion = calVersion;
-					commandArgs[i].exportVersion = exportVersion;
-					commandArgs[i].calDir = calDir;
-					commandArgs[i].exportDir = exportDir;
-					ymd(date, &year, &month, &day);
-					commandArgs[i].year = year;
-					commandArgs[i].month = month;
-					commandArgs[i].day = day;
-					commandArgs[i].returnValue = 0;
-					pthread_create(&threadIds[i], &attr, &runThread, (void*) &commandArgs[i]);
-					incrementDate(date);
-					queued++;
+					case 'q':
+						for (int k = 0; k < nThreads; k++)
+						{
+							if (threadIds[k] > 0)
+							{
+								pthread_kill(threadIds[k], SIGKILL);
+							}
+						}
+						goto exit;
+						break;
+					default:
+						break;
 				}
 			}
+			mvprintw(PROCESSING_TIME_ORIGIN, "Total time: %02d:%02d:%02d", hours, minutes, seconds);
+			clrtobot();
+			mvprintw(PROCESSING_STATUS_ORIGIN, "%d/%d processed (%4.1f%%)", completed, days, (float)completed / (float)days * 100.0);
+			clrtobot();
+			mvprintw(KEYBOARD_ORIGIN, "[q] - quit");
+			clrtobot();
+			refresh();
+			usleep(THREAD_MANAGER_WAIT);
 		}
-		currentTime = time(NULL);
-		t = (long)currentTime - (long)startTime;
-		hours = t / 3600;
-		minutes = (t - 3600*hours) / 60;
-		seconds = t - 3600*hours - 60 * minutes;
-
-		keyboard = getch();
-		if (keyboard != ERR)
-		{
-			switch (keyboard)
-			{
-				case 'q':
-					goto exit;
-					break;
-				default:
-					break;
-			}
-		}
-		mvprintw(PROCESSING_TIME_ORIGIN, "Total time: %02d:%02d:%02d", hours, minutes, seconds);
-		clrtobot();
-		mvprintw(PROCESSING_STATUS_ORIGIN, "%d/%d processed (%4.1f%%)", completed, days, (float)completed / (float)days * 100.0);
-		clrtobot();
-		mvprintw(KEYBOARD_ORIGIN, "[q] - quit");
-		clrtobot();
-		refresh();
-		usleep(THREAD_MANAGER_WAIT);
 	}
-
 exit:
 	status = pthread_attr_destroy(&attr);
 	free(commandArgs);
