@@ -31,6 +31,7 @@
 #include <stdbool.h>
 #include <math.h>
 #include <time.h>
+#include <unistd.h>
 #include <ctype.h>
 
 // https://cdf.gsfc.nasa.gov/
@@ -1149,6 +1150,14 @@ void exportTCT16Cdfs(double startTime, double stopTime, const char *exportDir, c
 
     char cdfFileName[CDF_PATHNAME_LEN];
     constructExportFileName("TCT16", startTime, stopTime, exportDir, exportVersion, satellite, cdfFileName);
+
+    char zipFileName[FILENAME_MAX];
+    sprintf(zipFileName, "%s.ZIP", cdfFileName);
+    if (access(zipFileName, F_OK) == 0)
+    {
+        fprintf(stdout, "%sTIICT ZIP file exists. Not exporting.\n", infoHeader);
+        return;
+    }
     
     CDFid exportCdfId;
     CDFstatus status;
@@ -1262,6 +1271,15 @@ void exportTCT02Cdfs(double startTime, double stopTime, const char *exportDir, c
     CDFstatus status;
     char cdfFileName[CDF_PATHNAME_LEN];
     constructExportFileName("TCT02", startTime, stopTime, exportDir, exportVersion, satellite, cdfFileName);
+
+    char zipFileName[FILENAME_MAX];
+    sprintf(zipFileName, "%s.ZIP", cdfFileName);
+    if (access(zipFileName, F_OK) == 0)
+    {
+        fprintf(stdout, "%sTIICT ZIP file exists. Not exporting.\n", infoHeader);
+        return;
+    }
+
     status = CDFcreateCDF(cdfFileName, &exportCdfId);
     if (status != CDF_OK)
     {
