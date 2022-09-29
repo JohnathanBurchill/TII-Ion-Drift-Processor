@@ -51,6 +51,10 @@ USER root
 RUN cd /home/dataflow/cdf38_1-dist && \
 make INSTALLDIR=/usr/local install && \
 ldconfig
+COPY tiilib.tar.gz /home/dataflow/.
+RUN cd / && \
+tar zxvf /home/dataflow/tiilib.tar.gz && \
+rm /home/dataflow/tiilib.tar.gz
 USER dataflow
 RUN cd /home/dataflow && \
 rm -rf cdf38_1-dist*
