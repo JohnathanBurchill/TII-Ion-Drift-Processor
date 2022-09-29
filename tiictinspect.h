@@ -31,8 +31,6 @@
 
 #define NUM_DATA_VARIABLES 6
 
-void closeCdf(CDFid id);
-
 void loadCrossTrackData(const char * filename, uint8_t **dataBuffers, long *numberOfRecords, bool *fourByteCalFlag);
 
 

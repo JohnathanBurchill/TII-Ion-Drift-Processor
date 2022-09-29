@@ -315,17 +315,6 @@ int main(int argc, char* argv[])
 
 }
 
-void closeCdf(CDFid id)
-{
-    CDFstatus status;
-    status = CDFcloseCDF(id);
-    if (status != CDF_OK)
-    {
-        printErrorMessage(status);
-    }
-
-}
-
 CDFstatus loadCrossTrackData(const char *filename, uint8_t **dataBuffers, long *numberOfRecords, bool *fourByteCalFlag, const char *parameterName)
 {
     CDFstatus status = CDF_OK;

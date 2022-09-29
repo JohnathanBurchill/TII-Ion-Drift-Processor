@@ -23,6 +23,7 @@
 #include "utilities.h"
 #include "processing.h"
 #include "indexing.h"
+#include "lpData.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -67,9 +68,9 @@ int main(int argc, char* argv[])
         }
     }
 
-    if (argc != 9)
+    if (argc != 10)
     {
-        fprintf(stdout, "usage: %s satLetter year month day calversionString exportVersionString calDir exportDir\n", argv[0]);
+        fprintf(stdout, "usage: %s satLetter year month day calversionString exportVersionString calDir lpDir exportDir\n", argv[0]);
         exit(1);
     }
 
@@ -80,7 +81,8 @@ int main(int argc, char* argv[])
     const char* calVersion = argv[5];
     const char* exportVersion = argv[6];
     const char* calDir = argv[7];
-    const char* exportDir = argv[8];
+    const char* lpDir = argv[8];
+    const char* exportDir = argv[9];
 
     char fitLogFileName[CDF_PATHNAME_LEN + 8];
 
@@ -157,7 +159,16 @@ int main(int argc, char* argv[])
 
     loadCalData(calDir, calVersion, satellite, year, month, day, dataBuffers, &nRecs);
 
+    double * lpTimes = NULL;
+    double * lpPhiSc1 = NULL;
+    double * lpPhiSc2 = NULL;
+    long nLpRecs = 0;
+
+    getLpData(lpDir, satellite, year, month, day, dataBuffers, &lpPhiSc1, &lpPhiSc2);
+
     fflush(stdout);
+
+    exit(0);
 
     // Do the calibration
     double *pEpoch = (double*) dataBuffers[0];
@@ -442,6 +453,13 @@ int main(int argc, char* argv[])
         free(dataBuffers[i]);
     }
 
+    if (lpTimes != NULL)
+        free(lpTimes);
+    if (lpPhiSc1 != NULL)
+        free(lpPhiSc1);
+    if (lpPhiSc2 != NULL)
+        free(lpPhiSc2);
+
     free(xhat);
     free(yhat);
     free(zhat);
@@ -451,17 +469,6 @@ int main(int argc, char* argv[])
     free(flags);
  
     return 0;
-}
-
-void closeCdf(CDFid id)
-{
-    CDFstatus status;
-    status = CDFcloseCDF(id);
-    if (status != CDF_OK)
-    {
-        printErrorMessage(status);
-    }
-
 }
 
 CDFstatus createVarFrom1DVar(CDFid id, char *name, long dataType, long startIndex, long stopIndex, void *buffer)

@@ -28,8 +28,6 @@
 
 #include <cdf.h>
 
-void closeCdf(CDFid id);
-
 typedef enum DayType {
     PREVIOUS_DAY = -1,
     REQUESTED_DAY = 0,

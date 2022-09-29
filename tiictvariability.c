@@ -169,17 +169,6 @@ int main(int argc, char* argv[])
 
 }
 
-void closeCdf(CDFid id)
-{
-    CDFstatus status;
-    status = CDFcloseCDF(id);
-    if (status != CDF_OK)
-    {
-        printErrorMessage(status);
-    }
-
-}
-
 void loadCrossTrackData(const char * filename, uint8_t **dataBuffers, long *numberOfRecords, bool *fourByteCalFlag)
 {
     char validationFileName[CDF_PATHNAME_LEN];

@@ -32,8 +32,6 @@
 
 #define NUM_DATA_VARIABLES 7
 
-void closeCdf(CDFid id);
-
 CDFstatus loadCrossTrackData(const char *filename, uint8_t **dataBuffers, long *numberOfRecords, bool *fourByteCalFlag, const char *parameterName);
 
 #define ADDR(n, m, d) (((float*)dataBuffers[(n)]+(d*timeIndex + m)))

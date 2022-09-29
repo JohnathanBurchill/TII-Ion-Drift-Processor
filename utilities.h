@@ -29,4 +29,7 @@ void constructExportFileName(const char *dataset, double startTime, double stopT
 // Prints an error message from the CDFstatus
 void printErrorMessage(CDFstatus status);
 
+void closeCdf(CDFid id);
+
+
 #endif // UTILITIES_H

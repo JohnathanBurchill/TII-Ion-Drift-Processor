@@ -47,3 +47,14 @@ void printErrorMessage(CDFstatus status)
     CDFgetStatusText(status, errorMessage);
     fprintf(stdout, "%s%s\n", infoHeader, errorMessage);
 }
+
+void closeCdf(CDFid id)
+{
+    CDFstatus status;
+    status = CDFcloseCDF(id);
+    if (status != CDF_OK)
+    {
+        printErrorMessage(status);
+    }
+
+}
