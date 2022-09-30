@@ -60,6 +60,7 @@ typedef struct CommandArgs
 	char *calVersion;
 	char *exportVersion;
 	char *calDir;
+	char *lpDir;
 	char *exportDir;
 } CommandArgs;
 
@@ -121,7 +122,8 @@ int main(int argc, char *argv[])
 	char *calVersion = CALIBRATION_FILE_VERSION;
 	char *exportVersion = EXPORT_VERSION;
 	char *calDir = "/efirepo/EfiCalCdfs";
-	char *exportDir = "/databases/TCT";
+	char *lpDir = "/storage/LP";
+	char *exportDir = "/storage/TCT";
 
 	char *date = strdup(startDate);
 	char *d1 = strdup(startDate);
@@ -215,6 +217,7 @@ int main(int argc, char *argv[])
 						commandArgs[i].calVersion = calVersion;
 						commandArgs[i].exportVersion = exportVersion;
 						commandArgs[i].calDir = calDir;
+						commandArgs[i].calDir = lpDir;
 						commandArgs[i].exportDir = exportDir;
 						ymd(date, &year, &month, &day);
 						commandArgs[i].year = year;
@@ -371,7 +374,7 @@ void *runThread(void *a)
 	// exec TIICT command 
 	int status = 0;
 	char command[5*FILENAME_MAX+256];
-	sprintf(command, "tiict %s %d %d %d %s %s %s %s > %s/%s/TCT16/%s%4d%02d%02d.log 2>&1", args->satLetter, args->year, args->month, args->day, args->calVersion, args->exportVersion, args->calDir, args->exportDir, args->exportDir, args->exportVersion, args->satLetter, args->year, args->month, args->day);
+	sprintf(command, "tiict %s %d %d %d %s %s %s %s > %s/%s/TCT16/%s%4d%02d%02d.log 2>&1", args->satLetter, args->year, args->month, args->day, args->calVersion, args->exportVersion, args->calDir, args->lpDir, args->exportDir, args->exportDir, args->exportVersion, args->satLetter, args->year, args->month, args->day);
 	status = system(command);
 	if (WIFEXITED(status) && (WEXITSTATUS(status) == 0))
 	{
