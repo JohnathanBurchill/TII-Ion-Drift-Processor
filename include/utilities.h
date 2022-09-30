@@ -1,6 +1,6 @@
 /*
 
-    TII Cross-Track Ion Drift Processor: utilities.h
+    TII Cross-Track Ion Drift Processor: include/utilities.h
 
     Copyright (C) 2022  Johnathan K Burchill
 

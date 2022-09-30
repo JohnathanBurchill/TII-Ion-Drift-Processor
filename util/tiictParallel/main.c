@@ -18,6 +18,8 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+#include "utilities.h"
+
 #include <stdio.h>
 
 #include <string.h>
@@ -41,6 +43,7 @@
 
 #define MAX_THREADS 38
 
+char infoHeader[50] = {0};
 
 enum STATUS 
 {
@@ -131,6 +134,16 @@ int main(int argc, char *argv[])
 	int days = dayCount(d1, d2);
 	free(d1);
 	free(d2);
+
+	sprintf(infoHeader, "tiictParallel: ");
+
+	// Ensure log directory exists
+	int dirStat = makeSureDirExists(exportDir, exportVersion, "logs");
+	if (dirStat != 0)
+	{
+		fprintf(stderr, "Cannot access %s/%s/logs directory.\n", exportDir, exportVersion);
+		exit(EXIT_FAILURE);
+	}
 
 	CommandArgs *commandArgs = calloc(nThreads, sizeof(CommandArgs));
 	if (commandArgs == NULL)
@@ -374,7 +387,7 @@ void *runThread(void *a)
 	// exec TIICT command 
 	int status = 0;
 	char command[5*FILENAME_MAX+256];
-	sprintf(command, "/home/dataflow/bin/tiict %s %d %d %d %s %s %s %s %s > %s/%s/TCT16/%s%4d%02d%02d.log 2>&1", args->satLetter, args->year, args->month, args->day, args->calVersion, args->exportVersion, args->calDir, args->lpDir, args->exportDir, args->exportDir, args->exportVersion, args->satLetter, args->year, args->month, args->day);
+	sprintf(command, "/home/dataflow/bin/tiict %s %d %d %d %s %s %s %s %s > %s/%s/logs/%s%4d%02d%02d.log 2>&1", args->satLetter, args->year, args->month, args->day, args->calVersion, args->exportVersion, args->calDir, args->lpDir, args->exportDir, args->exportDir, args->exportVersion, args->satLetter, args->year, args->month, args->day);
 
 	status = system(command);
 	if (WIFEXITED(status) && (WEXITSTATUS(status) == 0))

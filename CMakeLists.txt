@@ -30,6 +30,8 @@ else (CMAKE_BUILD_TYPE STREQUAL Debug)
     SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -std=gnu99 ")
 endif(CMAKE_BUILD_TYPE STREQUAL Debug)
 
+INCLUDE_DIRECTORIES(include)
+
 # GSL
 FIND_PACKAGE(GSL REQUIRED)
 
@@ -40,25 +42,27 @@ SET(LIBS ${LIBS} ${MATH} ${GSL_LIBRARY} )
 
 INCLUDE_DIRECTORIES(${INCLUDE_DIRS} ${GSL_INCLUDE_DIRS})
 
-ADD_EXECUTABLE(tiict tiict.c utilities.c processing.c lpData.c)
+ADD_LIBRARY(Utilities utilities.c)
+
+ADD_EXECUTABLE(tiict tiict.c processing.c lpData.c)
 TARGET_INCLUDE_DIRECTORIES(tiict PRIVATE)
-TARGET_LINK_LIBRARIES(tiict ${LIBS} -lgslcblas -lcdf -ltii)
+TARGET_LINK_LIBRARIES(tiict Utilities ${LIBS} -lgslcblas -lcdf -ltii)
 
-ADD_EXECUTABLE(tiictinspect tiictinspect.c utilities.c)
+ADD_EXECUTABLE(tiictinspect tiictinspect.c)
 TARGET_INCLUDE_DIRECTORIES(tiictinspect PRIVATE)
-TARGET_LINK_LIBRARIES(tiictinspect ${LIBS} -lgslcblas -lcdf)
+TARGET_LINK_LIBRARIES(tiictinspect Utilities ${LIBS} -lgslcblas -lcdf)
 
-ADD_EXECUTABLE(tiictqualityflags tiictqualityflags.c utilities.c)
+ADD_EXECUTABLE(tiictqualityflags tiictqualityflags.c)
 TARGET_INCLUDE_DIRECTORIES(tiictqualityflags PRIVATE )
-TARGET_LINK_LIBRARIES(tiictqualityflags ${MATH} -lcdf)
+TARGET_LINK_LIBRARIES(tiictqualityflags Utilities ${MATH} -lcdf)
 
-ADD_EXECUTABLE(tiictvariability tiictvariability.c utilities.c)
+ADD_EXECUTABLE(tiictvariability tiictvariability.c)
 TARGET_INCLUDE_DIRECTORIES(tiictvariability PRIVATE )
-TARGET_LINK_LIBRARIES(tiictvariability ${LIBS} -lgslcblas -lcdf)
+TARGET_LINK_LIBRARIES(tiictvariability Utilities ${LIBS} -lgslcblas -lcdf)
 
-ADD_EXECUTABLE(tiictbin tiictbin.c utilities.c statistics.c)
+ADD_EXECUTABLE(tiictbin tiictbin.c statistics.c)
 TARGET_INCLUDE_DIRECTORIES(tiictbin PRIVATE )
-TARGET_LINK_LIBRARIES(tiictbin ${LIBS} -lgslcblas -lcdf)
+TARGET_LINK_LIBRARIES(tiictbin Utilities ${LIBS} -lgslcblas -lcdf)
 
 # ADD_EXECUTABLE(tiictfitstatistics tiictfitstatistics.c)
 # TARGET_INCLUDE_DIRECTORIES(tiictfitstatistics PRIVATE )
