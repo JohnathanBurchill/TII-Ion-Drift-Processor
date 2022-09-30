@@ -33,9 +33,9 @@
 #include <curses.h>
 
 
-#define SOFTWARE_VERSION "1.0"
+#define SOFTWARE_VERSION "1.1"
 #define CALIBRATION_FILE_VERSION "0302"
-#define EXPORT_VERSION "0302"
+#define EXPORT_VERSION "0401"
 
 #define THREAD_MANAGER_WAIT 100000 // uSeconds
 
