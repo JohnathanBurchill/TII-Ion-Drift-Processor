@@ -42,7 +42,7 @@ INCLUDE_DIRECTORIES(${INCLUDE_DIRS} ${GSL_INCLUDE_DIRS})
 
 ADD_EXECUTABLE(tiict tiict.c utilities.c processing.c lpData.c)
 TARGET_INCLUDE_DIRECTORIES(tiict PRIVATE)
-TARGET_LINK_LIBRARIES(tiict ${LIBS} -lgslcblas -lcdf)
+TARGET_LINK_LIBRARIES(tiict ${LIBS} -lgslcblas -lcdf -ltii)
 
 ADD_EXECUTABLE(tiictinspect tiictinspect.c utilities.c)
 TARGET_INCLUDE_DIRECTORIES(tiictinspect PRIVATE)

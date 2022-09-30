@@ -31,5 +31,6 @@ void printErrorMessage(CDFstatus status);
 
 void closeCdf(CDFid id);
 
+int makeSureDirExists(const char *exportDir, const char *exportVersion, const char *subdir);
 
 #endif // UTILITIES_H

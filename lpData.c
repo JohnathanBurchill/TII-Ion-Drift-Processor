@@ -10,10 +10,11 @@
 #include <fts.h>
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
 
 extern char infoHeader[50];
 
-int getLpData(const char *lpDir, const char *satellite, const int year, const int month, const int day, uint8_t **dataBuffers, double **lpPhiScHighGain, double **lpPhiScLowGain)
+int getLpData(const char *lpDir, const char *satellite, const int year, const int month, const int day, uint8_t **dataBuffers, long nRecs, float **lpPhiScHighGain, float **lpPhiScLowGain, float **lpPhiSc)
 {
 
     int status = 0;
@@ -33,6 +34,7 @@ int getLpData(const char *lpDir, const char *satellite, const int year, const in
     double *lpTimes2Hz = NULL;
     double *lpVsHg = NULL;
     double *lpVsLg = NULL;
+    double *lpVs = NULL;
     long nLpRecs = 0;
 
     for (int i = 0; i < 3; i++)
@@ -47,7 +49,7 @@ int getLpData(const char *lpDir, const char *satellite, const int year, const in
         }
         fprintf(stderr, "%sLoading LP data from %s\n", infoHeader, lpFile);
         
-        loadLpInputs(lpFile, &lpTimes2Hz, &lpVsHg, &lpVsLg, &nLpRecs);
+        loadLpInputs(lpFile, &lpTimes2Hz, &lpVsHg, &lpVsLg, &lpVs, &nLpRecs);
 
         date.tm_mday = date.tm_mday + 1;
         
@@ -55,18 +57,30 @@ int getLpData(const char *lpDir, const char *satellite, const int year, const in
 
     fprintf(stderr, "%sLoaded %ld LP HM records\n", infoHeader, nLpRecs);
 
-
-    long ym, mm, dm, hm, minm, sm, msm;
-
-    for (long i = 0; i < nLpRecs; i+=1000)
-    {
-        EPOCHbreakdown(lpTimes2Hz[i], &ym, &mm, &dm, &hm, &minm, &sm, &msm);
-        fprintf(stderr, "t=%4ld%02ld%02ldT%02ld%02ld%02ld.%03ld\t%f\t%f\n", ym, mm, dm, hm, minm, sm, msm, lpVsHg[i], lpVsLg[i]);
-    }
-
     // interpolate LP data to TII times
+    *lpPhiScHighGain = malloc(sizeof(float) * nRecs);
+    *lpPhiScLowGain = malloc(sizeof(float) * nRecs);
+    *lpPhiSc = malloc(sizeof(float) * nRecs);
+    if (*lpPhiScHighGain == NULL || *lpPhiScLowGain == NULL || *lpPhiSc == NULL)
+    {
+        return -1;
+    }
+    bzero(*lpPhiScHighGain, sizeof(float) * nRecs);
+    bzero(*lpPhiScLowGain, sizeof(float) * nRecs);
+    bzero(*lpPhiSc, sizeof(float) * nRecs);
 
-    
+    double *tiiTime = (double*)dataBuffers[0];
+
+    interpolate(lpTimes2Hz, lpVsHg, nLpRecs, tiiTime, nRecs, *lpPhiScHighGain);
+    interpolate(lpTimes2Hz, lpVsLg, nLpRecs, tiiTime, nRecs, *lpPhiScLowGain);
+    interpolate(lpTimes2Hz, lpVsLg, nLpRecs, tiiTime, nRecs, *lpPhiSc);
+
+    // long ym, mm, dm, hm, minm, sm, msm;
+    // for (long i = 0; i < nRecs; i+=16)
+    // {
+    //     EPOCHbreakdown(tiiTime[i], &ym, &mm, &dm, &hm, &minm, &sm, &msm);
+    //     fprintf(stderr, "t=%4ld%02ld%02ldT%02ld%02ld%02ld.%03ld\t%f\t%f\n", ym, mm, dm, hm, minm, sm, msm, (*lpPhiScHighGain)[i], (*lpPhiScLowGain)[i]);
+    // }
 
 
     return status;
@@ -135,7 +149,7 @@ int getLpInputFilename(const char satelliteLetter, long year, long month, long d
 
 
 // Adapted from SLIDEM
-void loadLpInputs(const char *cdfFile, double **lpTime, double **lpPhiScHighGain, double **lpPhiScLowGain, long *numberOfRecords)
+void loadLpInputs(const char *cdfFile, double **lpTime, double **lpPhiScHighGain, double **lpPhiScLowGain, double **lpPhiSc, long *numberOfRecords)
 {
     // Open the CDF file with validation
     CDFsetValidate(VALIDATEFILEoff);
@@ -173,8 +187,8 @@ void loadLpInputs(const char *cdfFile, double **lpTime, double **lpPhiScHighGain
         closeCdf(cdfId);
         return;
     }
-    int nVariables = 3;
-    char * variables[3] = {"Timestamp", "Vs_hgn", "Vs_lgn"};
+    int nVariables = 4;
+    char * variables[4] = {"Timestamp", "Vs_hgn", "Vs_lgn", "U_SC"};
 
     for (uint8_t i = 0; i<nVariables; i++)
     {
@@ -227,6 +241,10 @@ void loadLpInputs(const char *cdfFile, double **lpTime, double **lpPhiScHighGain
                 *lpPhiScLowGain = (double*) realloc(*lpPhiScLowGain, totalBytes);
                 memcpy(*lpPhiScLowGain + (*numberOfRecords), data, numBytesToAdd);
                 break;
+            case 3: // U_SC
+                *lpPhiSc = (double*) realloc(*lpPhiSc, totalBytes);
+                memcpy(*lpPhiSc + (*numberOfRecords), data, numBytesToAdd);
+                break;
             default:
                 return;
         }
@@ -238,5 +256,48 @@ void loadLpInputs(const char *cdfFile, double **lpTime, double **lpPhiScHighGain
     // Update number of records found and memory allocated
     *numberOfRecords += numRecs;
     // *totalMemoryAllocated = fpMemorySize;
+
+}
+
+
+// Copied and modified from TRACIS interpolate.c
+void interpolate(double *times, double *values, size_t nVals, double *requestedTimes, long nRequestedValues, float *newValues)
+{
+    
+    size_t lastIndex = 0;
+    double thisTime = 0;
+    double t1 = 0, t2 = 0, dt = 0;
+    double fraction = 0;
+    double v1 = 0, v2 = 0, dv = 0;
+    double x = 0, y = 0, z = 0;
+    double rad = 0;
+    double lat = 0;
+    double lon = 0;
+    for (size_t i = 0; i < nRequestedValues; i++)
+    {
+        thisTime = requestedTimes[i];
+        // 
+        while (times[lastIndex] <= thisTime && lastIndex < nVals) 
+        {
+            lastIndex++;
+        }
+        // Extrapolate earlier or later, or the times are the same
+        if (times[lastIndex] >= thisTime || lastIndex == nVals - 1)
+        {
+            newValues[i] = (float)values[lastIndex];
+        }
+        // Interpolate
+        else
+        {
+            t1 = times[lastIndex];
+            t2 = times[lastIndex+1];
+            // Assumes t2 > t1
+            dt = thisTime - t1;
+            fraction = dt / (t2 - t1);
+            newValues[i] = (float)(values[lastIndex] + (values[lastIndex+1] - values[lastIndex]) * fraction);
+        }
+    }
+
+    return;
 
 }

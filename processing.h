@@ -22,6 +22,7 @@
 #define PROCESSING_H
 
 #include <stdint.h>
+#include <stdbool.h>
 #include <stdio.h>
 
 enum FITINFO_BIT_MASKS {
@@ -42,7 +43,7 @@ typedef struct offset_model_fit_arguments {
 } offset_model_fit_arguments;
 
 
-void removeOffsetsAndSetFlags(const char* satellite, offset_model_fit_arguments fitargs, long nRecs, uint8_t **dataBuffers, float *viErrors, uint16_t *flags, uint32_t *fitInfo, FILE* fitFile);
+void removeOffsetsAndSetFlags(const char* satellite, offset_model_fit_arguments fitargs, long nRecs, uint8_t **dataBuffers, float *viErrors, uint16_t *flags, uint32_t *fitInfo, FILE* fitFile, bool setFlags);
 
 void updateDataQualityFlags(const char *satellite, uint8_t sensorIndex, uint8_t regionNumber, float driftValue, float mad, long timeIndex, uint16_t *flags, uint32_t *fitInfo);
 

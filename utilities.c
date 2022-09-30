@@ -20,6 +20,10 @@
 
 #include <stdio.h>
 #include <cdf.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <sys/errno.h>
+#include <sys/stat.h>
 
 #include "utilities.h"
 
@@ -56,5 +60,40 @@ void closeCdf(CDFid id)
     {
         printErrorMessage(status);
     }
+
+}
+
+int makeSureDirExists(const char *exportDir, const char *exportVersion, const char *subdir)
+{
+    int status = 0;
+    char outDir[FILENAME_MAX] = {0};
+    sprintf(outDir, "%s/%s", exportDir, exportVersion);
+
+    errno = 0;
+    status = access(outDir, F_OK);
+    if (status != 0 && errno == ENOENT)
+    {
+        // Try to create the directory
+        errno = 0;
+        fprintf(stderr, "%sCreating %s\n", infoHeader, outDir);
+        status = mkdir(outDir, S_IRWXU);
+    }
+
+    if (status != 0)
+        return status;
+
+
+    sprintf(outDir, "%s/%s/%s", exportDir, exportVersion, subdir);
+    status = access(outDir, F_OK);
+    if (status != 0 && errno == ENOENT)
+    {
+        // Try to create the directory
+        errno = 0;
+        fprintf(stderr, "%sCreating %s\n", infoHeader, outDir);
+        status = mkdir(outDir, S_IRWXU);
+    }
+
+    return status;
+
 
 }

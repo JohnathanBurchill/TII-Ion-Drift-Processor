@@ -25,6 +25,9 @@
 #include "indexing.h"
 #include "lpData.h"
 
+#include <tii/detector.h>
+#include <tii/isp.h>
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -111,6 +114,22 @@ int main(int argc, char* argv[])
         fprintf(stdout, "%sProcessing %ld records for this date.\n", infoHeader, numAvailableRecords);
     }
 
+    // Create output directory structure if it does not exist
+    int dirStat = makeSureDirExists(exportDir, exportVersion, "TCT16");
+    if (dirStat != 0)
+    {
+        fprintf(stderr, "%sTCT16 export directory is unavailable (or could not be created).\n", infoHeader);
+        exit(EXIT_FAILURE);
+    }
+    dirStat = makeSureDirExists(exportDir, exportVersion, "TCT02");
+    if (dirStat != 0)
+    {
+        fprintf(stderr, "%sTCT02 export directory is unavailable (or could not be created).\n", infoHeader);
+        exit(EXIT_FAILURE);
+    }
+
+
+
     sprintf(fitLogFileName, "%s/%s/TCT16/SW_EXPT_EFI%s_TCT16_%04d%02d%02dT000000_%04d%02d%02dT235959_%s_fits.txt", exportDir, exportVersion, satellite, year, month, day, year, month, day, exportVersion);
     fprintf(stdout, "%sFit log file: %s\n", infoHeader, fitLogFileName);
 
@@ -159,16 +178,7 @@ int main(int argc, char* argv[])
 
     loadCalData(calDir, calVersion, satellite, year, month, day, dataBuffers, &nRecs);
 
-    double * lpTimes = NULL;
-    double * lpPhiSc1 = NULL;
-    double * lpPhiSc2 = NULL;
-    long nLpRecs = 0;
-
-    getLpData(lpDir, satellite, year, month, day, dataBuffers, &lpPhiSc1, &lpPhiSc2);
-
     fflush(stdout);
-
-    exit(0);
 
     // Do the calibration
     double *pEpoch = (double*) dataBuffers[0];
@@ -192,10 +202,42 @@ int main(int argc, char* argv[])
         exit(1);
     }
 
+    // Adjust times for sample lag
     for (long timeIndex = 0; timeIndex < nRecs; timeIndex++)
     {
-        // Adjust times for sample lag
         ((double*)dataBuffers[0])[timeIndex] += ((1./32 - 0.0875)*1000.); // ms
+    }
+
+    // Get LP floating potentials
+    double * lpTimes = NULL;
+    float * lpPhiScHighGain = NULL;
+    float * lpPhiScLowGain = NULL;
+    float * lpPhiSc = NULL;
+    long nLpRecs = 0;
+
+    getLpData(lpDir, satellite, year, month, day, dataBuffers, nRecs, &lpPhiScHighGain, &lpPhiScLowGain, &lpPhiSc);
+    fprintf(stdout, "%sLoaded and interpolated LP potentials.\n", infoHeader);
+
+    float enxh = 0.0;
+    float enxv = 0.0;
+    float vixh = 0.0;
+    float vixv = 0.0;
+    float q = 1.602e-19;
+    float mass = 2.67e-26; // O+
+
+    float shx = 0.0, shy = 0.0, svx = 0.0, svy = 0.0;
+
+    // Detector centres
+    float xch = 0.0;
+    float ych = 0.0;
+    float xcv = 0.0;
+    float ycv = 0.0;
+    detectorCoordinates(satellite[0], H_SENSOR, &xch, &ych);
+    detectorCoordinates(satellite[0], V_SENSOR, &xcv, &ycv);
+
+    // Estimate raw velocities 
+    for (long timeIndex = 0; timeIndex < nRecs; timeIndex++)
+    {
         // Bias Voltage
         // TODO: need a more accurate replacement: i.e., early in mission the voltage was ~-60 V, not -62.
         if (VBIAS() < -95.0)
@@ -218,7 +260,6 @@ int main(int argc, char* argv[])
         innerDomeBias = VBIAS() - VFP();
 
         // Get scaling parameter
-        float shx, shy, svx, svy;
         switch(satellite[0])
         {
             case 'A': // 20190930 slew experiment, plus simulations
@@ -261,17 +302,54 @@ int main(int argc, char* argv[])
                 }
                 break;
         }
-        // Change sign to get flow directions correct, then apply scaling and remove known satellite signal
-//        fprintf(stdout, "%sshx: %f\n", infoHeader, shx);
-        *ADDR(1, 0, 2) = -1.0 * (MXH() - 32.5) * shx - VSATX(); 
-        *ADDR(1, 1, 2) = -1.0 * (MYH() - 32.5) * shy - VSATY();
-        *ADDR(2, 0, 2) = -1.0 * (MXV() - 32.5) * svx - VSATX();
-        *ADDR(2, 1, 2) = -1.0 * (MYV() - 32.5) * svy - VSATZ();
+        // Cross-track flows do not take into satellite potential
+        // Change sign to get flow directions correct, then apply scaling
+        // and subtract satellite velocity
+
+        *ADDR(1, 1, 2) = -1.0 * (MYH() - ych) * shy - VSATY();
+        *ADDR(2, 1, 2) = -1.0 * (MYV() - ycv) * svy - VSATZ();
+
+        // Along-track flows take into account satellite potential 
+        // by first converting flow to energy (eofr)
+        // adding the satellite potential estimate from LP
+        // then converting to velocity
+        // We no longer use the cross-track empirical sensitivity formulas,
+        // which are approximations anyway.
+        // TODO: revise calibration files to get MCP voltage 
+        // NOTE that inner dome bias is not measured but the setting for the H sensor.
+        // Remove effect of satellite potential
+        // TODO: take into account v-cross-B-dot-dl
+        enxh = eofr(MXH() - xch, innerDomeBias, 0.0);
+        enxv = eofr(MXV() - xcv, innerDomeBias, 0.0);
+
+        enxh += lpPhiSc[timeIndex];
+        enxv += lpPhiSc[timeIndex];
+
+        // enxh += lpPhiScHighGain[timeIndex];
+        // enxv += lpPhiScHighGain[timeIndex];
+
+        // enxh += lpPhiScLowGain[timeIndex];
+        // enxv += lpPhiScLowGain[timeIndex];
+
+        // Calculate vix assuming pure O+
+        // needs to be negative, indicating a flow toward the satellite,
+        vixh = -sqrtf(2.0 / mass * q * enxh);
+        vixv = -sqrtf(2.0 / mass * q * enxv);
+        // then satellite velocity can be subtracted (VSATX is negative, i.e. toward the satellite).
+        // HX
+        *ADDR(1, 0, 2) = vixh - VSATX();
+        // HV
+        *ADDR(2, 0, 2) = vixv - VSATX();
+
+        // Old way, estimates a proxy based on image moments
+        // *ADDR(1, 0, 2) = -1.0 * (MXH() - 32.5) * shx - VSATX();
+        // *ADDR(2, 0, 2) = -1.0 * (MXV() - 32.5) * svx - VSATX();
 
     }
 
     fprintf(stdout, "%sPrepared calibration data.\n", infoHeader);
     fflush(stdout);
+
 
     // Set up new memory
     float *xhat = (float*) malloc((size_t) (nRecs * sizeof(float) * 3));
@@ -308,7 +386,8 @@ int main(int argc, char* argv[])
     // 5. Repeat. Does not have to be sequential
     for (uint8_t ind = 0; ind < 4; ind++)
     {
-        removeOffsetsAndSetFlags(satellite, fitargs[ind], nRecs, dataBuffers, viErrors, flags, fitInfo, fitFile);
+        // Remove offsets again and set flags
+        removeOffsetsAndSetFlags(satellite, fitargs[ind], nRecs, dataBuffers, viErrors, flags, fitInfo, fitFile, true);
     }
 
     fprintf(stdout, "%sRemoved offsets and calculated flags.\n", infoHeader);
@@ -455,10 +534,12 @@ int main(int argc, char* argv[])
 
     if (lpTimes != NULL)
         free(lpTimes);
-    if (lpPhiSc1 != NULL)
-        free(lpPhiSc1);
-    if (lpPhiSc2 != NULL)
-        free(lpPhiSc2);
+    if (lpPhiScHighGain != NULL)
+        free(lpPhiScHighGain);
+    if (lpPhiScLowGain != NULL)
+        free(lpPhiScLowGain);
+    if (lpPhiSc != NULL)
+        free(lpPhiSc);
 
     free(xhat);
     free(yhat);

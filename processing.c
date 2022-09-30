@@ -32,7 +32,7 @@
 
 extern char infoHeader[50];
 
-void removeOffsetsAndSetFlags(const char* satellite, offset_model_fit_arguments fitargs, long nRecs, uint8_t **dataBuffers, float *viErrors, uint16_t *flags, uint32_t *fitInfo, FILE* fitFile)
+void removeOffsetsAndSetFlags(const char* satellite, offset_model_fit_arguments fitargs, long nRecs, uint8_t **dataBuffers, float *viErrors, uint16_t *flags, uint32_t *fitInfo, FILE* fitFile, bool setFlags)
 {
     // Robust linear least squares from GSL: https://www.gnu.org/software/gsl/doc/html/lls.html#examples
     long long timeIndex = 0;
@@ -186,7 +186,7 @@ void removeOffsetsAndSetFlags(const char* satellite, offset_model_fit_arguments 
                     gsl_matrix_set(modelTimesMatrix, modelDataIndex, 0, 1.0);
                     gsl_matrix_set(modelTimesMatrix, modelDataIndex++, 1, fitTime); // seconds from start of file
                 }
-                // Load values into model data buffer ence each for HX, HY, VX, VY
+                // Load values into model data buffer once each for HX, HY, VX, VY
                 for (uint8_t k = 0; k < 4; k++)
                 {
                     uint8_t flagIndex = k; // Defined flags as bit 0 -> HX, bit 1 -> VX, bit 2-> HY and bit 3-> VY. Data are stored in memory differently.
@@ -222,11 +222,14 @@ void removeOffsetsAndSetFlags(const char* satellite, offset_model_fit_arguments 
                         fprintf(stdout, "%s<GSL Fit Error: %s> for fit region from %s to %s spanning latitudes %.0f to %.0f.\n", infoHeader, gsl_strerror(gslStatus), startString, stopString, fitargs.lat1, fitargs.lat4);
                         // Print "-9999999999.GSLERRORNUMBER" for each of the nine fit parameters
                         fprintf(fitFile, " -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d", gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus);
-                        for (timeIndex = beginIndex0; timeIndex < endIndex1; timeIndex++)
+                        if (setFlags)
                         {
-                            // Got a complete region, but had a fit error
-                            fitInfo[timeIndex] &= ~(FITINFO_INCOMPLETE_REGION << (flagIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
-                            fitInfo[timeIndex] |= (FITINFO_GSL_FIT_ERROR << (flagIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
+                            for (timeIndex = beginIndex0; timeIndex < endIndex1; timeIndex++)
+                            {
+                                // Got a complete region, but had a fit error
+                                fitInfo[timeIndex] &= ~(FITINFO_INCOMPLETE_REGION << (flagIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
+                                fitInfo[timeIndex] |= (FITINFO_GSL_FIT_ERROR << (flagIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
+                            }
                         }
                     }
                     else
@@ -256,9 +259,12 @@ void removeOffsetsAndSetFlags(const char* satellite, offset_model_fit_arguments 
                             // Having a complete region can be determined from offset removed and gsl error flags, but
                             // the extra bit will make it logically straightforward to find incomplete regions.
                             // Toggle off the "offset not removed" and "incomplete region" flag bits
-                            fitInfo[timeIndex] &= ~((FITINFO_OFFSET_NOT_REMOVED | FITINFO_INCOMPLETE_REGION) << (flagIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
-                            // Update quality and calibration flags based on thresholds
-                            updateDataQualityFlags(satellite, flagIndex, fitargs.regionNumber, driftValue, mad, timeIndex, flags, fitInfo);
+                            if (setFlags)
+                            {
+                                fitInfo[timeIndex] &= ~((FITINFO_OFFSET_NOT_REMOVED | FITINFO_INCOMPLETE_REGION) << (flagIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
+                                // Update quality and calibration flags based on thresholds
+                                updateDataQualityFlags(satellite, flagIndex, fitargs.regionNumber, driftValue, mad, timeIndex, flags, fitInfo);
+                            }
                         }
                     }
                 }
