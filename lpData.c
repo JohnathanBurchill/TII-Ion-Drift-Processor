@@ -34,7 +34,7 @@
 
 extern char infoHeader[50];
 
-int getLpData(const char *lpDir, const char *satellite, const int year, const int month, const int day, uint8_t **dataBuffers, long nRecs, float **lpPhiScHighGain, float **lpPhiScLowGain, float **lpPhiSc)
+int getLpData(const char *lpDir, const char *satellite, const int year, const int month, const int day, uint8_t **dataBuffers, long nRecs, float **lpPhiScHighGain, float **lpPhiScLowGain, float **lpPhiSc, size_t *nLpRecs)
 {
 
     int status = 0;
@@ -55,7 +55,6 @@ int getLpData(const char *lpDir, const char *satellite, const int year, const in
     double *lpVsHg = NULL;
     double *lpVsLg = NULL;
     double *lpVs = NULL;
-    long nLpRecs = 0;
 
     for (int i = 0; i < 3; i++)
     {
@@ -69,13 +68,11 @@ int getLpData(const char *lpDir, const char *satellite, const int year, const in
         }
         fprintf(stderr, "%sLoading LP data from %s\n", infoHeader, lpFile);
         
-        loadLpInputs(lpFile, &lpTimes2Hz, &lpVsHg, &lpVsLg, &lpVs, &nLpRecs);
+        loadLpInputs(lpFile, &lpTimes2Hz, &lpVsHg, &lpVsLg, &lpVs, nLpRecs);
 
         date.tm_mday = date.tm_mday + 1;
         
     }
-
-    fprintf(stderr, "%sLoaded %ld LP HM records\n", infoHeader, nLpRecs);
 
     // interpolate LP data to TII times
     *lpPhiScHighGain = malloc(sizeof(float) * nRecs);
@@ -91,9 +88,9 @@ int getLpData(const char *lpDir, const char *satellite, const int year, const in
 
     double *tiiTime = (double*)dataBuffers[0];
 
-    interpolate(lpTimes2Hz, lpVsHg, nLpRecs, tiiTime, nRecs, *lpPhiScHighGain);
-    interpolate(lpTimes2Hz, lpVsLg, nLpRecs, tiiTime, nRecs, *lpPhiScLowGain);
-    interpolate(lpTimes2Hz, lpVsLg, nLpRecs, tiiTime, nRecs, *lpPhiSc);
+    interpolate(lpTimes2Hz, lpVsHg, *nLpRecs, tiiTime, nRecs, *lpPhiScHighGain);
+    interpolate(lpTimes2Hz, lpVsLg, *nLpRecs, tiiTime, nRecs, *lpPhiScLowGain);
+    interpolate(lpTimes2Hz, lpVsLg, *nLpRecs, tiiTime, nRecs, *lpPhiSc);
 
     return status;
 

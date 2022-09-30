@@ -24,7 +24,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
-int getLpData(const char *lpDir, const char *satellite, const int year, const int month, const int day, uint8_t **dataBuffers, long nRecs, float **lpPhiScHighGain, float **lpPhiScLowGain, float **lpPhiSc);
+int getLpData(const char *lpDir, const char *satellite, const int year, const int month, const int day, uint8_t **dataBuffers, long nRecs, float **lpPhiScHighGain, float **lpPhiScLowGain, float **lpPhiSc, size_t *nLpRecs);
 
 int getLpInputFilename(const char satelliteLetter, long year, long month, long day, const char *path, char *filename);
 

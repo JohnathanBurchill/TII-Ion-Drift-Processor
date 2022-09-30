@@ -213,10 +213,14 @@ int main(int argc, char* argv[])
     float * lpPhiScHighGain = NULL;
     float * lpPhiScLowGain = NULL;
     float * lpPhiSc = NULL;
-    long nLpRecs = 0;
+    size_t nLpRecs = 0;
 
-    getLpData(lpDir, satellite, year, month, day, dataBuffers, nRecs, &lpPhiScHighGain, &lpPhiScLowGain, &lpPhiSc);
-    fprintf(stdout, "%sLoaded and interpolated LP potentials.\n", infoHeader);
+    getLpData(lpDir, satellite, year, month, day, dataBuffers, nRecs, &lpPhiScHighGain, &lpPhiScLowGain, &lpPhiSc, &nLpRecs);
+    if (nLpRecs < LP_MIN_NUMBER_OF_POTENTIALS)
+    {
+        fprintf(stderr, "%sNot enough (%lu) LP potentials imported.\n", infoHeader, nLpRecs);
+    }
+    fprintf(stdout, "%sLoaded %lu LP potentials, and interpolated them to the TII times.\n", infoHeader, nLpRecs);
 
     // Choose a potential estimate (lpPhiSc, lpPhiScHighGain, or lpPhiScLowGain)
     float *lpPotentials = lpPhiSc;
