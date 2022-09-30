@@ -1,3 +1,23 @@
+/*
+
+    TII Cross-Track Ion Drift Processor: lpData.c
+
+    Copyright (C) 2022  Johnathan K Burchill
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
 #include "lpData.h"
 
 #include "indexing.h"
@@ -74,14 +94,6 @@ int getLpData(const char *lpDir, const char *satellite, const int year, const in
     interpolate(lpTimes2Hz, lpVsHg, nLpRecs, tiiTime, nRecs, *lpPhiScHighGain);
     interpolate(lpTimes2Hz, lpVsLg, nLpRecs, tiiTime, nRecs, *lpPhiScLowGain);
     interpolate(lpTimes2Hz, lpVsLg, nLpRecs, tiiTime, nRecs, *lpPhiSc);
-
-    // long ym, mm, dm, hm, minm, sm, msm;
-    // for (long i = 0; i < nRecs; i+=16)
-    // {
-    //     EPOCHbreakdown(tiiTime[i], &ym, &mm, &dm, &hm, &minm, &sm, &msm);
-    //     fprintf(stderr, "t=%4ld%02ld%02ldT%02ld%02ld%02ld.%03ld\t%f\t%f\n", ym, mm, dm, hm, minm, sm, msm, (*lpPhiScHighGain)[i], (*lpPhiScLowGain)[i]);
-    // }
-
 
     return status;
 
