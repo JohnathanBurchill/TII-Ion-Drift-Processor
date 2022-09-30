@@ -62,12 +62,12 @@ void addAttributes(CDFid id, const char *calVersion, const char *satellite, cons
 
 long numberOfAvailableRecordsForDate(const char *satellite, const int year, const int month, const int day, const char *calDir, const char *calVersion);
 
-void exportTCT16Cdfs(double startTime, double stopTime, const char *exportDir, const char *exportVersion, const char *calVersion, const char *satellite, long startIndex, long stopIndex, uint8_t **dataBuffers, float *ectFieldH, float *ectFieldV, float* bctField, float *viErrors, uint16_t *flags, uint32_t *fitInfo);
+void exportTCT16Cdfs(double startTime, double stopTime, const char *exportDir, const char *exportVersion, const char *calVersion, const char *satellite, long startIndex, long stopIndex, uint8_t **dataBuffers, float *ectFieldH, float *ectFieldV, float* bctField, float *viErrors, float *potentials, uint16_t *flags, uint32_t *fitInfo);
 
-void exportTCT02Cdfs(double startTime, double stopTime, const char *exportDir, const char *exportVersion, const char *calVersion, const char *satellite, long startIndex, long stopIndex, uint8_t **dataBuffers, float *ectFieldH, float *ectFieldV, float* bctField, float *viErrors, uint16_t *flags, uint32_t *fitInfo);
+void exportTCT02Cdfs(double startTime, double stopTime, const char *exportDir, const char *exportVersion, const char *calVersion, const char *satellite, long startIndex, long stopIndex, uint8_t **dataBuffers, float *ectFieldH, float *ectFieldV, float* bctField, float *viErrors, float *potentials, uint16_t *flags, uint32_t *fitInfo);
 
 // Returns true if a full 8 samples were downsampled to 1 sample, false otherwise
-bool downSampleHalfSecond(long *index, long storageIndex, double t0, long maxIndex, uint8_t **dataBuffers, float *ectFieldH, float *ectFieldV, float *bctField, float *viErrors, uint16_t *flags, uint32_t *fitInfo);
+bool downSampleHalfSecond(long *index, long storageIndex, double t0, long maxIndex, uint8_t **dataBuffers, float *ectFieldH, float *ectFieldV, float *bctField, float *viErrors, float *potentials, uint16_t *flags, uint32_t *fitInfo);
 
 void zipCdfFile(char *cdfFileName);
 

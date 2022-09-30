@@ -218,6 +218,9 @@ int main(int argc, char* argv[])
     getLpData(lpDir, satellite, year, month, day, dataBuffers, nRecs, &lpPhiScHighGain, &lpPhiScLowGain, &lpPhiSc);
     fprintf(stdout, "%sLoaded and interpolated LP potentials.\n", infoHeader);
 
+    // Choose a potential estimate (lpPhiSc, lpPhiScHighGain, or lpPhiScLowGain)
+    float *lpPotentials = lpPhiSc;
+
     float enxh = 0.0;
     float enxv = 0.0;
     float vixh = 0.0;
@@ -322,14 +325,8 @@ int main(int argc, char* argv[])
         enxh = eofr(MXH() - xch, innerDomeBias, 0.0);
         enxv = eofr(MXV() - xcv, innerDomeBias, 0.0);
 
-        enxh += lpPhiSc[timeIndex];
-        enxv += lpPhiSc[timeIndex];
-
-        // enxh += lpPhiScHighGain[timeIndex];
-        // enxv += lpPhiScHighGain[timeIndex];
-
-        // enxh += lpPhiScLowGain[timeIndex];
-        // enxv += lpPhiScLowGain[timeIndex];
+        enxh += lpPotentials[timeIndex];
+        enxv += lpPotentials[timeIndex];
 
         // Calculate vix assuming pure O+
         // needs to be negative, indicating a flow toward the satellite,
@@ -487,9 +484,9 @@ int main(int argc, char* argv[])
             if (duration >= SECONDS_OF_DATA_REQUIRED_FOR_EXPORTING)
             {
                 // 16 Hz data
-                exportTCT16Cdfs(startTime, stopTime, exportDir, exportVersion, calVersion, satellite, startIndex, stopIndex, dataBuffers, ectFieldH, ectFieldV, bctField, viErrors, flags, fitInfo);
+                exportTCT16Cdfs(startTime, stopTime, exportDir, exportVersion, calVersion, satellite, startIndex, stopIndex, dataBuffers, ectFieldH, ectFieldV, bctField, viErrors, lpPotentials, flags, fitInfo);
                 // 2 Hz data
-                exportTCT02Cdfs(startTime, stopTime, exportDir, exportVersion, calVersion, satellite, startIndex, stopIndex, dataBuffers, ectFieldH, ectFieldV, bctField, viErrors, flags, fitInfo);
+                exportTCT02Cdfs(startTime, stopTime, exportDir, exportVersion, calVersion, satellite, startIndex, stopIndex, dataBuffers, ectFieldH, ectFieldV, bctField, viErrors, lpPotentials, flags, fitInfo);
                 recordsExported += (stopIndex - startIndex + 1);
                 minutesExported += (stopTime - startTime)/1000./60.;
                 filesExported++; // Only count 16 Hz files
@@ -921,6 +918,7 @@ void addAttributes(CDFid id, const char *dataset, const char *satellite, const c
         {"Vicrx", "CDF_FLOAT", "m/s", "Ion drift corotation signal x component in satellite-track coorinates. This has been removed from ion drift and electric field.", -1000., 1000.},
         {"Vicry", "CDF_FLOAT", "m/s", "Ion drift corotation signal y component in satellite-track coorinates. This has been removed from ion drift and electric field.", -1000., 1000.},
         {"Vicrz", "CDF_FLOAT", "m/s", "Ion drift corotation signal z component in satellite-track coorinates. This has been removed from ion drift and electric field.", -1000., 1000.},
+        {"U_SC", "CDF_FLOAT", "V", "Satellite floating potential estimate from EXTD LP_HM dataset.", -50., 5.},
         {"Quality_flags", "CDF_UINT2", "*", "Bitwise flag for each velocity component, where a value of 1 for a particular component signifies that calibration was successful, and that the baseline 1-sigma noise level is less than or equal to 100 m/s at 2 Hz. Electric field quality can be assessed from these flags according to -vxB. Bit0 (least significant) = Vixh, bit1 = Vixv, bit2 = Viy, bit3 = Viz. Refer to the release notes for details.", 0, 65535},
         {"Calibration_flags", "CDF_UINT4", "*", "Information about the calibration process. Refer to the release notes for details.", 0, 4294967295}
     };
@@ -1227,7 +1225,7 @@ long numberOfAvailableRecordsForDate(const char *satellite, const int year, cons
 
 }
 
-void exportTCT16Cdfs(double startTime, double stopTime, const char *exportDir, const char *exportVersion, const char *calVersion, const char *satellite, long startIndex, long stopIndex, uint8_t **dataBuffers, float *ectFieldH, float *ectFieldV, float* bctField, float *viErrors, uint16_t *flags, uint32_t *fitInfo)
+void exportTCT16Cdfs(double startTime, double stopTime, const char *exportDir, const char *exportVersion, const char *calVersion, const char *satellite, long startIndex, long stopIndex, uint8_t **dataBuffers, float *ectFieldH, float *ectFieldV, float* bctField, float *viErrors, float *potentials, uint16_t *flags, uint32_t *fitInfo)
 {
     fprintf(stdout, "%sExporting 16 Hz data.\n",infoHeader);
     char epochString[EPOCH_STRING_LEN+1];
@@ -1288,6 +1286,7 @@ void exportTCT16Cdfs(double startTime, double stopTime, const char *exportDir, c
         createVarFrom2DVar(exportCdfId, "Vicrx", CDF_REAL4, startIndex, stopIndex, dataBuffers[10], 0, 3);
         createVarFrom2DVar(exportCdfId, "Vicry", CDF_REAL4, startIndex, stopIndex, dataBuffers[10], 1, 3);
         createVarFrom2DVar(exportCdfId, "Vicrz", CDF_REAL4, startIndex, stopIndex, dataBuffers[10], 2, 3);
+        createVarFrom1DVar(exportCdfId, "U_SC", CDF_REAL4, startIndex, stopIndex, potentials);
         createVarFrom1DVar(exportCdfId, "Quality_flags", CDF_UINT2, startIndex, stopIndex, flags);
         createVarFrom1DVar(exportCdfId, "Calibration_flags", CDF_UINT4, startIndex, stopIndex, fitInfo);
 
@@ -1304,7 +1303,7 @@ void exportTCT16Cdfs(double startTime, double stopTime, const char *exportDir, c
     }
 }
 
-void exportTCT02Cdfs(double startTime, double stopTime, const char *exportDir, const char *exportVersion, const char *calVersion, const char *satellite, long startIndex, long stopIndex, uint8_t **dataBuffers, float *ectFieldH, float *ectFieldV, float* bctField, float *viErrors, uint16_t *flags, uint32_t *fitInfo)
+void exportTCT02Cdfs(double startTime, double stopTime, const char *exportDir, const char *exportVersion, const char *calVersion, const char *satellite, long startIndex, long stopIndex, uint8_t **dataBuffers, float *ectFieldH, float *ectFieldV, float* bctField, float *viErrors, float *potentials, uint16_t *flags, uint32_t *fitInfo)
 {
     fprintf(stdout, "%sExporting 2 Hz data.\n",infoHeader);
 
@@ -1335,7 +1334,7 @@ void exportTCT02Cdfs(double startTime, double stopTime, const char *exportDir, c
         t0 = floor(TIME()/1000.0); // UT second reference
         for (uint8_t halfSecond = 0; halfSecond < 2; halfSecond ++)
         {
-            downSampled = downSampleHalfSecond(&timeIndex, storageIndex, t0 + 0.5 * halfSecond, stopIndex, dataBuffers, ectFieldH, ectFieldV, bctField, viErrors, flags, fitInfo);
+            downSampled = downSampleHalfSecond(&timeIndex, storageIndex, t0 + 0.5 * halfSecond, stopIndex, dataBuffers, ectFieldH, ectFieldV, bctField, viErrors, potentials, flags, fitInfo);
             if (downSampled)
             {
                 storageIndex++;
@@ -1407,6 +1406,7 @@ void exportTCT02Cdfs(double startTime, double stopTime, const char *exportDir, c
         createVarFrom2DVar(exportCdfId, "Vicrx", CDF_REAL4, startIndex, stopIndex, dataBuffers[10], 0, 3);
         createVarFrom2DVar(exportCdfId, "Vicry", CDF_REAL4, startIndex, stopIndex, dataBuffers[10], 1, 3);
         createVarFrom2DVar(exportCdfId, "Vicrz", CDF_REAL4, startIndex, stopIndex, dataBuffers[10], 2, 3);
+        createVarFrom1DVar(exportCdfId, "U_SC", CDF_REAL4, startIndex, stopIndex, potentials);
         createVarFrom1DVar(exportCdfId, "Quality_flags", CDF_UINT2, startIndex, stopIndex, flags);
         createVarFrom1DVar(exportCdfId, "Calibration_flags", CDF_UINT4, startIndex, stopIndex, fitInfo);
 
@@ -1424,7 +1424,7 @@ void exportTCT02Cdfs(double startTime, double stopTime, const char *exportDir, c
     }
 }
 
-bool downSampleHalfSecond(long *index, long storageIndex, double t0, long maxIndex, uint8_t **dataBuffers, float *ectFieldH, float *ectFieldV, float *bctField, float *viErrors, uint16_t *flags, uint32_t *fitInfo)
+bool downSampleHalfSecond(long *index, long storageIndex, double t0, long maxIndex, uint8_t **dataBuffers, float *ectFieldH, float *ectFieldV, float *bctField, float *viErrors, float *potentials, uint16_t *flags, uint32_t *fitInfo)
 {
     long timeIndex = *index;
     uint8_t nSamples = 0;
@@ -1480,6 +1480,7 @@ bool downSampleHalfSecond(long *index, long storageIndex, double t0, long maxInd
         floatBuf[27] += VCORX();
         floatBuf[28] += VCORY();
         floatBuf[29] += VCORZ();
+        floatBuf[30] += potentials[timeIndex];
         flagBuf &= flags[timeIndex];
         fitInfoBuf |= fitInfo[timeIndex];
         nSamples++;
@@ -1523,6 +1524,7 @@ bool downSampleHalfSecond(long *index, long storageIndex, double t0, long maxInd
         *((float*)dataBuffers[10] + (3*storageIndex) + 0) = floatBuf[27] / 8.0; // Vicrxyz
         *((float*)dataBuffers[10] + (3*storageIndex) + 1) = floatBuf[28] / 8.0;
         *((float*)dataBuffers[10] + (3*storageIndex) + 2) = floatBuf[29] / 8.0;
+        potentials[storageIndex] = floatBuf[30] / 8.0; // Floating potential U_SC
         // Flags set to 0 at 16 Hz based on magnitude of flow,
         // are not reset at 2 Hz, to ensure integrity of 2 Hz measurements
         // One can review 16 Hz measurements to examine details of flow where even a

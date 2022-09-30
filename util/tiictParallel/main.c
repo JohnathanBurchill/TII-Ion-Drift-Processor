@@ -374,7 +374,7 @@ void *runThread(void *a)
 	// exec TIICT command 
 	int status = 0;
 	char command[5*FILENAME_MAX+256];
-	sprintf(command, "tiict %s %d %d %d %s %s %s %s > %s/%s/TCT16/%s%4d%02d%02d.log 2>&1", args->satLetter, args->year, args->month, args->day, args->calVersion, args->exportVersion, args->calDir, args->lpDir, args->exportDir, args->exportDir, args->exportVersion, args->satLetter, args->year, args->month, args->day);
+	sprintf(command, "tiict %s %d %d %d %s %s %s %s %s > %s/%s/TCT16/%s%4d%02d%02d.log 2>&1", args->satLetter, args->year, args->month, args->day, args->calVersion, args->exportVersion, args->calDir, args->lpDir, args->exportDir, args->exportDir, args->exportVersion, args->satLetter, args->year, args->month, args->day);
 	status = system(command);
 	if (WIFEXITED(status) && (WEXITSTATUS(status) == 0))
 	{
