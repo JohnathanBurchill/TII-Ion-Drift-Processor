@@ -41,13 +41,6 @@ int exportCdfs(ProcessorState *state)
 
     int status = TIICT_OK;
 
-    // Export the cross-track flow CDF file
-    long exportDimSizes[1] = {0};
-    long exportVarNumbers[29];
-    static long recVary = {VARY};
-    static long dimVary = {VARY};
-    static long dimNoVary = {NOVARY};
-
     // Keep only data from the requested day
     double minTime, maxTime, startTime, stopTime, prevTime;
     long startIndex = 0, stopIndex = state->nRecs;
