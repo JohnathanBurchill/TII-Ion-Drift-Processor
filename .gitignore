@@ -21,3 +21,4 @@ build
 /**/*.code-workspace
 examples/fitstats
 
+examples/gmon.out
