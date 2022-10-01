@@ -24,7 +24,7 @@ ADD_DEFINITIONS(-DHAVE_GETOPT_H)
 
 if(CMAKE_BUILD_TYPE STREQUAL Debug)
     message( "-- Debugging enabled")
-    SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -std=gnu99 ")
+    SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pg -std=gnu99 ")
 else (CMAKE_BUILD_TYPE STREQUAL Debug)
     message( "-- Optimization enabled")
     SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -std=gnu99 ")
@@ -44,7 +44,7 @@ INCLUDE_DIRECTORIES(${INCLUDE_DIRS} ${GSL_INCLUDE_DIRS})
 
 ADD_LIBRARY(Utilities utilities.c)
 
-ADD_EXECUTABLE(tiict tiict.c processing.c lpData.c)
+ADD_EXECUTABLE(tiict tiict.c processing.c export.c loadData.c)
 TARGET_INCLUDE_DIRECTORIES(tiict PRIVATE)
 TARGET_LINK_LIBRARIES(tiict Utilities ${LIBS} -lgslcblas -lcdf -ltii)
 

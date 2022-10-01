@@ -1,6 +1,6 @@
 /*
 
-    TII Cross-Track Ion Drift Processor: tiict.h
+    TII Cross-Track Ion Drift Processor: errors.h
 
     Copyright (C) 2022  Johnathan K Burchill
 
@@ -18,16 +18,27 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef TIICT_H
-#define TIICT_H
+#ifndef _TIICT_ERRORS_H
+#define _TIICT_ERRORS_H
 
-#include "state.h"
+enum TIICT_ERRORS {
 
-int initProcessor(int argc, char **argv, ProcessorState *state);
-int parseArguments(int argc, char **argv, Arguments *args);
-void initHeader(Arguments *args);
+    TIICT_OK = 0,
+    TIICT_MEMORY,
+    TIICT_CDF_READ,
+    TIICT_CDF_WRITE,
+    TIICT_ARGS_ABOUT,
+    TIICT_ARGS_BAD,
+    TIICT_ARGS_SATELLITE,
+    TIICT_NOT_ENOUGH_CALIBRATION_RECORDS,
+    TIICT_EXPORT_DIRECTORY_TCT16,
+    TIICT_EXPORT_DIRECTORY_TCT02,
+    TIICT_DIRECTORY_READ,
+    TIICT_NO_LP_HM_DATA,
+    TIICT_ZIP_EXISTS,
+    TIICT_LOG_WRITE,
+    TIICT_SHELL,
+    TIICT_ZIP
+};
 
-void checkResult(int status, ProcessorState *state);
-void shutdown(ProcessorState *state, int exitStatus);
-
-#endif // TIICT_H
+#endif // _TIICT_ERRORS_H

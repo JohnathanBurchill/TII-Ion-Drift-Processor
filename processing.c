@@ -20,22 +20,255 @@
 
 #include "processing.h"
 
+#include "state.h"
 #include "settings.h"
 #include "indexing.h"
+#include "errors.h"
+
+#include <tii/detector.h>
+#include <tii/isp.h>
 
 #include <stdio.h>
 #include <stdbool.h>
 #include <cdf.h>
 
+#include <gsl/gsl_errno.h>
 #include <gsl/gsl_multifit.h>
 #include <gsl/gsl_statistics.h>
 
 extern char infoHeader[50];
 
-void removeOffsetsAndSetFlags(const char* satellite, offset_model_fit_arguments fitargs, long nRecs, uint8_t **dataBuffers, float *viErrors, uint16_t *flags, uint32_t *fitInfo, FILE* fitFile, bool setFlags)
+
+int initQualityData(ProcessorState *state)
+{
+    // Quality flag and fitInfo flag initialized to zero
+    state->flags = (uint16_t*) malloc((size_t) (state->nRecs * sizeof(uint16_t)));
+    state->fitInfo = (uint32_t*) malloc((size_t) (state->nRecs * sizeof(uint32_t)));
+    // Error estimates from Mean Absolute Deviation (MAD): default is -42. :)
+    state->viErrors = (float*) malloc((size_t) (state->nRecs * sizeof(float) * 4));
+    if (state->flags == NULL || state->fitInfo == NULL || state->viErrors == NULL)
+    {
+        return TIICT_MEMORY;
+    }
+    for (long ind = 0; ind < state->nRecs; ind++)
+    {
+        state->viErrors[4*ind+0] = DEFAULT_VI_ERROR;
+        state->viErrors[4*ind+1] = DEFAULT_VI_ERROR;
+        state->viErrors[4*ind+2] = DEFAULT_VI_ERROR;
+        state->viErrors[4*ind+3] = DEFAULT_VI_ERROR;
+        state->flags[ind] = 0;
+        // FITINFO_OFFSET_NOT_REMOVED = 1 and FITINFO_INCOMPLETE_REGION = 1 are the defaults for fitInfo
+        // Set for each velocity component
+        for (uint8_t k = 0; k < 4; k++)
+        {
+            state->fitInfo[ind] |= ((FITINFO_OFFSET_NOT_REMOVED | FITINFO_INCOMPLETE_REGION)) << (k * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT);
+        }
+    }
+
+    return TIICT_OK;
+}
+
+int calibrateFlows(ProcessorState *state)
+{
+
+
+    // Allocate memory for quality parameters
+    int status = initQualityData(state);
+    if (status != TIICT_OK)
+        return status;
+
+    // Do the calibration
+    uint8_t **dataBuffers = state->dataBuffers;
+    double *pEpoch = (double*) dataBuffers[0];
+    long long timeIndex = 0;
+
+    // The macros TIME(), QDLAT(), etc. give the value at index timeIndex.
+    double epoch0 = TIME();
+
+    // Strategy is to perform calculations in place in memory without allocating space unecessarily.
+    // Update 
+    //  0) Adjust times by + 1./32 - 0.0875 s
+    //  1) VSatXYZ from km/s to m/s
+    //  2) bias voltage to nearest of -100 V, -62 V or left alone if too different from those values
+    //  3) apply Level 1 calibration with bias dependence
+    float value, innerDomeBias;
+
+    // Adjust times for sample lag
+    for (long timeIndex = 0; timeIndex < state->nRecs; timeIndex++)
+    {
+        ((double*)dataBuffers[0])[timeIndex] += ((1./32 - 0.0875)*1000.); // ms
+    }
+
+    // Choose a potential estimate (lpPhiSc, lpPhiScHighGain, or lpPhiScLowGain)
+    state->potentials = state->lpPhiSc;
+
+    float enxh = 0.0;
+    float enxv = 0.0;
+    float vixh = 0.0;
+    float vixv = 0.0;
+    float q = 1.602e-19;
+    float mass = 2.67e-26; // O+
+
+    float shx = 0.0, shy = 0.0, svx = 0.0, svy = 0.0;
+
+    // Detector centres
+    float xch = 0.0;
+    float ych = 0.0;
+    float xcv = 0.0;
+    float ycv = 0.0;
+    detectorCoordinates(state->args.satellite[0], H_SENSOR, &xch, &ych);
+    detectorCoordinates(state->args.satellite[0], V_SENSOR, &xcv, &ycv);
+
+    // Estimate raw velocities
+    for (long timeIndex = 0; timeIndex < state->nRecs; timeIndex++)
+    {
+        // Bias Voltage
+        // TODO: need a more accurate replacement: i.e., early in mission the voltage was ~-60 V, not -62.
+        if (VBIAS() < -95.0)
+            *ADDR(13, 0, 1) = -100.;
+        else if(VBIAS() > -65. && VBIAS() < -59.0)
+            *ADDR(13, 0, 1) = -62.0;
+//        fprintf(stdout, "%s; after: %f\n", infoHeader, VBIAS());
+
+        // VSatXYZ to m/s
+        *ADDR(3, 0, 3) *= 1000.0;
+        *ADDR(3, 1, 3) *= 1000.0;
+        *ADDR(3, 2, 3) *= 1000.0;
+
+        // VCorot to m/s
+        *ADDR(10, 0, 3) *= 1000.0;
+        *ADDR(10, 1, 3) *= 1000.0;
+        *ADDR(10, 2, 3) *= 1000.0;
+
+        // Apply level1 calibration with bias dependence
+        innerDomeBias = VBIAS() - VFP();
+
+        // Get scaling parameter
+        switch(state->args.satellite[0])
+        {
+            case 'A': // 20190930 slew experiment, plus simulations
+                shx = 574.0;
+                shy = 574.0;
+                svx = 712.0;
+                svy = 712.0;
+                if (innerDomeBias >= -63.0 && innerDomeBias < -59.0)
+                {
+                    shx *= .76;
+                    shy *= .76;
+                    svx *= .76;
+                    svy *= .76;
+                }
+                break;
+            case 'B': // 20210616 slew experiment
+                shx = 553.0;
+                shy = 553.0;
+                svx = 548.0;
+                svy = 548.0;
+                if (innerDomeBias >= -63.0 && innerDomeBias < -59.0)
+                {
+                    shx *= 450.5;
+                    shy = 450.5; // Calibration 20210624, inner dome bias at -62 V.
+                    svx *= 451.0;
+		    svy = 525.0; // Calibration 20210624, inner dome bias at -62 V.
+                }
+                break;
+            case 'C': // 20191126 slew experiment, plus simulations
+                shx = 679.0;
+                shy = 679.0;
+                svx = 2377.0;
+                svy = 2377.0;
+                if (innerDomeBias >= -63.0 && innerDomeBias < -59.0)
+                {
+                    shx *= .76;
+                    shy *= .76;
+                    svx *= .76;
+                    svy *= .76;
+                }
+                break;
+        }
+        // Cross-track flows do not take into satellite potential
+        // Change sign to get flow directions correct, then apply scaling
+        // and subtract satellite velocity
+
+        *ADDR(1, 1, 2) = -1.0 * (MYH() - ych) * shy - VSATY();
+        *ADDR(2, 1, 2) = -1.0 * (MYV() - ycv) * svy - VSATZ();
+
+        // Along-track flows take into account satellite potential 
+        // by first converting flow to energy (eofr)
+        // adding the satellite potential estimate from LP
+        // then converting to velocity
+        // We no longer use the cross-track empirical sensitivity formulas,
+        // which are approximations anyway.
+        // TODO: revise calibration files to get MCP voltage 
+        // NOTE that inner dome bias is not measured but the setting for the H sensor.
+        // Remove effect of satellite potential
+        // TODO: take into account v-cross-B-dot-dl
+
+        if (state->usePotentials)
+        {
+            enxh = eofr(MXH() - xch, innerDomeBias, 0.0);
+            enxv = eofr(MXV() - xcv, innerDomeBias, 0.0);
+
+            enxh += state->potentials[timeIndex];
+            enxv += state->potentials[timeIndex];
+
+            // Calculate vix assuming pure O+
+            // needs to be negative, indicating a flow toward the satellite,
+            vixh = -sqrtf(2.0 / mass * q * enxh);
+            vixv = -sqrtf(2.0 / mass * q * enxv);
+            // then satellite velocity can be subtracted (VSATX is negative, i.e. toward the satellite).
+            // HX
+            *ADDR(1, 0, 2) = vixh - VSATX();
+            // HV
+            *ADDR(2, 0, 2) = vixv - VSATX();
+        }
+        else
+        {
+            // Old way, estimates a proxy based on image moments
+            *ADDR(1, 0, 2) = -1.0 * (MXH() - 32.5) * shx - VSATX();
+            *ADDR(2, 0, 2) = -1.0 * (MXV() - 32.5) * svx - VSATX();
+        }
+
+    }
+
+    fprintf(stdout, "%sPrepared calibration data.\n", infoHeader);
+    fflush(stdout);
+
+    return TIICT_OK;
+
+}
+
+int removeOffsetsAndSetFlags(ProcessorState *state, bool setFlags)
+{
+    int status = TIICT_OK;
+
+    // Remove offsets and calculate flags
+    // 1. Ascending northern polar region to descending northern polar region
+    // 2. Descending low-lat region
+    // 3. Descending southern polar region to ascending southern polar region
+    // 4. Ascending low-lat region
+    // 5. Repeat. Does not have to be sequential
+    for (uint8_t ind = 0; ind < 4; ind++)
+    {
+        // Remove offsets again and set flags
+        status = removeOffsetsAndSetFlagsForInterval(state, ind, setFlags);
+        if (status != TIICT_OK)
+            return status;
+    }
+
+    fprintf(stdout, "%sRemoved offsets and calculated flags.\n", infoHeader);
+    fflush(state->fitFile);
+    fflush(stdout);
+
+    return status;
+
+}
+
+int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, uint8_t interval, bool setFlags)
 {
     // Robust linear least squares from GSL: https://www.gnu.org/software/gsl/doc/html/lls.html#examples
     long long timeIndex = 0;
+    uint8_t **dataBuffers = state->dataBuffers;
     double epoch0 = TIME();
     uint16_t minDataPointsNeeded = 80;
     float previousQDLat = QDLAT();
@@ -54,8 +287,10 @@ void removeOffsetsAndSetFlags(const char* satellite, offset_model_fit_arguments 
 
     char startString[EPOCH_STRING_LEN+1], stopString[EPOCH_STRING_LEN+1];
 
-    float dlatfirst = fitargs.lat2 - fitargs.lat1;
-    float dlatsecond = fitargs.lat4 - fitargs.lat3;
+    offset_model_fit_arguments *fitargs = &state->fitargs[interval];
+
+    float dlatfirst = fitargs->lat2 - fitargs->lat1;
+    float dlatsecond = fitargs->lat4 - fitargs->lat3;
 
     int8_t firstDirection = 0;
     if (dlatfirst > 0)
@@ -69,7 +304,7 @@ void removeOffsetsAndSetFlags(const char* satellite, offset_model_fit_arguments 
     else if (dlatsecond < 0)
         secondDirection = -1;
 
-    float location = (fitargs.lat2 + fitargs.lat3) / 2.;
+    float location = (fitargs->lat2 + fitargs->lat3) / 2.;
     int8_t region; // For flagging
     if (location >= 44. )
         region = 1; // North
@@ -88,12 +323,12 @@ void removeOffsetsAndSetFlags(const char* satellite, offset_model_fit_arguments 
 
     double tregion11, tregion12, tregion21, tregion22;
 
-    for (timeIndex = 0; timeIndex < nRecs; timeIndex++)
+    for (timeIndex = 0; timeIndex < state->nRecs; timeIndex++)
     {
         c0 = 0.0;
         c1 = 0.0;
         seconds = (TIME() - epoch0) / 1000.;
-        if ((firstDirection == 1 && QDLAT() >= fitargs.lat1 && previousQDLat < fitargs.lat1) || (firstDirection == -1 && QDLAT() <= fitargs.lat1 && previousQDLat > fitargs.lat1))
+        if ((firstDirection == 1 && QDLAT() >= fitargs->lat1 && previousQDLat < fitargs->lat1) || (firstDirection == -1 && QDLAT() <= fitargs->lat1 && previousQDLat > fitargs->lat1))
         {
             // Start a new region search
             regionBegin = true; // Found start of region to remove offset from
@@ -104,7 +339,7 @@ void removeOffsetsAndSetFlags(const char* satellite, offset_model_fit_arguments 
             tregion11 = TIME();
 
         }
-        else if (regionBegin && ((firstDirection == 1 && QDLAT() >= fitargs.lat2 && previousQDLat < fitargs.lat2) || (firstDirection == -1 && QDLAT() <= fitargs.lat2 && previousQDLat > fitargs.lat2)))
+        else if (regionBegin && ((firstDirection == 1 && QDLAT() >= fitargs->lat2 && previousQDLat < fitargs->lat2) || (firstDirection == -1 && QDLAT() <= fitargs->lat2 && previousQDLat > fitargs->lat2)))
         {
             if ((TIME() - tregion11)/1000. < (5400. / 2.)) // Should be within 1/2 an orbit of start of segment
             {
@@ -121,7 +356,7 @@ void removeOffsetsAndSetFlags(const char* satellite, offset_model_fit_arguments 
                 regionBegin = false;
             }
         }
-        else if (gotFirstModelData && ((secondDirection == -1 && QDLAT() <= fitargs.lat3 && previousQDLat > fitargs.lat3) || (secondDirection == 1 && QDLAT() >= fitargs.lat3 && previousQDLat < fitargs.lat3)))
+        else if (gotFirstModelData && ((secondDirection == -1 && QDLAT() <= fitargs->lat3 && previousQDLat > fitargs->lat3) || (secondDirection == 1 && QDLAT() >= fitargs->lat3 && previousQDLat < fitargs->lat3)))
         {
             if ((TIME() - tregion12)/1000. < (5400. / 2.)) // Should be within 1/2 an orbit of start of segment
             {
@@ -138,7 +373,7 @@ void removeOffsetsAndSetFlags(const char* satellite, offset_model_fit_arguments 
                 regionBegin = false;
             }
         }
-        else if (gotStartOfSecondModelData && ((secondDirection == -1 && QDLAT() <= fitargs.lat4 && previousQDLat > fitargs.lat4) || (secondDirection == 1 && QDLAT() >= fitargs.lat4 && previousQDLat < fitargs.lat4)))
+        else if (gotStartOfSecondModelData && ((secondDirection == -1 && QDLAT() <= fitargs->lat4 && previousQDLat > fitargs->lat4) || (secondDirection == 1 && QDLAT() >= fitargs->lat4 && previousQDLat < fitargs->lat4)))
         {
             if ((TIME() - tregion21)/1000. < (5400. / 2.)) // Should be within 1/2 an orbit of start of segment
             {
@@ -161,7 +396,7 @@ void removeOffsetsAndSetFlags(const char* satellite, offset_model_fit_arguments 
                 numModel1Points = beginIndex1 - beginIndex0;
                 numModel2Points = endIndex1 - endIndex0;
                 numModelPoints = numModel1Points + numModel2Points;
-                fprintf(fitFile, "%d %d %lld %lld %f %f %f %f", fitargs.regionNumber, numFits, numModel1Points, numModel2Points, tregion11, tregion12, tregion21, tregion22);
+                fprintf(state->fitFile, "%d %d %lld %lld %f %f %f %f", fitargs->regionNumber, numFits, numModel1Points, numModel2Points, tregion11, tregion12, tregion21, tregion22);
                 // Allocate fit buffers
                 modelTimesMatrix = gsl_matrix_alloc(numModelPoints, p);
                 model1Values = gsl_vector_alloc(numModel1Points);
@@ -219,16 +454,16 @@ void removeOffsetsAndSetFlags(const char* satellite, offset_model_fit_arguments 
                     {
                         toEncodeEPOCH(tregion11, 0, startString);
                         toEncodeEPOCH(tregion22, 0, stopString);
-                        fprintf(stdout, "%s<GSL Fit Error: %s> for fit region from %s to %s spanning latitudes %.0f to %.0f.\n", infoHeader, gsl_strerror(gslStatus), startString, stopString, fitargs.lat1, fitargs.lat4);
+                        fprintf(stdout, "%s<GSL Fit Error: %s> for fit region from %s to %s spanning latitudes %.0f to %.0f.\n", infoHeader, gsl_strerror(gslStatus), startString, stopString, fitargs->lat1, fitargs->lat4);
                         // Print "-9999999999.GSLERRORNUMBER" for each of the nine fit parameters
-                        fprintf(fitFile, " -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d", gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus);
+                        fprintf(state->fitFile, " -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d", gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus);
                         if (setFlags)
                         {
                             for (timeIndex = beginIndex0; timeIndex < endIndex1; timeIndex++)
                             {
                                 // Got a complete region, but had a fit error
-                                fitInfo[timeIndex] &= ~(FITINFO_INCOMPLETE_REGION << (flagIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
-                                fitInfo[timeIndex] |= (FITINFO_GSL_FIT_ERROR << (flagIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
+                                state->fitInfo[timeIndex] &= ~(FITINFO_INCOMPLETE_REGION << (flagIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
+                                state->fitInfo[timeIndex] |= (FITINFO_GSL_FIT_ERROR << (flagIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
                             }
                         }
                     }
@@ -245,7 +480,7 @@ void removeOffsetsAndSetFlags(const char* satellite, offset_model_fit_arguments 
                         double mad2 = gsl_stats_mad(model2Values->data, 1, numModel2Points, work2->data); // For last segment
                         double median1 = gsl_stats_median(model1Values->data, 1, numModel1Points);
                         double median2 = gsl_stats_median(model2Values->data, 1, numModel2Points);
-                        fprintf(fitFile, " %f %f %f %f %f %f %f %f %f", c0, c1, stats.adj_Rsq, stats.rmse, median1, median2, mad, mad1, mad2);
+                        fprintf(state->fitFile, " %f %f %f %f %f %f %f %f %f", c0, c1, stats.adj_Rsq, stats.rmse, median1, median2, mad, mad1, mad2);
                         // Remove the offsets and assign flags for this region
                         for (timeIndex = beginIndex0; timeIndex < endIndex1; timeIndex++)
                         {
@@ -254,21 +489,21 @@ void removeOffsetsAndSetFlags(const char* satellite, offset_model_fit_arguments 
                             driftValue = *ADDR(1 + k / 2, k % 2, 2);
                             // Assign error estimate
                             // TODO: use interpolated MADs derived start and end of pass?
-                            viErrors[4*timeIndex + k] = mad;
+                            state->viErrors[4*timeIndex + k] = mad;
                             // Set offset-removed flag (most significant bit), and complete region found
                             // Having a complete region can be determined from offset removed and gsl error flags, but
                             // the extra bit will make it logically straightforward to find incomplete regions.
                             // Toggle off the "offset not removed" and "incomplete region" flag bits
                             if (setFlags)
                             {
-                                fitInfo[timeIndex] &= ~((FITINFO_OFFSET_NOT_REMOVED | FITINFO_INCOMPLETE_REGION) << (flagIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
+                                state->fitInfo[timeIndex] &= ~((FITINFO_OFFSET_NOT_REMOVED | FITINFO_INCOMPLETE_REGION) << (flagIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
                                 // Update quality and calibration flags based on thresholds
-                                updateDataQualityFlags(satellite, flagIndex, fitargs.regionNumber, driftValue, mad, timeIndex, flags, fitInfo);
+                                updateDataQualityFlags(state->args.satellite, flagIndex, fitargs->regionNumber, driftValue, mad, timeIndex, state->flags, state->fitInfo);
                             }
                         }
                     }
                 }
-                fprintf(fitFile, "\n");
+                fprintf(state->fitFile, "\n");
                 gsl_matrix_free(modelTimesMatrix);
                 gsl_vector_free(model1Values);
                 gsl_vector_free(model2Values);
@@ -288,7 +523,7 @@ void removeOffsetsAndSetFlags(const char* satellite, offset_model_fit_arguments 
             gotFirstModelData = false;
             gotStartOfSecondModelData = false;
             gotSecondModelData = false;
-            if (timeIndex == nRecs)
+            if (timeIndex == state->nRecs)
             {
                 break;
             }
@@ -302,6 +537,8 @@ void removeOffsetsAndSetFlags(const char* satellite, offset_model_fit_arguments 
         previousQDLat = QDLAT();
     
     }
+
+    return TIICT_OK;
 
 }
 
@@ -327,6 +564,8 @@ void updateDataQualityFlags(const char *satellite, uint8_t sensorIndex, uint8_t 
         fitInfo[timeIndex] |= (FITINFO_DRIFT_MAGNITUDE_EXCEEDED << (sensorIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
     }
 
+    return;
+
 }
 
 float madThreshold(char satellite, int sensorIndex)
@@ -340,3 +579,247 @@ float madThreshold(char satellite, int sensorIndex)
     // Absolute threshold for noise levels defined as 100 m/s 1-sigma equivalant at 2 Hz
     return 100.0 * sqrtf(8.0);
 }
+
+int initFields(ProcessorState *state)
+{
+    // Set up new memory
+    state->xhat = (float*) malloc((size_t) (state->nRecs * sizeof(float) * 3));
+    state->yhat = (float*) malloc((size_t) (state->nRecs * sizeof(float) * 3));
+    state->zhat = (float*) malloc((size_t) (state->nRecs * sizeof(float) * 3));
+    state->ectFieldH = (float*) malloc((size_t) (state->nRecs * sizeof(float) * 3));
+    state->ectFieldV = (float*) malloc((size_t) (state->nRecs * sizeof(float) * 3));
+    state->bctField = (float*) malloc((size_t) (state->nRecs * sizeof(float) * 3));
+
+    if (state->xhat == NULL || state->yhat == NULL || state->zhat == NULL || state->ectFieldH == NULL || state->ectFieldV == NULL || state->bctField == NULL)
+        return TIICT_MEMORY;
+
+    return TIICT_OK;
+}
+
+int calculateFields(ProcessorState *state)
+{
+    // Init memory for fields
+    int status = initFields(state);
+    if (status != TIICT_OK)
+        return status;
+
+    // Calculate fields
+    long long ind;
+    uint8_t **dataBuffers = state->dataBuffers;
+    float *xhat = state->xhat;
+    float *yhat = state->yhat;
+    float *zhat = state->zhat;
+    float *ectFieldH = state->ectFieldH;
+    float *ectFieldV = state->ectFieldV;
+    float *bctField = state->bctField;
+
+    for (long timeIndex = 0; timeIndex < state->nRecs; timeIndex++)
+    {
+        // Calculate xhat, yhat, zhat
+        // xhat parallel to satellite velocity 
+        float magVsat = sqrtf(VSATN()*VSATN() + VSATE()*VSATE() + VSATC() * VSATC());
+        ind = 3*timeIndex;
+        xhat[ind + 0] = VSATN() / magVsat;
+        xhat[ind + 1] = VSATE() / magVsat;
+        xhat[ind + 2] = VSATC() / magVsat;
+        // yhat is xhat cross {0, 0, -1}
+        yhat[ind + 0] = -xhat[ind + 1];
+        yhat[ind + 1] = xhat[ind + 0];
+        yhat[ind + 2] = 0.0;
+        float magyhat = sqrtf(yhat[ind + 0] * yhat[ind + 0] + yhat[ind + 1] * yhat[ind + 1] + yhat[ind + 2] * yhat[ind + 2]);
+        yhat[ind + 0] /= magyhat;
+        yhat[ind + 1] /= magyhat;
+        yhat[ind + 2] /= magyhat;
+        // zhat is the cross-product of x into y
+        zhat[ind+0] = xhat[ind+1] * yhat[ind+2] - xhat[ind+2] * yhat[ind+1];
+        zhat[ind+1] = -1.0 * xhat[ind+0] * yhat[ind+2] + xhat[ind+2] * yhat[ind+0];
+        zhat[ind+2] = xhat[ind+0] * yhat[ind+1] - xhat[ind+1] * yhat[ind+0];
+        float magzhat = sqrtf(zhat[ind + 0] * zhat[ind + 0] + zhat[ind + 1] * zhat[ind + 1] + zhat[ind + 2] * zhat[ind + 2]);
+        zhat[ind + 0] /= magzhat;
+        zhat[ind + 1] /= magzhat;
+        zhat[ind + 2] /= magzhat;
+
+        // B field in cross-track frame, nT:
+        bctField[ind + 0] = BN() * xhat[ind + 0] + BE() * xhat[ind + 1] + BC() * xhat[ind + 2];
+        bctField[ind + 1] = BN() * yhat[ind + 0] + BE() * yhat[ind + 1] + BC() * yhat[ind + 2];
+        bctField[ind + 2] = BN() * zhat[ind + 0] + BE() * zhat[ind + 1] + BC() * zhat[ind + 2];
+
+        // E field from H sensor X, in cross-track frame, mV/m:
+        ectFieldH[ind + 0] = -1.0 * (MYH() * bctField[ind + 2] - MYV() * bctField[ind + 1]) / 1000000000.0 * 1000.0; 
+        ectFieldH[ind + 1] = -1.0 * (-1.0 * MXH() * bctField[ind + 2] + MYV() * bctField[ind + 0]) / 1000000000.0 * 1000.0; 
+        ectFieldH[ind + 2] = -1.0 * (MXH() * bctField[ind + 1] - MYH() * bctField[ind + 0]) / 1000000000.0 * 1000.0; 
+
+        // E field from V sensor X, in cross-track frame, mV/m:
+        ectFieldV[ind + 0] = -1.0 * (MYH() * bctField[ind + 2] - MYV() * bctField[ind + 1]) / 1000000000.0 * 1000.0; 
+        ectFieldV[ind + 1] = -1.0 * (-1.0 * MXV() * bctField[ind + 2] + MYV() * bctField[ind + 0]) / 1000000000.0 * 1000.0; 
+        ectFieldV[ind + 2] = -1.0 * (MXV() * bctField[ind + 1] - MYH() * bctField[ind + 0]) / 1000000000.0 * 1000.0; 
+
+    }
+
+    fprintf(stdout, "%sCalculated fields.\n", infoHeader);
+    fflush(stdout);
+
+    return TIICT_OK;
+
+}
+
+// Copied and modified from TRACIS interpolate.c
+void interpolate(double *times, double *values, size_t nVals, double *requestedTimes, long nRequestedValues, float *newValues)
+{
+    
+    size_t lastIndex = 0;
+    double thisTime = 0;
+    double t1 = 0, t2 = 0, dt = 0;
+    double fraction = 0;
+    double v1 = 0, v2 = 0, dv = 0;
+    double x = 0, y = 0, z = 0;
+    double rad = 0;
+    double lat = 0;
+    double lon = 0;
+    for (size_t i = 0; i < nRequestedValues; i++)
+    {
+        thisTime = requestedTimes[i];
+        // 
+        while (times[lastIndex] <= thisTime && lastIndex < nVals) 
+        {
+            lastIndex++;
+        }
+        // Extrapolate earlier or later, or the times are the same
+        if (times[lastIndex] >= thisTime || lastIndex == nVals - 1)
+        {
+            newValues[i] = (float)values[lastIndex];
+        }
+        // Interpolate
+        else
+        {
+            t1 = times[lastIndex];
+            t2 = times[lastIndex+1];
+            // Assumes t2 > t1
+            dt = thisTime - t1;
+            fraction = dt / (t2 - t1);
+            newValues[i] = (float)(values[lastIndex] + (values[lastIndex+1] - values[lastIndex]) * fraction);
+        }
+    }
+
+    return;
+
+}
+
+
+bool downSampleHalfSecond(long *index, long storageIndex, double t0, long maxIndex, uint8_t **dataBuffers, float *ectFieldH, float *ectFieldV, float *bctField, float *viErrors, float *potentials, uint16_t *flags, uint32_t *fitInfo)
+{
+    long timeIndex = *index;
+    uint8_t nSamples = 0;
+    double timeBuf = 0.0;
+    uint16_t flagBuf = 65535;
+    uint32_t fitInfoBuf = 0;
+    float floatBuf[NUM_BUFFER_VARIABLES]; // Time, flags, and fitInfo are handled separately; need one extra working buffer each for lattitude and longitude averages
+    float theta, phi, x, y, z;
+    bool downSampled = false;
+
+    for (uint8_t b = 0; b < NUM_BUFFER_VARIABLES; b++)
+    {
+        floatBuf[b] = 0.0;
+    }
+
+    while (((TIME()/1000. - t0) < 0.5) && (timeIndex <= maxIndex))
+    {
+        timeBuf += TIME();
+        // Handle lat and lon and mlt in cartesian coordinates
+        // For spherical coordinates
+        theta = M_PI / 2.0 - LAT() * M_PI / 180.0;
+        phi = LON() * M_PI / 180.0;
+        floatBuf[0] += cosf(phi) * sinf(theta);
+        floatBuf[1] += sinf(phi) * sinf(theta);
+        floatBuf[2] += cosf(theta);
+        floatBuf[3] += RADIUS();
+        // For magnetic coordinates
+        theta = M_PI / 2.0 - QDLAT() * M_PI / 180.0;
+        phi = MLT() / 24.0 * 2.0 * M_PI;
+        floatBuf[4] += cosf(phi) * sinf(theta);
+        floatBuf[5] += sinf(phi) * sinf(theta);
+        floatBuf[6] += cosf(theta);
+        floatBuf[7] += MXH();
+        floatBuf[8] += viErrors[timeIndex * 4 + 0];
+        floatBuf[9] += MXV();
+        floatBuf[10] += viErrors[timeIndex * 4 + 2];
+        floatBuf[11] += MYH();
+        floatBuf[12] += viErrors[timeIndex * 4 + 1];
+        floatBuf[13] += MYV();
+        floatBuf[14] += viErrors[timeIndex * 4 + 3];
+        floatBuf[15] += VSATN();
+        floatBuf[16] += VSATE();
+        floatBuf[17] += VSATC();
+        floatBuf[18] += ectFieldH[timeIndex * 3 + 0]; // EH xyz
+        floatBuf[19] += ectFieldH[timeIndex * 3 + 1];
+        floatBuf[20] += ectFieldH[timeIndex * 3 + 2];
+        floatBuf[21] += ectFieldV[timeIndex * 3 + 0]; // EV xyz
+        floatBuf[22] += ectFieldV[timeIndex * 3 + 1];
+        floatBuf[23] += ectFieldV[timeIndex * 3 + 2];
+        floatBuf[24] += bctField[timeIndex * 3 + 0]; // Bxyz
+        floatBuf[25] += bctField[timeIndex * 3 + 1];
+        floatBuf[26] += bctField[timeIndex * 3 + 2];
+        floatBuf[27] += VCORX();
+        floatBuf[28] += VCORY();
+        floatBuf[29] += VCORZ();
+        floatBuf[30] += potentials[timeIndex];
+        flagBuf &= flags[timeIndex];
+        fitInfoBuf |= fitInfo[timeIndex];
+        nSamples++;
+        timeIndex++;
+    }
+    if (nSamples == 8)
+    {
+        // do the averaging and store result in original array
+        *((double*)dataBuffers[0] + (storageIndex)) = timeBuf / 8.0; // Average time
+        x = floatBuf[0] / 8.0;
+        y = floatBuf[1] / 8.0;
+        z = floatBuf[2] / 8.0;
+        *((float*)dataBuffers[7] + (storageIndex)) = atan2f(z, sqrtf(x*x + y*y)) * 180.0 / M_PI; // Lat
+        *((float*)dataBuffers[8] + (storageIndex)) = fmodf(atan2f(y, x) * 180.0 / M_PI, 360.0); // Lon
+        *((float*)dataBuffers[9] + (storageIndex)) = floatBuf[3] / 8.0; // radius
+        x = floatBuf[4] / 8.0;
+        y = floatBuf[5] / 8.0;
+        z = floatBuf[6] / 8.0;
+        *((float*)dataBuffers[5] + (storageIndex)) = atan2f(z, sqrtf(x*x + y*y)) * 180.0 / M_PI; // QD Lat
+        *((float*)dataBuffers[4] + (storageIndex)) = fmodf(atan2f(y, x) * 180.0 / M_PI + 360.0, 360.0) / 360. * 24.0; // MLT
+        *((float*)dataBuffers[1] + (2*storageIndex) + 0) = floatBuf[7] / 8.0; // VxH
+        viErrors[storageIndex * 4 + 0] = floatBuf[8] / 8.0 / sqrtf(8.0); // VxH error scaled for 2 Hz
+        *((float*)dataBuffers[2] + (2*storageIndex) + 0) = floatBuf[9] / 8.0; // VxV
+        viErrors[storageIndex * 4 + 2] = floatBuf[10] / 8.0 / sqrtf(8.0); // VxV error scaled for 2 Hz
+        *((float*)dataBuffers[1] + (2*storageIndex) + 1) = floatBuf[11] / 8.0; // VyH
+        viErrors[storageIndex * 4 + 1] = floatBuf[12] / 8.0 / sqrtf(8.0); // VyH error scaled for 2 Hz
+        *((float*)dataBuffers[2] + (2*storageIndex) + 1) = floatBuf[13] / 8.0; // VyV
+        viErrors[storageIndex * 4 + 3] = floatBuf[14] / 8.0 / sqrtf(8.0); // VyV error scaled for 2 Hz
+        *((float*)dataBuffers[11] + (3*storageIndex) + 0) = floatBuf[15] / 8.0; // VSatN
+        *((float*)dataBuffers[11] + (3*storageIndex) + 1) = floatBuf[16] / 8.0; // VSatE
+        *((float*)dataBuffers[11] + (3*storageIndex) + 2) = floatBuf[17] / 8.0; // VSatC
+        ectFieldH[storageIndex * 3 + 0] = floatBuf[18] / 8.0; // EHxyz
+        ectFieldH[storageIndex * 3 + 1] = floatBuf[19] / 8.0;
+        ectFieldH[storageIndex * 3 + 2] = floatBuf[20] / 8.0;
+        ectFieldV[storageIndex * 3 + 0] = floatBuf[21] / 8.0; // EVxyz
+        ectFieldV[storageIndex * 3 + 1] = floatBuf[22] / 8.0;
+        ectFieldV[storageIndex * 3 + 2] = floatBuf[23] / 8.0;
+        bctField[storageIndex * 3 + 0] = floatBuf[24] / 8.0; // Bxyz
+        bctField[storageIndex * 3 + 1] = floatBuf[25] / 8.0;
+        bctField[storageIndex * 3 + 2] = floatBuf[26] / 8.0;
+        *((float*)dataBuffers[10] + (3*storageIndex) + 0) = floatBuf[27] / 8.0; // Vicrxyz
+        *((float*)dataBuffers[10] + (3*storageIndex) + 1) = floatBuf[28] / 8.0;
+        *((float*)dataBuffers[10] + (3*storageIndex) + 2) = floatBuf[29] / 8.0;
+        potentials[storageIndex] = floatBuf[30] / 8.0; // Floating potential U_SC
+        // Flags set to 0 at 16 Hz based on magnitude of flow,
+        // are not reset at 2 Hz, to ensure integrity of 2 Hz measurements
+        // One can review 16 Hz measurements to examine details of flow where even a
+        // single sample of the eight has a magnitude greater than 8 km/s
+        flags[storageIndex] = flagBuf;
+        fitInfo[storageIndex] = fitInfoBuf;
+
+        downSampled = true;
+
+    }
+
+    *index = timeIndex;
+    return downSampled;
+
+}
+

@@ -21,6 +21,8 @@
 #ifndef PROCESSING_H
 #define PROCESSING_H
 
+#include "state.h"
+
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -33,21 +35,23 @@ enum FITINFO_BIT_MASKS {
     FITINFO_DRIFT_MAGNITUDE_EXCEEDED = (1 << 4)
 };
 
-typedef struct offset_model_fit_arguments {
-    const uint8_t regionNumber;
-    const char *regionName;
-    const float lat1;
-    const float lat2;
-    const float lat3;
-    const float lat4;
-} offset_model_fit_arguments;
+int initQualityData(ProcessorState *state);
+int calibrateFlows(ProcessorState *state);
 
-
-void removeOffsetsAndSetFlags(const char* satellite, offset_model_fit_arguments fitargs, long nRecs, uint8_t **dataBuffers, float *viErrors, uint16_t *flags, uint32_t *fitInfo, FILE* fitFile, bool setFlags);
+int removeOffsetsAndSetFlags(ProcessorState *state, bool setFlags);
+int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, uint8_t interval, bool setFlags);
 
 void updateDataQualityFlags(const char *satellite, uint8_t sensorIndex, uint8_t regionNumber, float driftValue, float mad, long timeIndex, uint16_t *flags, uint32_t *fitInfo);
 
 float madThreshold(char satellite, int sensorIndex);
+
+int initFields(ProcessorState *state);
+int calculateFields(ProcessorState *state);
+
+void interpolate(double *times, double *values, size_t nVals, double *requestedTimes, long nRequestedValues, float *newValues);
+
+// Returns true if a full 8 samples were downsampled to 1 sample, false otherwise
+bool downSampleHalfSecond(long *index, long storageIndex, double t0, long maxIndex, uint8_t **dataBuffers, float *ectFieldH, float *ectFieldV, float *bctField, float *viErrors, float *potentials, uint16_t *flags, uint32_t *fitInfo);
 
 
 #endif // PROCESSING_H

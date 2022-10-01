@@ -1,6 +1,6 @@
 /*
 
-    TII Cross-Track Ion Drift Processor: lpData.h
+    TII Cross-Track Ion Drift Processor: loadData.h
 
     Copyright (C) 2022  Johnathan K Burchill
 
@@ -18,18 +18,30 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef _LPDATA_H
-#define _LPDATA_H
+#ifndef _LOADDATA_H
+#define _LOADDATA_H
+
+#include "state.h"
 
 #include <stdint.h>
 #include <stddef.h>
 
-int getLpData(const char *lpDir, const char *satellite, const int year, const int month, const int day, uint8_t **dataBuffers, long nRecs, float **lpPhiScHighGain, float **lpPhiScLowGain, float **lpPhiSc, size_t *nLpRecs);
+typedef enum DayType {
+    PREVIOUS_DAY = -1,
+    REQUESTED_DAY = 0,
+    NEXT_DAY = 1
+} DayType;
 
 int getLpInputFilename(const char satelliteLetter, long year, long month, long day, const char *path, char *filename);
+int loadLpCalData(ProcessorState *state);
+int getLpData(ProcessorState *state);
+int loadLpInputs(const char *cdfFile, double **lpTime, double **lpPhiScHighGain, double **lpPhiScLowGain, double **lpPhiSc, long *numberOfRecords);
 
-void loadLpInputs(const char *cdfFile, double **lpTime, double **lpPhiScHighGain, double **lpPhiScLowGain, double **lpPhiSc, long *numberOfRecords);
+int loadTiiCalData(ProcessorState *state);
+void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state);
 
-void interpolate(double *times, double *values, size_t nVals, double *requestedTimes, long nRequestedValues, float *newValues);
+void setCalibrationFileName(ProcessorState *state, int year, int month, int day);
 
-#endif // _LPDATA_H
+int checkCalDataAvailability(ProcessorState *state);
+
+#endif // _LOADDATA_H
