@@ -241,14 +241,14 @@ int calibrateFlows(ProcessorState *state)
         {
             backgroundRamEnergyeV = factor * VSATX() * VSATX();
             // Calculate vix assuming pure O+
-            // needs to be negative, indicating a flow toward the satellite,
-            vixh = -sqrtf((MXH() + backgroundRamEnergyeV) / factor);
-            vixv = -sqrtf((MXV() + backgroundRamEnergyeV) / factor);
-            // then satellite velocity can be subtracted (VSATX is negative, i.e. toward the satellite).
+            // Positive, is flow towards satellite, in direction of sensor x axis.
+            vixh = sqrtf((MXH() + backgroundRamEnergyeV) / factor);
+            vixv = sqrtf((MXV() + backgroundRamEnergyeV) / factor);
+            // then calculate vi. Note that VSATX is positive toward direction of motion
             // HX
-            *ADDR(1, 0, 2) = vixh - VSATX();
+            *ADDR(1, 0, 2) = VSATX() - vixh;
             // HV
-            *ADDR(2, 0, 2) = vixv - VSATX();
+            *ADDR(2, 0, 2) = VSATX() - vixv;
         }
     }
 
