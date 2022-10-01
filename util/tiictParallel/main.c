@@ -36,8 +36,6 @@
 
 
 #define SOFTWARE_VERSION "1.1"
-#define CALIBRATION_FILE_VERSION "0302"
-#define EXPORT_VERSION "0401"
 
 #define THREAD_MANAGER_WAIT 100000 // uSeconds
 
@@ -103,30 +101,29 @@ int main(int argc, char *argv[])
         }
     }
 
-	if (argc !=  4)
+	if (argc !=  9)
 	{
-		printf("usage:\t%s startyyyymmdd endyyyymmdd nthreads\n\t\tparallel processes Swarm TII data to generate TIICT product for specified satellite and date.\n", argv[0]);
+		printf("usage:\t%s startyyyymmdd endyyyymmdd calVersion exportVersion calDir lpDir exportDir nthreads\n\t\tparallel processes Swarm TII data to generate TIICT product for specified satellite and date.\n", argv[0]);
 		printf("\t%s --about\n\t\tprints copyright and license information.\n", argv[0]);
 		exit(0);
 	}
-
 
 	initScreen();
 	clear();
 
 	char *startDate = argv[1];
 	char *endDate = argv[2];
-	int nThreads = atoi(argv[3]);
+	char *calVersion = argv[3];
+	char *exportVersion  = argv[4];
+	char *calDir = argv[5];
+	char *lpDir = argv[6];
+	char *exportDir = argv[7];
+	int nThreads = atoi(argv[8]);
 	if (nThreads > MAX_THREADS)
 	{
 		nThreads = MAX_THREADS;
 	}
 
-	char *calVersion = CALIBRATION_FILE_VERSION;
-	char *exportVersion = EXPORT_VERSION;
-	char *calDir = "/efirepo/EfiCalCdfs";
-	char *lpDir = "/storage/LP";
-	char *exportDir = "/storage/TCT";
 
 	char *date = strdup(startDate);
 	char *d1 = strdup(startDate);
