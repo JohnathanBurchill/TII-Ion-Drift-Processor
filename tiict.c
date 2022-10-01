@@ -215,13 +215,15 @@ int main(int argc, char* argv[])
     float * lpPhiSc = NULL;
     size_t nLpRecs = 0;
 
-    getLpData(lpDir, satellite, year, month, day, dataBuffers, nRecs, &lpPhiScHighGain, &lpPhiScLowGain, &lpPhiSc, &nLpRecs);
-    if (nLpRecs < LP_MIN_NUMBER_OF_POTENTIALS)
+    if (strcmp(exportVersion, "0401") == 0)
     {
-        fprintf(stderr, "%sNot enough (%lu) LP potentials imported.\n", infoHeader, nLpRecs);
+        getLpData(lpDir, satellite, year, month, day, dataBuffers, nRecs, &lpPhiScHighGain, &lpPhiScLowGain, &lpPhiSc, &nLpRecs);
+        if (nLpRecs < LP_MIN_NUMBER_OF_POTENTIALS)
+        {
+            fprintf(stderr, "%sNot enough (%lu) LP potentials imported.\n", infoHeader, nLpRecs);
+        }
+        fprintf(stdout, "%sLoaded %lu LP potentials, and interpolated them to the TII times.\n", infoHeader, nLpRecs);
     }
-    fprintf(stdout, "%sLoaded %lu LP potentials, and interpolated them to the TII times.\n", infoHeader, nLpRecs);
-
     // Choose a potential estimate (lpPhiSc, lpPhiScHighGain, or lpPhiScLowGain)
     float *lpPotentials = lpPhiSc;
 
@@ -326,25 +328,31 @@ int main(int argc, char* argv[])
         // NOTE that inner dome bias is not measured but the setting for the H sensor.
         // Remove effect of satellite potential
         // TODO: take into account v-cross-B-dot-dl
-        enxh = eofr(MXH() - xch, innerDomeBias, 0.0);
-        enxv = eofr(MXV() - xcv, innerDomeBias, 0.0);
 
-        enxh += lpPotentials[timeIndex];
-        enxv += lpPotentials[timeIndex];
+        if (strcmp(exportVersion, "0401") >= 0)
+        {
+            enxh = eofr(MXH() - xch, innerDomeBias, 0.0);
+            enxv = eofr(MXV() - xcv, innerDomeBias, 0.0);
 
-        // Calculate vix assuming pure O+
-        // needs to be negative, indicating a flow toward the satellite,
-        vixh = -sqrtf(2.0 / mass * q * enxh);
-        vixv = -sqrtf(2.0 / mass * q * enxv);
-        // then satellite velocity can be subtracted (VSATX is negative, i.e. toward the satellite).
-        // HX
-        *ADDR(1, 0, 2) = vixh - VSATX();
-        // HV
-        *ADDR(2, 0, 2) = vixv - VSATX();
+            enxh += lpPotentials[timeIndex];
+            enxv += lpPotentials[timeIndex];
 
-        // Old way, estimates a proxy based on image moments
-        // *ADDR(1, 0, 2) = -1.0 * (MXH() - 32.5) * shx - VSATX();
-        // *ADDR(2, 0, 2) = -1.0 * (MXV() - 32.5) * svx - VSATX();
+            // Calculate vix assuming pure O+
+            // needs to be negative, indicating a flow toward the satellite,
+            vixh = -sqrtf(2.0 / mass * q * enxh);
+            vixv = -sqrtf(2.0 / mass * q * enxv);
+            // then satellite velocity can be subtracted (VSATX is negative, i.e. toward the satellite).
+            // HX
+            *ADDR(1, 0, 2) = vixh - VSATX();
+            // HV
+            *ADDR(2, 0, 2) = vixv - VSATX();
+        }
+        else
+        {
+            // Old way, estimates a proxy based on image moments
+            *ADDR(1, 0, 2) = -1.0 * (MXH() - 32.5) * shx - VSATX();
+            *ADDR(2, 0, 2) = -1.0 * (MXV() - 32.5) * svx - VSATX();
+        }
 
     }
 
@@ -929,7 +937,8 @@ void addAttributes(CDFid id, const char *dataset, const char *satellite, const c
 
     for (uint8_t i = 0; i < NUM_EXPORT_VARIABLES; i++)
     {
-        addVariableAttributes(id, variableAttrs[i]);
+        if (strcmp(variableAttrs[i].name, "U_SC") != 0 || strcmp(version, "0401") >= 0)
+            addVariableAttributes(id, variableAttrs[i]);
     }
 
 }
@@ -1290,7 +1299,10 @@ void exportTCT16Cdfs(double startTime, double stopTime, const char *exportDir, c
         createVarFrom2DVar(exportCdfId, "Vicrx", CDF_REAL4, startIndex, stopIndex, dataBuffers[10], 0, 3);
         createVarFrom2DVar(exportCdfId, "Vicry", CDF_REAL4, startIndex, stopIndex, dataBuffers[10], 1, 3);
         createVarFrom2DVar(exportCdfId, "Vicrz", CDF_REAL4, startIndex, stopIndex, dataBuffers[10], 2, 3);
-        createVarFrom1DVar(exportCdfId, "U_SC", CDF_REAL4, startIndex, stopIndex, potentials);
+    
+        if (strcmp(exportVersion, "0401") >= 0)
+            createVarFrom1DVar(exportCdfId, "U_SC", CDF_REAL4, startIndex, stopIndex, potentials);
+    
         createVarFrom1DVar(exportCdfId, "Quality_flags", CDF_UINT2, startIndex, stopIndex, flags);
         createVarFrom1DVar(exportCdfId, "Calibration_flags", CDF_UINT4, startIndex, stopIndex, fitInfo);
 
@@ -1410,7 +1422,9 @@ void exportTCT02Cdfs(double startTime, double stopTime, const char *exportDir, c
         createVarFrom2DVar(exportCdfId, "Vicrx", CDF_REAL4, startIndex, stopIndex, dataBuffers[10], 0, 3);
         createVarFrom2DVar(exportCdfId, "Vicry", CDF_REAL4, startIndex, stopIndex, dataBuffers[10], 1, 3);
         createVarFrom2DVar(exportCdfId, "Vicrz", CDF_REAL4, startIndex, stopIndex, dataBuffers[10], 2, 3);
-        createVarFrom1DVar(exportCdfId, "U_SC", CDF_REAL4, startIndex, stopIndex, potentials);
+        if (strcmp(exportVersion, "0401") >= 0)
+            createVarFrom1DVar(exportCdfId, "U_SC", CDF_REAL4, startIndex, stopIndex, potentials);
+
         createVarFrom1DVar(exportCdfId, "Quality_flags", CDF_UINT2, startIndex, stopIndex, flags);
         createVarFrom1DVar(exportCdfId, "Calibration_flags", CDF_UINT4, startIndex, stopIndex, fitInfo);
 
