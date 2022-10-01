@@ -724,7 +724,7 @@ void interpolate(double *times, double *values, size_t nVals, double *requestedT
 }
 
 
-bool downSampleHalfSecond(long *index, long storageIndex, double t0, long maxIndex, uint8_t **dataBuffers, float *ectFieldH, float *ectFieldV, float *bctField, float *viErrors, float *potentials, uint16_t *flags, uint32_t *fitInfo)
+bool downSampleHalfSecond(long *index, long storageIndex, double t0, long maxIndex, uint8_t **dataBuffers, float *ectFieldH, float *ectFieldV, float *bctField, float *viErrors, float *potentials, uint16_t *flags, uint32_t *fitInfo, bool usePotentials)
 {
     long timeIndex = *index;
     uint8_t nSamples = 0;
@@ -780,7 +780,8 @@ bool downSampleHalfSecond(long *index, long storageIndex, double t0, long maxInd
         floatBuf[27] += VCORX();
         floatBuf[28] += VCORY();
         floatBuf[29] += VCORZ();
-        floatBuf[30] += potentials[timeIndex];
+        if (usePotentials)
+            floatBuf[30] += potentials[timeIndex];
         flagBuf &= flags[timeIndex];
         fitInfoBuf |= fitInfo[timeIndex];
         nSamples++;
@@ -824,7 +825,8 @@ bool downSampleHalfSecond(long *index, long storageIndex, double t0, long maxInd
         *((float*)dataBuffers[10] + (3*storageIndex) + 0) = floatBuf[27] / 8.0; // Vicrxyz
         *((float*)dataBuffers[10] + (3*storageIndex) + 1) = floatBuf[28] / 8.0;
         *((float*)dataBuffers[10] + (3*storageIndex) + 2) = floatBuf[29] / 8.0;
-        potentials[storageIndex] = floatBuf[30] / 8.0; // Floating potential U_SC
+        if (usePotentials)
+            potentials[storageIndex] = floatBuf[30] / 8.0; // Floating potential U_SC
         // Flags set to 0 at 16 Hz based on magnitude of flow,
         // are not reset at 2 Hz, to ensure integrity of 2 Hz measurements
         // One can review 16 Hz measurements to examine details of flow where even a
