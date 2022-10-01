@@ -70,8 +70,6 @@ int initQualityData(ProcessorState *state)
 
 int calibrateFlows(ProcessorState *state)
 {
-
-
     // Allocate memory for quality parameters
     int status = initQualityData(state);
     if (status != TIICT_OK)
@@ -206,25 +204,18 @@ int calibrateFlows(ProcessorState *state)
 
         if (state->usePotentials)
         {
-            enxh = eofr(MXH() - xch, innerDomeBias, 0.0);
-            enxv = eofr(MXV() - xcv, innerDomeBias, 0.0);
+            // Calculate ion energy for each sensor (from only the x moment for now)
+            // Add in the satellite potential
+            // Then remove offsets from this
+            // Then convert to flow velocity, adding ram energy of O+ before taking sqare root. 
+            *ADDR(1, 0, 2) = eofr(MXH() - xch, innerDomeBias, 0.0) + state->potentials[timeIndex];
+            *ADDR(2, 0, 2) = eofr(MXV() - xcv, innerDomeBias, 0.0) + state->potentials[timeIndex];
 
-            enxh += state->potentials[timeIndex];
-            enxv += state->potentials[timeIndex];
-
-            // Calculate vix assuming pure O+
-            // needs to be negative, indicating a flow toward the satellite,
-            vixh = -sqrtf(2.0 / mass * q * enxh);
-            vixv = -sqrtf(2.0 / mass * q * enxv);
-            // then satellite velocity can be subtracted (VSATX is negative, i.e. toward the satellite).
-            // HX
-            *ADDR(1, 0, 2) = vixh - VSATX();
-            // HV
-            *ADDR(2, 0, 2) = vixv - VSATX();
         }
         else
         {
             // Old way, estimates a proxy based on image moments
+            // no potential correction, and this is our offset-biased flow estimate
             *ADDR(1, 0, 2) = -1.0 * (MXH() - 32.5) * shx - VSATX();
             *ADDR(2, 0, 2) = -1.0 * (MXV() - 32.5) * svx - VSATX();
         }
@@ -233,6 +224,33 @@ int calibrateFlows(ProcessorState *state)
 
     fprintf(stdout, "%sPrepared calibration data.\n", infoHeader);
     fflush(stdout);
+
+    // Remove offsets and set calibration flags
+    status = removeOffsetsAndSetFlags(state, true);
+    if (status != TIICT_OK)
+        return status;
+
+    // If using satellite potential, calculate ion along-track drift from offset-corrected energies
+    // We have effectively removed 4.8 eV from each energy by setting the energy to 0 at mid-latitude
+    // Add it back in before calculating velocity, then remove satellite velocity
+    float backgroundRamEnergyeV = 0.0;
+    float factor = 0.5 * mass / q;
+    if (state->usePotentials)
+    {
+        for (long timeIndex = 0; timeIndex < state->nRecs; timeIndex++)
+        {
+            backgroundRamEnergyeV = factor * VSATX() * VSATX();
+            // Calculate vix assuming pure O+
+            // needs to be negative, indicating a flow toward the satellite,
+            vixh = -sqrtf((MXH() + backgroundRamEnergyeV) / factor);
+            vixv = -sqrtf((MXV() + backgroundRamEnergyeV) / factor);
+            // then satellite velocity can be subtracted (VSATX is negative, i.e. toward the satellite).
+            // HX
+            *ADDR(1, 0, 2) = vixh - VSATX();
+            // HV
+            *ADDR(2, 0, 2) = vixv - VSATX();
+        }
+    }
 
     return TIICT_OK;
 
