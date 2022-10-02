@@ -56,7 +56,9 @@ int exportCdfs(ProcessorState *state)
     // Find first index with time on requested day
     long timeIndex = 0;
     uint8_t **dataBuffers = state->dataBuffers;
-    while (TIME() < minTime) timeIndex++;
+    while (timeIndex < state->nRecs && TIME() < minTime) timeIndex++;
+    if (timeIndex == state->nRecs)
+        return TIICT_NO_RECORDS_TO_EXPORT;
 
     startIndex = timeIndex;
     startTime = TIME();
