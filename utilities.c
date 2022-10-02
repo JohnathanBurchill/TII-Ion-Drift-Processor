@@ -30,6 +30,7 @@
 // Prefix for all fprintf messages
 extern char infoHeader[50];
 
+#define DIRECTORY_PERMISSIONS 0755
 
 // Generates the filename for exported CDF file, with full path
 void constructExportFileName(const char *dataset, double startTime, double stopTime, const char *exportDir, const char *exportVersion, const char *satellite, char *cdfFileName) 
@@ -76,7 +77,7 @@ int makeSureDirExists(const char *exportDir, const char *exportVersion, const ch
         // Try to create the directory
         errno = 0;
         fprintf(stderr, "%sCreating %s\n", infoHeader, outDir);
-        status = mkdir(outDir, S_IRWXU);
+        status = mkdir(outDir, DIRECTORY_PERMISSIONS);
     }
 
     if (status != 0)
@@ -90,7 +91,7 @@ int makeSureDirExists(const char *exportDir, const char *exportVersion, const ch
         // Try to create the directory
         errno = 0;
         fprintf(stderr, "%sCreating %s\n", infoHeader, outDir);
-        status = mkdir(outDir, S_IRWXU);
+        status = mkdir(outDir, DIRECTORY_PERMISSIONS);
     }
 
     return status;
