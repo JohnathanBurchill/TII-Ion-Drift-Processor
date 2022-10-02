@@ -265,9 +265,6 @@ int main(int argc, char *argv[])
 				}
 			}
 			mvprintw(PROCESSING_TIME_ORIGIN, "Total time: %02d:%02d:%02d", hours, minutes, seconds);
-			clrtobot();
-			mvprintw(PROCESSING_STATUS_ORIGIN, "%d/%d processed (%4.1f%%)", completed, days, (float)completed / (float)days * 100.0);
-			clrtobot();
 			mvprintw(KEYBOARD_ORIGIN, "[q] - quit");
 			clrtobot();
 			refresh();
