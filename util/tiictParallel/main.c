@@ -214,7 +214,7 @@ int main(int argc, char *argv[])
 						{
 							completed++;
 							commandArgs[i].threadRunning = false;
-							mvprintw(PROCESSING_STATUS_ORIGIN, "%d/%d processed (%4.1f%%)", completed, days, (float)completed / (float)days * 100.0);
+							mvprintw(PROCESSING_STATUS_ORIGIN, "Latest processed: %4d%02d%02d (%4.1f%%)", commandArgs[i].year, commandArgs[i].month, commandArgs[i].day, (float)completed / (float)days * 100.0);
 							clrtoeol();
 							threadIds[i] = 0;
 						}
