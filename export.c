@@ -728,8 +728,8 @@ int zipCdfFile(char *cdfFileName)
     status = system("zip -q 1 > /dev/null");
     if (WIFEXITED(status) && WEXITSTATUS(status) == 12)
     {
-        char command[5*FILENAME_MAX + 100];
-        sprintf(command, "zip -Z store -q -r -j %s.ZIP %s.cdf", cdfFileName, cdfFileName);
+        char command[6*FILENAME_MAX + 100];
+        sprintf(command, "zip -Z store -q -r -j %s.ZIP %s.cdf && rm %s.cdf", cdfFileName, cdfFileName, cdfFileName);
         status = system(command);
         if (WIFEXITED(status) && (WEXITSTATUS(status) == 0))
         {
