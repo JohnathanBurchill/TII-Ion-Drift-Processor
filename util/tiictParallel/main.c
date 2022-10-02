@@ -219,8 +219,8 @@ int main(int argc, char *argv[])
 							completed++;
 							commandArgs[i].threadRunning = false;
 							latestYear = commandArgs[i].year;
-							latestMonth = commandArgs[i].year;
-							latestDay = commandArgs[i].year;
+							latestMonth = commandArgs[i].month;
+							latestDay = commandArgs[i].day;
 							clrtoeol();
 							threadIds[i] = 0;
 						}
