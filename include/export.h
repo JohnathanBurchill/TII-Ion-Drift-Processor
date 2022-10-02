@@ -47,12 +47,10 @@ void addAttributes(CDFid id, const char *calVersion, const char *satellite, cons
 int exportTCT16Cdfs(ProcessorState *state, double startTime, double stopTime, long startIndex, long stopIndex);
 int exportTCT02Cdfs(ProcessorState *state, double startTime, double stopTime, long startIndex, long stopIndex);
 
-int zipCdfFile(char *cdfFileName);
+int zipCdfFile(ProcessorState *state, char *cdfFileName);
 
-int initDirectories(Arguments *args);
+int initDirectories(ProcessorState *state);
 
-void initLogFile(char *fitLogFileName, Arguments *a);
-
-int initFitFiles(ProcessorState *state);
+int initLogFiles(ProcessorState *state);
 
 #endif // _TIICT_EXPORT_H

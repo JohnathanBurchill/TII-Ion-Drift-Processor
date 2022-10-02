@@ -18,6 +18,7 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+#include "processing.h"
 #include "utilities.h"
 
 #include <stdio.h>
@@ -41,7 +42,7 @@
 
 #define MAX_THREADS 38
 
-char infoHeader[50] = {0};
+extern char infoHeader[50];
 
 enum STATUS 
 {
@@ -84,6 +85,8 @@ static int cols = 0;
 void initScreen(void);
 
 void *runThread(void *a);
+
+void cleanup(void *a);
 
 int main(int argc, char *argv[])
 {
@@ -133,14 +136,6 @@ int main(int argc, char *argv[])
 	free(d2);
 
 	sprintf(infoHeader, "tiictParallel: ");
-
-	// Ensure log directory exists
-	int dirStat = makeSureDirExists(exportDir, exportVersion, "logs");
-	if (dirStat != 0)
-	{
-		fprintf(stderr, "Cannot access %s/%s/logs directory.\n", exportDir, exportVersion);
-		exit(EXIT_FAILURE);
-	}
 
 	CommandArgs *commandArgs = calloc(nThreads, sizeof(CommandArgs));
 	if (commandArgs == NULL)
@@ -262,7 +257,8 @@ int main(int argc, char *argv[])
 						{
 							if (threadIds[k] > 0)
 							{
-								pthread_kill(threadIds[k], SIGKILL);
+								pthread_cancel(threadIds[k]);
+								pthread_join(threadIds[k], NULL);
 							}
 						}
 						goto exit;
@@ -387,21 +383,40 @@ void *runThread(void *a)
 {
 	CommandArgs* args = (CommandArgs *)a;
 
-	// exec TIICT command 
-	int status = 0;
-	char command[5*FILENAME_MAX+256];
-	sprintf(command, "tiict %s %d %d %d %s %s %s %s %s >> %s/%s/logs/%s%4d%02d%02d.log 2>&1", args->satLetter, args->year, args->month, args->day, args->calVersion, args->exportVersion, args->calDir, args->lpDir, args->exportDir, args->exportDir, args->exportVersion, args->satLetter, args->year, args->month, args->day);
+	char y[5] = {0};
+	snprintf(y, 5, "%4d", args->year);
+	char m[3] = {0};
+	snprintf(m, 3, "%2d", args->month);
+	char d[3] = {0};
+	snprintf(d, 3, "%2d", args->day);
 
-	status = system(command);
-	if (WIFEXITED(status) && (WEXITSTATUS(status) == 0))
-	{
-		// Use mvprintw() from curses to have a scrolling log?
-	}
-	else
-	{
-		// mvprintw?
-	}
-	args->threadRunning = false;
+	int argc = 10;
+	char *argv[] = {
+	  "tiict",
+	  args->satLetter,
+	  y,
+	  m,
+	  d,
+	  args->calVersion,
+	  args->exportVersion,
+	  args->calDir,
+	  args->lpDir,
+	  args->exportDir,
+	//   "--useLogFile",
+	  NULL
+	};
+
+	ProcessorState state = {0};
+	pthread_cleanup_push(cleanup, a);
+	int status = runProcessor(argc, argv, &state);
 	args->returnValue = status;
+	pthread_cleanup_pop(1);
 	pthread_exit(NULL);
+}
+
+void cleanup(void *a)
+{
+	CommandArgs* args = (CommandArgs *)a;
+	args->threadRunning = false;
+	return;
 }

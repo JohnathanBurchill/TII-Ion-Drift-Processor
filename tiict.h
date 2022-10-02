@@ -21,13 +21,4 @@
 #ifndef TIICT_H
 #define TIICT_H
 
-#include "state.h"
-
-int initProcessor(int argc, char **argv, ProcessorState *state);
-int parseArguments(int argc, char **argv, Arguments *args);
-void initHeader(Arguments *args);
-
-void checkResult(int status, ProcessorState *state);
-void shutdown(ProcessorState *state, int exitStatus);
-
 #endif // TIICT_H

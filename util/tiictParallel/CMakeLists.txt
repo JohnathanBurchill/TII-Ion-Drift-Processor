@@ -23,6 +23,6 @@ SET(THREADS_PREFER_PTHREAD_FLAG ON)
 FIND_PACKAGE(Threads REQUIRED)
 FIND_LIBRARY(CURSES ncurses)
 ADD_EXECUTABLE(tiictParallel main.c)
-TARGET_LINK_LIBRARIES(tiictParallel PRIVATE Utilities -lcdf Threads::Threads ${CURSES})
+TARGET_LINK_LIBRARIES(tiictParallel PRIVATE Processor -lcdf Threads::Threads ${CURSES})
 
 install(TARGETS tiictParallel DESTINATION $ENV{HOME}/bin)

@@ -24,20 +24,23 @@
 #include "settings.h"
 #include "indexing.h"
 #include "errors.h"
+#include "loadData.h"
+#include "export.h"
 
 #include <tii/detector.h>
 #include <tii/isp.h>
 
 #include <stdio.h>
+#include <string.h>
 #include <stdbool.h>
 #include <cdf.h>
+#include <pthread.h>
 
 #include <gsl/gsl_errno.h>
 #include <gsl/gsl_multifit.h>
 #include <gsl/gsl_statistics.h>
 
-extern char infoHeader[50];
-
+char infoHeader[50] = {0};
 
 int initQualityData(ProcessorState *state)
 {
@@ -120,13 +123,14 @@ int calibrateFlows(ProcessorState *state)
     // Estimate raw velocities
     for (long timeIndex = 0; timeIndex < state->nRecs; timeIndex++)
     {
+        pthread_testcancel();
+
         // Bias Voltage
         // TODO: need a more accurate replacement: i.e., early in mission the voltage was ~-60 V, not -62.
         if (VBIAS() < -95.0)
             *ADDR(13, 0, 1) = -100.;
         else if(VBIAS() > -65. && VBIAS() < -59.0)
             *ADDR(13, 0, 1) = -62.0;
-//        fprintf(stdout, "%s; after: %f\n", infoHeader, VBIAS());
 
         // VSatXYZ to m/s
         *ADDR(3, 0, 3) *= 1000.0;
@@ -222,8 +226,8 @@ int calibrateFlows(ProcessorState *state)
 
     }
 
-    fprintf(stdout, "%sPrepared calibration data.\n", infoHeader);
-    fflush(stdout);
+    fprintf(state->processingLogFile, "%sPrepared calibration data.\n", infoHeader);
+    fflush(state->processingLogFile);
 
     // Remove offsets and set calibration flags
     status = removeOffsetsAndSetFlags(state, true);
@@ -239,6 +243,8 @@ int calibrateFlows(ProcessorState *state)
     {
         for (long timeIndex = 0; timeIndex < state->nRecs; timeIndex++)
         {
+            pthread_testcancel();
+
             backgroundRamEnergyeV = factor * VSATX() * VSATX();
             // Calculate vix assuming pure O+
             // Positive, is flow towards satellite, in direction of sensor x axis.
@@ -274,9 +280,9 @@ int removeOffsetsAndSetFlags(ProcessorState *state, bool setFlags)
             return status;
     }
 
-    fprintf(stdout, "%sRemoved offsets and calculated flags.\n", infoHeader);
+    fprintf(state->processingLogFile, "%sRemoved offsets and calculated flags.\n", infoHeader);
     fflush(state->fitFile);
-    fflush(stdout);
+    fflush(state->processingLogFile);
 
     return status;
 
@@ -343,6 +349,8 @@ int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, uint8_t interval,
 
     for (timeIndex = 0; timeIndex < state->nRecs; timeIndex++)
     {
+        pthread_testcancel();
+
         c0 = 0.0;
         c1 = 0.0;
         seconds = (TIME() - epoch0) / 1000.;
@@ -465,14 +473,14 @@ int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, uint8_t interval,
                     gslStatus = gsl_multifit_robust_maxiter(GSL_FIT_MAXIMUM_ITERATIONS, gslFitWorkspace);
                     if (gslStatus)
                     {
-                        fprintf(stdout, "%sCould not set maximum GSL iterations.\n", infoHeader);
+                        fprintf(state->processingLogFile, "%sCould not set maximum GSL iterations.\n", infoHeader);
                     }
                     gslStatus = gsl_multifit_robust(modelTimesMatrix, modelValues, fitCoefficients, cov, gslFitWorkspace);
                     if (gslStatus)
                     {
                         toEncodeEPOCH(tregion11, 0, startString);
                         toEncodeEPOCH(tregion22, 0, stopString);
-                        fprintf(stdout, "%s<GSL Fit Error: %s> for fit region from %s to %s spanning latitudes %.0f to %.0f.\n", infoHeader, gsl_strerror(gslStatus), startString, stopString, fitargs->lat1, fitargs->lat4);
+                        fprintf(state->processingLogFile, "%s<GSL Fit Error: %s> for fit region from %s to %s spanning latitudes %.0f to %.0f.\n", infoHeader, gsl_strerror(gslStatus), startString, stopString, fitargs->lat1, fitargs->lat4);
                         // Print "-9999999999.GSLERRORNUMBER" for each of the nine fit parameters
                         fprintf(state->fitFile, " -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d", gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus);
                         if (setFlags)
@@ -533,7 +541,7 @@ int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, uint8_t interval,
             }
             else
             {
-                fprintf(stdout, "%s Fit error: did not get both endpoints of region defined for CDF_EPOCHS %f, %f, %f, %f: not fitting and not removing offsets.\n", infoHeader, tregion11, tregion12, tregion21, tregion22);
+                fprintf(state->processingLogFile, "%s Fit error: did not get both endpoints of region defined for CDF_EPOCHS %f, %f, %f, %f: not fitting and not removing offsets.\n", infoHeader, tregion11, tregion12, tregion21, tregion22);
                 // Fit region flag for incomplete region is already accounted for as complete_region bit is 0
             }
             
@@ -633,6 +641,8 @@ int calculateFields(ProcessorState *state)
 
     for (long timeIndex = 0; timeIndex < state->nRecs; timeIndex++)
     {
+        pthread_testcancel();
+
         // Calculate xhat, yhat, zhat
         // xhat parallel to satellite velocity 
         float magVsat = sqrtf(VSATN()*VSATN() + VSATE()*VSATE() + VSATC() * VSATC());
@@ -674,8 +684,8 @@ int calculateFields(ProcessorState *state)
 
     }
 
-    fprintf(stdout, "%sCalculated fields.\n", infoHeader);
-    fflush(stdout);
+    fprintf(state->processingLogFile, "%sCalculated fields.\n", infoHeader);
+    fflush(state->processingLogFile);
 
     return TIICT_OK;
 
@@ -742,6 +752,8 @@ bool downSampleHalfSecond(long *index, long storageIndex, double t0, long maxInd
 
     while (((TIME()/1000. - t0) < 0.5) && (timeIndex <= maxIndex))
     {
+        pthread_testcancel();
+
         timeBuf += TIME();
         // Handle lat and lon and mlt in cartesian coordinates
         // For spherical coordinates
@@ -843,3 +855,240 @@ bool downSampleHalfSecond(long *index, long storageIndex, double t0, long maxInd
 
 }
 
+int runProcessor(int argc, char *argv[], ProcessorState *state)
+{
+    int status = TIICT_OK;
+
+    // If program is cancelled free memory and close files
+    pthread_cleanup_push(shutdown, (void*)state);
+
+    checkResult(initProcessor(argc, argv, state), state);
+
+    checkResult(loadTiiCalData(state), state);
+
+    checkResult(loadLpCalData(state), state);
+
+    checkResult(calibrateFlows(state), state);
+
+    checkResult(calculateFields(state), state);
+
+    checkResult(exportCdfs(state), state);
+
+    // Run the cleanup function
+    pthread_cleanup_pop(1);
+
+    return TIICT_OK;
+
+}
+
+int initProcessor(int argc, char *argv[], ProcessorState *state)
+{
+    int status = TIICT_OK;
+    void *args = &state->args;
+
+    // Check arguments and abort if not right
+    status = parseArguments(argc, argv, state);
+    if (status != TIICT_OK)
+        return status;
+
+    status = initLogFiles(state);
+    if (status != TIICT_OK)
+        return status;
+
+    // Prefix for messages
+    initHeader(state);
+
+    // Confirm requested date has records. Abort otherwise.
+    status = checkCalDataAvailability(state);
+    if (status != TIICT_OK)
+        return status;
+
+    // Ensure export directories exist, or abort.
+    status = initDirectories(state);
+    if (status != TIICT_OK)
+        return status;
+
+    // The calibration data memory pointers
+    for (uint8_t i = 0; i < NUM_CAL_VARIABLES; i++)
+    {
+        state->dataBuffers[i] = NULL;
+    }
+    state->nRecs = 0;
+
+    // Turn off GSL failsafe error handler. We typically check the GSL return codes.
+    gsl_set_error_handler_off();
+
+    return TIICT_OK;
+}
+
+int parseArguments(int argc, char **argv, ProcessorState *state)
+{
+    Arguments *args = &state->args;
+    for (int i = 1; i < argc; i++)
+    {
+        if (strcmp(argv[i], "--about") == 0)
+        {
+            fprintf(stdout, "tiict - TII Cross-track ion drift processor, version %s.\n", SOFTWARE_VERSION);
+            fprintf(stdout, "Copyright (C) 2022  Johnathan K Burchill\n");
+            fprintf(stdout, "This program comes with ABSOLUTELY NO WARRANTY.\n");
+            fprintf(stdout, "This is free software, and you are welcome to redistribute it\n");
+            fprintf(stdout, "under the terms of the GNU General Public License.\n");
+            return TIICT_ARGS_ABOUT;
+        }
+    }
+
+    if (argc != 10)
+    {
+        fprintf(stdout, "usage: %s satLetter year month day calversionString exportVersionString calDir lpDir exportDir\n", argv[0]);
+        return TIICT_ARGS_BAD;
+    }
+
+    args->satellite = argv[1];
+    args->year = atoi(argv[2]);
+    args->month = atoi(argv[3]);
+    args->day = atoi(argv[4]);
+    args->calVersion = argv[5];
+    args->exportVersion = argv[6];
+    args->calDir = argv[7];
+    args->lpDir = argv[8];
+    args->exportDir = argv[9];
+
+    // Check satellite letter
+    if (strlen(args->satellite) != 1 || (args->satellite[0] != 'A' && args->satellite[0] != 'B' && args->satellite[0] != 'C'))
+    {
+        fprintf(stdout, "Satellite must be one of 'A', 'B', or 'C' (no quotes).\n");
+        return TIICT_ARGS_SATELLITE;
+    }
+
+    return TIICT_OK;
+
+}
+
+void initHeader(ProcessorState *state)
+{
+    Arguments *args = &state->args;
+    time_t currentTime;
+    struct tm * timeParts;
+    time(&currentTime);
+    timeParts = localtime(&currentTime);
+
+    // set up info header
+    sprintf(infoHeader, "TIICT %c%s %04d-%02d-%02d: ", args->satellite[0], args->exportVersion, args->year, args->month, args->day);
+    fprintf(state->processingLogFile, "\n%s-------------------------------------------------\n", infoHeader);
+    fprintf(state->processingLogFile, "%sVersion 0302 20220519\n", infoHeader);
+    fprintf(state->processingLogFile, "%sProcessing date: %s\n", infoHeader, asctime(timeParts));
+
+    return;
+}
+
+void checkResult(int status, ProcessorState *state)
+{
+    if (status != TIICT_OK)
+    {
+        state->returnStatus = status;
+        // Will call the cleanup handler
+        pthread_exit(NULL);
+    }
+
+    pthread_testcancel();
+
+    return;
+
+}
+
+void shutdown(void *s)
+{
+
+    ProcessorState *state = (ProcessorState *)s;
+
+    // Close fit log file
+    if (state->fitFile != NULL)
+    {
+        fclose(state->fitFile);
+        state->fitFile = NULL;
+    }
+    if (state->processingLogFile != NULL)
+    {
+        fclose(state->processingLogFile);
+        state->processingLogFile = NULL;
+    }
+    fflush(stdout);
+
+    // Free the memory
+    for (uint8_t i = 0; i < NUM_CAL_VARIABLES; i++)
+        if (state->dataBuffers[i] != NULL)
+        {
+            free(state->dataBuffers[i]);
+            state->dataBuffers[i] = NULL;
+        }
+
+    if (state->lpTimes != NULL)
+    {
+        free(state->lpTimes);
+        state->lpTimes = NULL;
+    }
+    if (state->lpPhiScHighGain != NULL)
+    {
+        free(state->lpPhiScHighGain);
+        state->lpPhiScHighGain = NULL;
+    }
+    if (state->lpPhiScLowGain != NULL)
+    {
+        free(state->lpPhiScLowGain);
+        state->lpPhiScLowGain = NULL;
+    }
+    if (state->lpPhiSc != NULL)
+    {
+        free(state->lpPhiSc);
+        state->lpPhiSc = NULL;
+    }
+    // state->potentials is just a pointer to one of the above potentials
+
+    if (state->xhat != NULL)
+    {
+        free(state->xhat);
+        state->xhat = NULL;
+    }
+    if (state->yhat != NULL)
+    {
+        free(state->yhat);
+        state->yhat = NULL;
+    }
+    if (state->zhat != NULL)
+    {
+        free(state->zhat);
+        state->zhat = NULL;
+    }
+    if (state->ectFieldH != NULL)
+    {
+        free(state->ectFieldH);
+        state->ectFieldH = NULL;
+    }
+    if (state->ectFieldV != NULL)
+    {
+        free(state->ectFieldV);
+        state->ectFieldV = NULL;
+    }
+    if (state->bctField != NULL)
+    {
+        free(state->bctField);
+        state->bctField = NULL;
+    }
+    if (state->viErrors != NULL)
+    {
+        free(state->viErrors);
+        state->viErrors = NULL;
+    }
+    if (state->flags != NULL)
+    {
+        free(state->flags);
+        state->flags = NULL;
+    }
+    if (state->fitInfo != NULL)
+    {
+        free(state->fitInfo);
+        state->fitInfo = NULL;
+    }
+
+    return;
+}

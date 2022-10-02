@@ -53,5 +53,12 @@ void interpolate(double *times, double *values, size_t nVals, double *requestedT
 // Returns true if a full 8 samples were downsampled to 1 sample, false otherwise
 bool downSampleHalfSecond(long *index, long storageIndex, double t0, long maxIndex, uint8_t **dataBuffers, float *ectFieldH, float *ectFieldV, float *bctField, float *viErrors, float *potentials, uint16_t *flags, uint32_t *fitInfo, bool usePotentials);
 
+int runProcessor(int argc, char *argv[], ProcessorState *state);
+int initProcessor(int argc, char **argv, ProcessorState *state);
+int parseArguments(int argc, char **argv, ProcessorState *state);
+void initHeader(ProcessorState *state);
+
+void checkResult(int status, ProcessorState *state);
+void shutdown(void *);
 
 #endif // PROCESSING_H

@@ -76,7 +76,6 @@ int makeSureDirExists(const char *exportDir, const char *exportVersion, const ch
     {
         // Try to create the directory
         errno = 0;
-        fprintf(stderr, "%sCreating %s\n", infoHeader, outDir);
         status = mkdir(outDir, DIRECTORY_PERMISSIONS);
     }
 
@@ -90,7 +89,6 @@ int makeSureDirExists(const char *exportDir, const char *exportVersion, const ch
     {
         // Try to create the directory
         errno = 0;
-        fprintf(stderr, "%sCreating %s\n", infoHeader, outDir);
         status = mkdir(outDir, DIRECTORY_PERMISSIONS);
     }
 

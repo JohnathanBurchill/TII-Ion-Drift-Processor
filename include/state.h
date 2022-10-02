@@ -49,10 +49,15 @@ typedef struct Arguments {
 } Arguments;
 
 typedef struct ProcessorState {
+
+    int returnStatus;
+
     Arguments args;
     offset_model_fit_arguments fitargs[4];
     char fitLogFilename[FILENAME_MAX];
     FILE *fitFile;
+    char processingLogFilename[FILENAME_MAX];
+    FILE *processingLogFile;
 
     // Calibration CDF data
     char calibrationFileName[CDF_PATHNAME_LEN];
