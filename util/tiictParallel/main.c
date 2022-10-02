@@ -189,7 +189,6 @@ int main(int argc, char *argv[])
 		mvprintw(END_DATE_ORIGIN, "  To: %s\n", endDate);
 		mvprintw(START_TIME_ORIGIN, "Started: %4d%02d%02d %02d:%02d:%02d", now->tm_year+1900, now->tm_mon+1, now->tm_mday, now->tm_hour, now->tm_min, now->tm_sec);
 		mvprintw(PROCESSING_TIME_ORIGIN, "Total time: %02d:%02d:%02d", 0, 0, 0);
-		mvprintw(PROCESSING_STATUS_ORIGIN, "%d/%d processed (%4.1f%%)", completed, days, (float)completed / (float)days * 100.0);
 
 		mvprintw(KEYBOARD_ORIGIN, "[q] - quit");
 		clrtobot();
