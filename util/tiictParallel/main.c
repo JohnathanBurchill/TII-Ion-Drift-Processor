@@ -78,7 +78,7 @@ static int cols = 0;
 #define END_DATE_ORIGIN 3,1
 #define START_TIME_ORIGIN 5,1
 #define PROCESSING_TIME_ORIGIN 6, 1
-#define PROCESSING_STATUS_ORIGIN 8,3
+#define PROCESSING_STATUS_ORIGIN 8,3 
 #define KEYBOARD_ORIGIN 10,2
 
 void initScreen(void);
@@ -177,6 +177,11 @@ int main(int argc, char *argv[])
 
 	int completed = 0;
 	int queued = 0;
+
+	int latestYear = 0;
+	int latestMonth = 0;
+	int latestDay = 0;
+
 	for (int sat = 0; sat < 3; sat++)
 	{
 		free(date);
@@ -213,7 +218,9 @@ int main(int argc, char *argv[])
 						{
 							completed++;
 							commandArgs[i].threadRunning = false;
-							mvprintw(PROCESSING_STATUS_ORIGIN, "Latest processed: %4d%02d%02d (%4.1f%%)", commandArgs[i].year, commandArgs[i].month, commandArgs[i].day, (float)completed / (float)days * 100.0);
+							latestYear = commandArgs[i].year;
+							latestMonth = commandArgs[i].year;
+							latestDay = commandArgs[i].year;
 							clrtoeol();
 							threadIds[i] = 0;
 						}
@@ -265,6 +272,9 @@ int main(int argc, char *argv[])
 				}
 			}
 			mvprintw(PROCESSING_TIME_ORIGIN, "Total time: %02d:%02d:%02d", hours, minutes, seconds);
+			clrtobot();
+			mvprintw(PROCESSING_STATUS_ORIGIN, "%d/%d processed (%4.1f%%). Latest: %4d%02d%02d", completed, days, (float)completed / (float)days * 100.0, latestYear, latestMonth, latestDay);
+			clrtobot();
 			mvprintw(KEYBOARD_ORIGIN, "[q] - quit");
 			clrtobot();
 			refresh();
