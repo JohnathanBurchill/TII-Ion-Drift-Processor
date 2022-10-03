@@ -33,7 +33,6 @@
 #include <time.h>
 #include <ctype.h>
 #include <math.h>
-#include <pthread.h>
 
 extern char infoHeader[50];
 
@@ -83,10 +82,8 @@ int exportCdfs(ProcessorState *state)
             if (duration >= SECONDS_OF_DATA_REQUIRED_FOR_EXPORTING)
             {
                 // 16 Hz data
-                pthread_testcancel();
                 status |= exportTCT16Cdfs(state, startTime, stopTime, startIndex, stopIndex);
                 // 2 Hz data
-                pthread_testcancel();
                 status |= exportTCT02Cdfs(state, startTime, stopTime, startIndex, stopIndex);
 
                 recordsExported += (stopIndex - startIndex + 1);
@@ -721,7 +718,6 @@ int exportTCT02Cdfs(ProcessorState *state, double startTime, double stopTime, lo
 
 int zipCdfFile(ProcessorState *state, char *cdfFileName)
 {
-    pthread_testcancel();
 
     // Archive the CDF and HDR files in a ZIP file
     int status = system(NULL);

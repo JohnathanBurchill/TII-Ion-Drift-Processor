@@ -31,6 +31,7 @@
 
 #include <pthread.h>
 #include <signal.h>
+#include <sys/wait.h>
 
 #include <time.h>
 #include <curses.h>
@@ -86,7 +87,7 @@ void initScreen(void);
 
 void *runThread(void *a);
 
-void cleanup(void *a);
+void cleanup(CommandArgs *args);
 
 int main(int argc, char *argv[])
 {
@@ -171,11 +172,14 @@ int main(int argc, char *argv[])
 	char *satellites[3] = {"A", "B", "C"};
 
 	int completed = 0;
-	int queued = 0;
+	int allCompleted[3] = {0};
+	int queued = 0;	
 
 	int latestYear = 0;
 	int latestMonth = 0;
 	int latestDay = 0;
+
+	bool quit = false;
 
 	for (int sat = 0; sat < 3; sat++)
 	{
@@ -212,6 +216,7 @@ int main(int argc, char *argv[])
 						if (status == 0)
 						{
 							completed++;
+							allCompleted[sat] = completed;
 							commandArgs[i].threadRunning = false;
 							latestYear = commandArgs[i].year;
 							latestMonth = commandArgs[i].month;
@@ -261,6 +266,7 @@ int main(int argc, char *argv[])
 								pthread_join(threadIds[k], NULL);
 							}
 						}
+						quit = true;
 						goto exit;
 						break;
 					default:
@@ -282,9 +288,16 @@ exit:
 	free(commandArgs);
 	free(date);
 	endwin();
-	printf("Days processed: %d / %d\n", completed, days);
+	printf("Days processed:\n");
+	printf("\tSwarm A: %d / %d\n", allCompleted[0], days);
+	printf("\tSwarm B: %d / %d\n", allCompleted[1], days);
+	printf("\tSwarm C: %d / %d\n", allCompleted[2], days);
 	printf("Total time: %02d:%02d:%02d\n", hours, minutes, seconds);
 
+	if (quit == true)
+	{
+		printf("--> Processes may still be running. Use\n\t'for i in `pidof tiict`;do kill -9 $i;done'\nto kill them. There may be zip processes running as well.\n");
+	}
 	return 0;
 
 }
@@ -383,39 +396,19 @@ void *runThread(void *a)
 {
 	CommandArgs* args = (CommandArgs *)a;
 
-	char y[5] = {0};
-	snprintf(y, 5, "%4d", args->year);
-	char m[3] = {0};
-	snprintf(m, 3, "%2d", args->month);
-	char d[3] = {0};
-	snprintf(d, 3, "%2d", args->day);
-
-	int argc = 10;
-	char *argv[] = {
-	  "tiict",
-	  args->satLetter,
-	  y,
-	  m,
-	  d,
-	  args->calVersion,
-	  args->exportVersion,
-	  args->calDir,
-	  args->lpDir,
-	  args->exportDir,
-	//   "--useLogFile",
-	  NULL
-	};
-
-	pthread_cleanup_push(cleanup, a);
-	int status = runProcessor(argc, argv);
+	// run tiict command as a system() call because CDF library is not thread safe
+	int status = 0;
+	char command[3*FILENAME_MAX+256] = {0};
+	sprintf(command, "tiict %s %d %d %d %s %s %s %s %s > /dev/null 2>&1 ", args->satLetter, args->year, args->month, args->day, args->calVersion, args->exportVersion, args->calDir, args->lpDir, args->exportDir);
+	status = system(command);
 	args->returnValue = status;
-	pthread_cleanup_pop(1);
+	args->threadRunning = false;
+
 	pthread_exit(NULL);
 }
 
-void cleanup(void *a)
+void cleanup(CommandArgs *args)
 {
-	CommandArgs* args = (CommandArgs *)a;
 	args->threadRunning = false;
 	return;
 }

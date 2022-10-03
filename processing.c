@@ -33,8 +33,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
+#include <time.h>
 #include <cdf.h>
-#include <pthread.h>
 
 #include <gsl/gsl_errno.h>
 #include <gsl/gsl_multifit.h>
@@ -123,8 +123,6 @@ int calibrateFlows(ProcessorState *state)
     // Estimate raw velocities
     for (long timeIndex = 0; timeIndex < state->nRecs; timeIndex++)
     {
-        pthread_testcancel();
-
         // Bias Voltage
         // TODO: need a more accurate replacement: i.e., early in mission the voltage was ~-60 V, not -62.
         if (VBIAS() < -95.0)
@@ -243,8 +241,6 @@ int calibrateFlows(ProcessorState *state)
     {
         for (long timeIndex = 0; timeIndex < state->nRecs; timeIndex++)
         {
-            pthread_testcancel();
-
             backgroundRamEnergyeV = factor * VSATX() * VSATX();
             // Calculate vix assuming pure O+
             // Positive, is flow towards satellite, in direction of sensor x axis.
@@ -349,8 +345,6 @@ int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, uint8_t interval,
 
     for (timeIndex = 0; timeIndex < state->nRecs; timeIndex++)
     {
-        pthread_testcancel();
-
         c0 = 0.0;
         c1 = 0.0;
         seconds = (TIME() - epoch0) / 1000.;
@@ -641,8 +635,6 @@ int calculateFields(ProcessorState *state)
 
     for (long timeIndex = 0; timeIndex < state->nRecs; timeIndex++)
     {
-        pthread_testcancel();
-
         // Calculate xhat, yhat, zhat
         // xhat parallel to satellite velocity 
         float magVsat = sqrtf(VSATN()*VSATN() + VSATE()*VSATE() + VSATC() * VSATC());
@@ -752,8 +744,6 @@ bool downSampleHalfSecond(long *index, long storageIndex, double t0, long maxInd
 
     while (((TIME()/1000. - t0) < 0.5) && (timeIndex <= maxIndex))
     {
-        pthread_testcancel();
-
         timeBuf += TIME();
         // Handle lat and lon and mlt in cartesian coordinates
         // For spherical coordinates
@@ -860,25 +850,28 @@ int runProcessor(int argc, char *argv[])
     int status = TIICT_OK;
     ProcessorState s = {0};
     ProcessorState *state = &s;
-    // If program is cancelled free memory and close files
-    pthread_cleanup_push(shutdown, (void*)state);
 
-    checkResult(initProcessor(argc, argv, state), state);
+    if ((status = initProcessor(argc, argv, state)) != TIICT_OK)
+        return shutdown(status, state);
 
-    checkResult(loadTiiCalData(state), state);
+    if ((status = loadTiiCalData(state)) != TIICT_OK)
+        return shutdown(status, state);
+ 
+    if ((status = loadLpCalData(state)) != TIICT_OK)
+        return shutdown(status, state);
+ 
+    if ((status = calibrateFlows(state)) != TIICT_OK)
+        return shutdown(status, state);
 
-    checkResult(loadLpCalData(state), state);
+    if ((status = calculateFields(state)) != TIICT_OK)
+        return shutdown(status, state);
 
-    checkResult(calibrateFlows(state), state);
+    status = exportCdfs(state);
 
-    checkResult(calculateFields(state), state);
+    status = shutdown(status, state);
 
-    checkResult(exportCdfs(state), state);
+    return status;
 
-    // Run the cleanup function
-    pthread_cleanup_pop(1);
-
-    return TIICT_OK;
 
 }
 
@@ -982,27 +975,24 @@ void initHeader(ProcessorState *state)
     return;
 }
 
-void checkResult(int status, ProcessorState *state)
+int checkResult(int status, ProcessorState *state)
 {
     if (status != TIICT_OK)
     {
         if (state->processingLogFile != NULL)
             fprintf(state->processingLogFile, "Error processing file. status = %d\n", status);
         state->returnStatus = status;
-        // Will call the cleanup handler
-        pthread_exit(NULL);
+        status = shutdown(status, state);
     }
 
-    pthread_testcancel();
-
-    return;
+    return status;
 
 }
 
-void shutdown(void *s)
+int shutdown(int status, ProcessorState *state)
 {
-
-    ProcessorState *state = (ProcessorState *)s;
+    if (state == NULL)
+        return(EXIT_FAILURE);
 
     // Close fit log file
     if (state->fitFile != NULL)
@@ -1093,5 +1083,5 @@ void shutdown(void *s)
         state->fitInfo = NULL;
     }
 
-    return;
+    return status;
 }

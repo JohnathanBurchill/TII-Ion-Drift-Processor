@@ -32,7 +32,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
-#include <pthread.h>
 #include <unistd.h>
 
 extern char infoHeader[50];
@@ -148,8 +147,6 @@ int getLpData(ProcessorState *state)
 
     for (int i = 0; i < 3; i++)
     {
-        pthread_testcancel();
-
         timegm(&date);
         bzero(lpFile, FILENAME_MAX);
         res = getLpInputFilename(state->args.satellite[0], date.tm_year+1900, date.tm_mon+1, date.tm_mday, state->args.lpDir, lpFile);
@@ -257,8 +254,6 @@ int loadLpInputs(const char *cdfFile, double **lpTime, double **lpPhiScHighGain,
     
     for (uint8_t i = 0; i < nVariables; i++)
     {
-        pthread_testcancel();
-
         varNum = CDFgetVarNum(cdfId, variables[i]);
         status = CDFreadzVarAllByVarID(cdfId, varNum, &numRecs, &dataType, &numElems, &numDims, dimSizes, &recVary, dimVarys, &data);
         if (status != CDF_OK)
@@ -335,7 +330,6 @@ int loadTiiCalData(ProcessorState *state)
         state->args.day = day + i;
         fprintf(state->processingLogFile, "%sLoading calibration data for %04d%02d%02d\n", infoHeader, state->args.year, state->args.month, state->args.day);
 
-        pthread_testcancel();
         loadTiiCalDataFromDate(i, state);
     }
     // Reset processing date

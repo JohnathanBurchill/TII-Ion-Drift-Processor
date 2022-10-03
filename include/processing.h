@@ -58,7 +58,7 @@ int initProcessor(int argc, char **argv, ProcessorState *state);
 int parseArguments(int argc, char **argv, ProcessorState *state);
 void initHeader(ProcessorState *state);
 
-void checkResult(int status, ProcessorState *state);
-void shutdown(void *);
+int checkResult(int status, ProcessorState *state);
+int shutdown(int status, ProcessorState *state);
 
 #endif // PROCESSING_H
