@@ -855,10 +855,11 @@ bool downSampleHalfSecond(long *index, long storageIndex, double t0, long maxInd
 
 }
 
-int runProcessor(int argc, char *argv[], ProcessorState *state)
+int runProcessor(int argc, char *argv[])
 {
     int status = TIICT_OK;
-
+    ProcessorState s = {0};
+    ProcessorState *state = &s;
     // If program is cancelled free memory and close files
     pthread_cleanup_push(shutdown, (void*)state);
 
@@ -985,6 +986,8 @@ void checkResult(int status, ProcessorState *state)
 {
     if (status != TIICT_OK)
     {
+        if (state->processingLogFile != NULL)
+            fprintf(state->processingLogFile, "Error processing file. status = %d\n", status);
         state->returnStatus = status;
         // Will call the cleanup handler
         pthread_exit(NULL);

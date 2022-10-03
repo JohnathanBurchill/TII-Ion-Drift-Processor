@@ -33,6 +33,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <pthread.h>
+#include <unistd.h>
 
 extern char infoHeader[50];
 
@@ -155,19 +156,26 @@ int getLpData(ProcessorState *state)
         if (res != 0)
         {
             fprintf(state->processingLogFile, "%sNo LP data for %4d%02d%02d\n", infoHeader, date.tm_year+1900, date.tm_mon+1, date.tm_mday);
+            date.tm_mday = date.tm_mday + 1;
             continue;
         }
         fprintf(state->processingLogFile, "%sLoading LP data from %s\n", infoHeader, lpFile);
         
         status = loadLpInputs(lpFile, &lpTimes2Hz, &lpVsHg, &lpVsLg, &lpVs, &state->nLpRecs);
         if (status == TIICT_MEMORY)
+        {
+            fprintf(state->processingLogFile, "%sUnable to allocate memory for LP data. Skipping processing.", infoHeader);
             return status;
+        }
 
         date.tm_mday = date.tm_mday + 1;
         
     }
     if (state->nLpRecs == 0)
+    {
+        fprintf(state->processingLogFile, "%sNo LP records found. Skipping processing.", infoHeader);
         return TIICT_NO_LP_HM_DATA;
+    }
 
     // interpolate LP data to TII times
     state->lpPhiScHighGain = malloc(sizeof(float) * state->nRecs);
@@ -175,6 +183,7 @@ int getLpData(ProcessorState *state)
     state->lpPhiSc = malloc(sizeof(float) * state->nRecs);
     if (state->lpPhiScHighGain == NULL || state->lpPhiScLowGain == NULL || state->lpPhiSc == NULL)
     {
+        fprintf(state->processingLogFile, "%sUnable to allocate memory for LP interpolation. Skipping processing.", infoHeader);
         return TIICT_MEMORY;
     }
     bzero(state->lpPhiScHighGain, sizeof(float) * state->nRecs);
@@ -241,9 +250,8 @@ int loadLpInputs(const char *cdfFile, double **lpTime, double **lpPhiScHighGain,
         status = CDFconfirmzVarExistence(cdfId, variables[i]);
         if (status != CDF_OK)
         {
-
             closeCdf(cdfId);
-                return TIICT_CDF_READ;
+            return TIICT_CDF_READ;
         }
     }
     
@@ -607,11 +615,17 @@ void setCalibrationFileName(ProcessorState *state, int year, int month, int day)
 int checkCalDataAvailability(ProcessorState *state)
 {
     setCalibrationFileName(state, state->args.year, state->args.month, state->args.day);
+    if (access(state->calibrationFileName, F_OK) != 0)
+    {
+        fprintf(state->processingLogFile, "%sCalibration file %s not found. Skipping this date.\n", infoHeader, state->calibrationFileName);
+        return TIICT_NO_CAL_FILE;
+    }
     CDFid calCdfId;
     CDFstatus status;
     status = CDFopenCDF(state->calibrationFileName, &calCdfId);
     if (status != CDF_OK) 
     {
+        fprintf(state->processingLogFile, "%sUnable to open %s. Skipping this date.\n", infoHeader, state->calibrationFileName);
         return TIICT_CDF_READ;
     }
 
@@ -631,7 +645,7 @@ int checkCalDataAvailability(ProcessorState *state)
     }
     else
     {
-        fprintf(state->processingLogFile, "%sProcessing %ld records for this date.\n", infoHeader, nRecords);
+        fprintf(state->processingLogFile, "%sProcessing %ld calibration records for this date.\n", infoHeader, nRecords);
     }
 
     return TIICT_OK;

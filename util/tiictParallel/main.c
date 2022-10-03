@@ -406,9 +406,8 @@ void *runThread(void *a)
 	  NULL
 	};
 
-	ProcessorState state = {0};
 	pthread_cleanup_push(cleanup, a);
-	int status = runProcessor(argc, argv, &state);
+	int status = runProcessor(argc, argv);
 	args->returnValue = status;
 	pthread_cleanup_pop(1);
 	pthread_exit(NULL);
