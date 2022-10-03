@@ -634,7 +634,8 @@ int checkCalDataAvailability(ProcessorState *state)
     status = CDFgetzVarAllocRecords(calCdfId, CDFgetVarNum(calCdfId, "epoch"), &nRecords);
     if (status != CDF_OK) 
     {
-        nRecords = 0;
+        printErrorMessageToFile(state->processingLogFile, status);
+        return TIICT_CDF_READ;
     }
     closeCdf(calCdfId);
 

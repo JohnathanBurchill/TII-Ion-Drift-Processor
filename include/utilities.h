@@ -27,6 +27,7 @@
 void constructExportFileName(const char *dataset, double startTime, double stopTime, const char *exportDir, const char *exportVersion, const char *satellite, char *cdfFileName);
 
 // Prints an error message from the CDFstatus
+void printErrorMessageToFile(FILE *file, CDFstatus status);
 void printErrorMessage(CDFstatus status);
 
 void closeCdf(CDFid id);

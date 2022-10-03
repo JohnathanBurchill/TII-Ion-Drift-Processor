@@ -46,6 +46,13 @@ void constructExportFileName(const char *dataset, double startTime, double stopT
 
 }
 
+void printErrorMessageToFile(FILE *file, CDFstatus status)
+{
+    char errorMessage[CDF_STATUSTEXT_LEN + 1];
+    CDFgetStatusText(status, errorMessage);
+    fprintf(file, "%s%s\n", infoHeader, errorMessage);
+}
+
 void printErrorMessage(CDFstatus status)
 {
     char errorMessage[CDF_STATUSTEXT_LEN + 1];
