@@ -854,10 +854,7 @@ int runProcessor(int argc, char *argv[])
     if ((status = initProcessor(argc, argv, state)) != TIICT_OK)
         return shutdown(status, state);
 
-    if ((status = loadTiiCalData(state)) != TIICT_OK)
-        return shutdown(status, state);
- 
-    if ((status = loadLpCalData(state)) != TIICT_OK)
+    if ((status = loadData(state)) != TIICT_OK)
         return shutdown(status, state);
  
     if ((status = calibrateFlows(state)) != TIICT_OK)
@@ -931,9 +928,9 @@ int parseArguments(int argc, char **argv, ProcessorState *state)
         }
     }
 
-    if (argc != 10)
+    if (argc != 12)
     {
-        fprintf(stdout, "usage: %s satLetter year month day calversionString exportVersionString calDir lpDir exportDir\n", argv[0]);
+        fprintf(stdout, "usage: %s satLetter year month day calversionString tracisVersionString exportVersionString calDir tracisDir lpDir exportDir\n", argv[0]);
         return TIICT_ARGS_BAD;
     }
 
@@ -942,10 +939,12 @@ int parseArguments(int argc, char **argv, ProcessorState *state)
     args->month = atoi(argv[3]);
     args->day = atoi(argv[4]);
     args->calVersion = argv[5];
-    args->exportVersion = argv[6];
-    args->calDir = argv[7];
-    args->lpDir = argv[8];
-    args->exportDir = argv[9];
+    args->tracisVersion = argv[6];
+    args->exportVersion = argv[7];
+    args->calDir = argv[8];
+    args->tracisDir = argv[9];
+    args->lpDir = argv[10];
+    args->exportDir = argv[11];
 
     // Check satellite letter
     if (strlen(args->satellite) != 1 || (args->satellite[0] != 'A' && args->satellite[0] != 'B' && args->satellite[0] != 'C'))
@@ -969,8 +968,8 @@ void initHeader(ProcessorState *state)
     // set up info header
     sprintf(infoHeader, "TIICT %c%s %04d-%02d-%02d: ", args->satellite[0], args->exportVersion, args->year, args->month, args->day);
     fprintf(state->processingLogFile, "\n%s-------------------------------------------------\n", infoHeader);
-    fprintf(state->processingLogFile, "%sVersion 0302 20220519\n", infoHeader);
-    fprintf(state->processingLogFile, "%sProcessing date: %s\n", infoHeader, asctime(timeParts));
+    fprintf(state->processingLogFile, "%sVersion %s %s\n", infoHeader, args->exportVersion, SOFTWARE_VERSION_STRING);
+    fprintf(state->processingLogFile, "%sProcessing date: %s", infoHeader, asctime(timeParts));
 
     return;
 }
@@ -1002,6 +1001,7 @@ int shutdown(int status, ProcessorState *state)
     }
     if (state->processingLogFile != NULL)
     {
+        fprintf(state->processingLogFile, "%sProcessing aborted with status %d\n", infoHeader, status);
         fclose(state->processingLogFile);
         state->processingLogFile = NULL;
     }

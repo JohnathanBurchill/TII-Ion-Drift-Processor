@@ -37,7 +37,7 @@
 #include <curses.h>
 
 
-#define SOFTWARE_VERSION "1.1"
+#define TIICT_PARALLEL_SOFTWARE_VERSION "1.1"
 
 #define THREAD_MANAGER_WAIT 100000 // uSeconds
 
@@ -61,8 +61,10 @@ typedef struct CommandArgs
 	int month;
 	int day;
 	char *calVersion;
+	char *tracisVersion;
 	char *exportVersion;
 	char *calDir;
+	char *tracisDir;
 	char *lpDir;
 	char *exportDir;
 } CommandArgs;
@@ -96,7 +98,7 @@ int main(int argc, char *argv[])
     {
         if (strcmp(argv[i], "--about") == 0)
         {
-            fprintf(stdout, "tiictParallel version %s.\n", SOFTWARE_VERSION);
+            fprintf(stdout, "tiictParallel version %s.\n", TIICT_PARALLEL_SOFTWARE_VERSION);
             fprintf(stdout, "Copyright (C) 2022  Johnathan K Burchill\n");
             fprintf(stdout, "This program comes with ABSOLUTELY NO WARRANTY.\n");
             fprintf(stdout, "This is free software, and you are welcome to redistribute it\n");
@@ -105,9 +107,9 @@ int main(int argc, char *argv[])
         }
     }
 
-	if (argc !=  9)
+	if (argc !=  11)
 	{
-		printf("usage:\t%s startyyyymmdd endyyyymmdd calVersion exportVersion calDir lpDir exportDir nthreads\n\t\tparallel processes Swarm TII data to generate TIICT product for specified satellite and date.\n", argv[0]);
+		printf("usage:\t%s startyyyymmdd endyyyymmdd calVersion tracisVersion exportVersion calDir tracisDir lpDir exportDir nthreads\n\t\tparallel processes Swarm TII data to generate TIICT product for specified satellite and date.\n", argv[0]);
 		printf("\t%s --about\n\t\tprints copyright and license information.\n", argv[0]);
 		exit(0);
 	}
@@ -119,10 +121,12 @@ int main(int argc, char *argv[])
 	char *endDate = argv[2];
 	char *calVersion = argv[3];
 	char *exportVersion  = argv[4];
-	char *calDir = argv[5];
-	char *lpDir = argv[6];
-	char *exportDir = argv[7];
-	int nThreads = atoi(argv[8]);
+	char *tracisVersion = argv[5];
+	char *calDir = argv[6];
+	char *tracisDir = argv[7];
+	char *lpDir = argv[8];
+	char *exportDir = argv[9];
+	int nThreads = atoi(argv[10]);
 	if (nThreads > MAX_THREADS)
 	{
 		nThreads = MAX_THREADS;
@@ -231,8 +235,10 @@ int main(int argc, char *argv[])
 						commandArgs[i].threadRunning = true;
 						commandArgs[i].satLetter = satellites[sat];
 						commandArgs[i].calVersion = calVersion;
+						commandArgs[i].tracisVersion = tracisVersion;
 						commandArgs[i].exportVersion = exportVersion;
 						commandArgs[i].calDir = calDir;
+						commandArgs[i].tracisDir = tracisDir;
 						commandArgs[i].lpDir = lpDir;
 						commandArgs[i].exportDir = exportDir;
 						ymd(date, &year, &month, &day);
@@ -399,7 +405,7 @@ void *runThread(void *a)
 	// run tiict command as a system() call because CDF library is not thread safe
 	int status = 0;
 	char command[3*FILENAME_MAX+256] = {0};
-	sprintf(command, "tiict %s %d %d %d %s %s %s %s %s > /dev/null 2>&1 ", args->satLetter, args->year, args->month, args->day, args->calVersion, args->exportVersion, args->calDir, args->lpDir, args->exportDir);
+	sprintf(command, "tiict %s %d %d %d %s %s %s %s %s %s %s > /dev/null 2>&1 ", args->satLetter, args->year, args->month, args->day, args->calVersion, args->tracisVersion, args->exportVersion, args->calDir, args->tracisDir, args->lpDir, args->exportDir);
 	status = system(command);
 	args->returnValue = status;
 	args->threadRunning = false;

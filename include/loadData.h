@@ -37,12 +37,16 @@ int loadLpCalData(ProcessorState *state);
 int getLpData(ProcessorState *state);
 int loadLpInputs(const char *cdfFile, double **lpTime, double **lpPhiScHighGain, double **lpPhiScLowGain, double **lpPhiSc, long *numberOfRecords);
 
-int loadTiiCalData(ProcessorState *state);
+int loadTiiData(ProcessorState *state);
 void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state);
+void loadTracisDataFromDate(const DayType dayType, ProcessorState *state);
 
-void loadCdf(const DayType dayType, const char * filename, const char *variables[], int nVars, ProcessorState *state, size_t sampleRate, uint8_t **dataBuffers, size_t *numberOfRecords, size_t *memoryAllocated);
+int loadData(ProcessorState *state);
+
+void loadCdf(const DayType dayType, const char * filename, const char *variables[], int nVars, ProcessorState *state, float sampleRate, uint8_t **dataBuffers, size_t *numberOfRecords, size_t *memoryAllocated);
 
 void setCalibrationFileName(ProcessorState *state, int year, int month, int day);
+void setTracisFileName(ProcessorState *state, int year, int month, int day);
 
 int checkCalDataAvailability(ProcessorState *state);
 

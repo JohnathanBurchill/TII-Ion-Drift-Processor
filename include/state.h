@@ -42,8 +42,10 @@ typedef struct Arguments {
     int month;
     int day;
     const char* calVersion;
+    const char* tracisVersion;
     const char* exportVersion;
     const char* calDir;
+    const char* tracisDir;
     const char* lpDir;
     const char* exportDir;
 } Arguments;
@@ -61,9 +63,13 @@ typedef struct ProcessorState {
 
     // Calibration CDF data
     char calibrationFileName[CDF_PATHNAME_LEN];
+    char tracisFileName[CDF_PATHNAME_LEN];
     uint8_t * dataBuffers[NUM_CAL_VARIABLES];
+    uint8_t * tracisDataBuffers[NUM_TRACIS_VARIABLES];
     long nRecs;
+    long nTracisRecs;
     long memoryAllocated;
+    long tracisMemoryAllocated;
 
     // LP data for floating potential
     double *lpTimes;
