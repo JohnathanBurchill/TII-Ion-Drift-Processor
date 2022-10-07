@@ -40,6 +40,8 @@ int loadLpInputs(const char *cdfFile, double **lpTime, double **lpPhiScHighGain,
 int loadTiiCalData(ProcessorState *state);
 void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state);
 
+void loadCdf(const DayType dayType, const char * filename, const char *variables[], int nVars, ProcessorState *state, size_t sampleRate, uint8_t **dataBuffers, size_t *numberOfRecords, size_t *memoryAllocated);
+
 void setCalibrationFileName(ProcessorState *state, int year, int month, int day);
 
 int checkCalDataAvailability(ProcessorState *state);

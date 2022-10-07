@@ -331,6 +331,7 @@ int loadTiiCalData(ProcessorState *state)
         fprintf(state->processingLogFile, "%sLoading calibration data for %04d%02d%02d\n", infoHeader, state->args.year, state->args.month, state->args.day);
 
         loadTiiCalDataFromDate(i, state);
+        // loadTracisDataFromDate(i, state);
     }
     // Reset processing date
     state->args.year = year;
@@ -369,14 +370,40 @@ void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state)
     setCalibrationFileName(state, state->args.year, state->args.month, state->args.day);
     fprintf(state->processingLogFile, "%s from %s\n", infoHeader, state->calibrationFileName);
 
+    // Variables
+    const char* variables[] = {
+        "epoch",                // index 0
+        "1st Moment - H",       // 1
+        "1st Moment - V",       // 2
+        "Det_H__vX",            // 3
+        "MLT",                  // 4
+        "QDLat",                // 5
+        "QDLon",                // 6
+        "Latitude",             // 7
+        "Long Tle",             // 8
+        "Radius",               // 9
+        "Det H CorVx",          // 10
+        "Sat_Vel_N",            // 11
+        "B-North",              // 12
+        "Bias_Grid_H",          // 13
+        "Faceplate_Volt_Mon_H"  // 14
+        };
+
+    loadCdf(dayType, state->calibrationFileName, variables, NUM_CAL_VARIABLES, state, 16, state->dataBuffers, &state->nRecs, &state->memoryAllocated);
+
+    return;
+}
+
+void loadCdf(const DayType dayType, const char * filename, const char *variables[], int nVars, ProcessorState *state, size_t sampleRate, uint8_t **dataBuffers, size_t *numberOfRecords, size_t *memoryAllocated)
+{
     // Open the CDF file with validation
     CDFsetValidate(VALIDATEFILEon);
-    CDFid calCdfId;
-    CDFstatus status;
-    status = CDFopenCDF(state->calibrationFileName, &calCdfId);
+    CDFid calCdfId = 0;
+    CDFstatus status = 0;
+    status = CDFopenCDF(filename, &calCdfId);
     if (status != CDF_OK) 
     {
-        // Not necessarily an error. For example, some dates will have not calibration data.
+        // Not necessarily an error. For example, some dates will have not calibration data, hence no file.
         fprintf(state->processingLogFile, "%sSkipping this date.\n", infoHeader);
         return;
     }
@@ -404,14 +431,15 @@ void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state)
         return;
     }
     long nRecs, calibrationMemorySize = 0;
-    status = CDFgetzVarAllocRecords(calCdfId, CDFgetVarNum(calCdfId, "epoch"), &nRecs);
+    // First variable should be the time
+    status = CDFgetzVarAllocRecords(calCdfId, CDFgetVarNum(calCdfId, (char *)variables[0]), &nRecs);
     if (status != CDF_OK)
     {
         fprintf(state->processingLogFile, "%sProblem with calibration file. Skipping this date.\n", infoHeader);
         closeCdf(calCdfId);
         return;
     }
-    if (nRecs < (16*SECONDS_OF_DATA_REQUIRED_FOR_PROCESSING))
+    if (nRecs < (sampleRate * SECONDS_OF_DATA_REQUIRED_FOR_PROCESSING))
     {
         // Not enough to do anything useful 
         // TODO: maybe increase this threshold to require a larger number of points each day?
@@ -479,7 +507,7 @@ void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state)
 
     // Update number of records
     nRecs = stopRecord - startRecord + 1;
-    if ((dayType == REQUESTED_DAY && nRecs < (16*SECONDS_OF_DATA_REQUIRED_FOR_PROCESSING)) || ((dayType == PREVIOUS_DAY || dayType == NEXT_DAY) && nRecs < (16*SECONDS_OF_BOUNDARY_DATA_REQUIRED_FOR_PROCESSING)))
+    if ((dayType == REQUESTED_DAY && nRecs < (sampleRate*SECONDS_OF_DATA_REQUIRED_FOR_PROCESSING)) || ((dayType == PREVIOUS_DAY || dayType == NEXT_DAY) && nRecs < (sampleRate*SECONDS_OF_BOUNDARY_DATA_REQUIRED_FOR_PROCESSING)))
     {
         // Not enough to do anything useful 
         // TODO: maybe increase this threshold to require a larger number of points each day?
@@ -488,29 +516,9 @@ void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state)
         return;
     }
 
-    // Variables
-    char* variables[] = {
-        "epoch",                // index 0
-        "1st Moment - H",       // 1
-        "1st Moment - V",       // 2
-        "Det_H__vX",            // 3
-        "MLT",                  // 4
-        "QDLat",                // 5
-        "QDLon",                // 6
-        "Latitude",             // 7
-        "Long Tle",             // 8
-        "Radius",               // 9
-        "Det H CorVx",          // 10
-        "Sat_Vel_N",            // 11
-        "B-North",              // 12
-        "Bias_Grid_H",          // 13
-        "Faceplate_Volt_Mon_H"  // 14
-        };
-
-    uint8_t nVars = numzVars;
-    if (nVars != NUM_CAL_VARIABLES)
+    if (numzVars != nVars)
     {
-        fprintf(state->processingLogFile, "%sError: number of calibration variables should be %d. Got %ld. Skipping this date.\n", infoHeader, (uint8_t) NUM_CAL_VARIABLES, numzVars);
+        fprintf(state->processingLogFile, "%sError: number of calibration variables should be %d. Got %ld. Skipping this date.\n", infoHeader, nVars, numzVars);
         closeCdf(calCdfId);
         return;
     }
@@ -539,7 +547,7 @@ void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state)
 
     for (uint8_t i = 0; i < nVars; i++)
     {
-        varNum = CDFgetVarNum(calCdfId, variables[i]);
+        varNum = CDFgetVarNum(calCdfId, (char *)variables[i]);
         if (varNum < CDF_OK)
         {
             printErrorMessage(varNum);
@@ -561,11 +569,11 @@ void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state)
         numBytesToAdd = numValues * nRecs * numVarBytes;
         numBytesNew = numBytesPrev + numBytesToAdd;
         calibrationMemorySize += numBytesNew;
-        newMem = realloc(state->dataBuffers[i], (size_t) numBytesNew);
+        newMem = realloc(dataBuffers[i], (size_t) numBytesNew);
         if (newMem == NULL)
             return;
-        state->dataBuffers[i] = (uint8_t*) newMem;
-        status = CDFgetzVarRangeRecordsByVarID(calCdfId, varNum, startRecord, stopRecord, state->dataBuffers[i] + numBytesPrev);
+        dataBuffers[i] = (uint8_t*) newMem;
+        status = CDFgetzVarRangeRecordsByVarID(calCdfId, varNum, startRecord, stopRecord, dataBuffers[i] + numBytesPrev);
         if (status != CDF_OK)
         {
 
@@ -580,20 +588,22 @@ void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state)
     switch (dayType)
     {
         case PREVIOUS_DAY:
-            fprintf(state->processingLogFile, "%sGot %ld s of data for previous day\n", infoHeader, nRecs / 16);
+            fprintf(state->processingLogFile, "%sGot %ld s of data for previous day\n", infoHeader, nRecs / sampleRate);
             break;
         case REQUESTED_DAY:
-            fprintf(state->processingLogFile, "%sGot %ld s of data for requested day\n", infoHeader, nRecs / 16);
+            fprintf(state->processingLogFile, "%sGot %ld s of data for requested day\n", infoHeader, nRecs / sampleRate);
             break;
         case NEXT_DAY:
-            fprintf(state->processingLogFile, "%sGot %ld s of data for next day\n", infoHeader, nRecs / 16);
+            fprintf(state->processingLogFile, "%sGot %ld s of data for next day\n", infoHeader, nRecs / sampleRate);
             break;
         default:
             break;
     }
     // Update number of records found and memory allocated
-    state->nRecs += nRecs;
-    state->memoryAllocated = calibrationMemorySize;
+    if (numberOfRecords != NULL)
+        *numberOfRecords += nRecs;
+    if (memoryAllocated != NULL)
+        *memoryAllocated = calibrationMemorySize;
 
     return;
 }
