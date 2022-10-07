@@ -175,7 +175,8 @@ int calibrateFlows(ProcessorState *state)
             case 'C': // 20191126 slew experiment, plus simulations
                 shx = 679.0;
                 shy = 679.0;
-                svx = 2377.0;
+                // Using H sensor sensitivity for Vixv
+                svx = 679.0;
                 svy = 2377.0;
                 if (innerDomeBias >= -63.0 && innerDomeBias < -59.0)
                 {
