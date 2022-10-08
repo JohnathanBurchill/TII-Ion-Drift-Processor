@@ -99,7 +99,10 @@ int loadLpCalData(ProcessorState *state)
     state->lpPhiScHighGain = NULL;
     state->lpPhiScLowGain = NULL;
     state->lpPhiSc = NULL;
+    state->lpNi = NULL;
+    state->lpFlagbits = NULL;
     state->nLpRecs = 0;
+
 
     int status = TIICT_OK;
     state->usePotentials = strcmp(state->args.exportVersion, "0401") >= 0; 
@@ -139,8 +142,12 @@ int getLpData(ProcessorState *state)
     double *lpVsHg = NULL;
     double *lpVsLg = NULL;
     double *lpVs = NULL;
+    double *lpNi = NULL;
+    uint32_t *lpFlagbits = NULL;
 
     int status = TIICT_OK;
+
+    int nLpRecsRead = 0;
 
     for (int i = 0; i < 3; i++)
     {
@@ -153,11 +160,17 @@ int getLpData(ProcessorState *state)
             continue;
         }
         
-        status = loadLpInputs(lpFile, &lpTimes2Hz, &lpVsHg, &lpVsLg, &lpVs, &state->nLpRecs);
+        status = loadLpInputs(lpFile, &lpTimes2Hz, &lpVsHg, &lpVsLg, &lpVs, &lpNi, &lpFlagbits, &state->nLpRecs);
         if (status == TIICT_MEMORY)
         {
             fprintf(state->processingLogFile, "%sUnable to allocate memory for LP data.", infoHeader);
             return status;
+        }
+        if (state->nLpRecs > nLpRecsRead)
+        {
+            state->gotLpFile[i] = true;
+            strcpy(state->lpFileNames[i], lpFile);
+            nLpRecsRead = state->nLpRecs;
         }
 
         date.tm_mday = date.tm_mday + 1;
@@ -173,7 +186,9 @@ int getLpData(ProcessorState *state)
     state->lpPhiScHighGain = (float*)calloc(state->nRecs, sizeof(float));
     state->lpPhiScLowGain = (float*)calloc(state->nRecs, sizeof(float));
     state->lpPhiSc = (float*)calloc(state->nRecs, sizeof(float));
-    if (state->lpPhiScHighGain == NULL || state->lpPhiScLowGain == NULL || state->lpPhiSc == NULL)
+    state->lpNi = (float*)calloc(state->nRecs, sizeof(float));
+    state->lpFlagbits = (uint32_t*)calloc(state->nRecs, sizeof(uint32_t));
+    if (state->lpPhiScHighGain == NULL || state->lpPhiScLowGain == NULL || state->lpPhiSc == NULL || state->lpNi == NULL || state->lpFlagbits == NULL)
     {
         fprintf(state->processingLogFile, "%sUnable to allocate memory for LP interpolation.", infoHeader);
         return TIICT_MEMORY;
@@ -184,6 +199,8 @@ int getLpData(ProcessorState *state)
     interpolate(lpTimes2Hz, lpVsHg, state->nLpRecs, tiiTime, state->nRecs, state->lpPhiScHighGain);
     interpolate(lpTimes2Hz, lpVsLg, state->nLpRecs, tiiTime, state->nRecs, state->lpPhiScLowGain);
     interpolate(lpTimes2Hz, lpVs, state->nLpRecs, tiiTime, state->nRecs, state->lpPhiSc);
+    interpolate(lpTimes2Hz, lpNi, state->nLpRecs, tiiTime, state->nRecs, state->lpNi);
+    zeroOrderInterpolateU32(lpTimes2Hz, lpFlagbits, state->nLpRecs, tiiTime, state->nRecs, state->lpFlagbits);
 
     free(lpTimes2Hz);
     free(lpVsHg);
@@ -195,7 +212,7 @@ int getLpData(ProcessorState *state)
 }
 
 // Adapted from SLIDEM
-int loadLpInputs(const char *cdfFile, double **lpTime, double **lpPhiScHighGain, double **lpPhiScLowGain, double **lpPhiSc, long *numberOfRecords)
+int loadLpInputs(const char *cdfFile, double **lpTime, double **lpPhiScHighGain, double **lpPhiScLowGain, double **lpPhiSc, double **lpNi, uint32_t **lpFlagbits, long *numberOfRecords)
 {
     // Open the CDF file with validation
     CDFsetValidate(VALIDATEFILEoff);
@@ -231,8 +248,8 @@ int loadLpInputs(const char *cdfFile, double **lpTime, double **lpPhiScHighGain,
         closeCdf(cdfId);
         return TIICT_CDF_READ;
     }
-    int nVariables = 4;
-    char * variables[4] = {"Timestamp", "Vs_hgn", "Vs_lgn", "U_SC"};
+    int nVariables = 6;
+    char * variables[6] = {"Timestamp", "Vs_hgn", "Vs_lgn", "U_SC", "n", "Flagbits"};
 
     for (uint8_t i = 0; i<nVariables; i++)
     {
@@ -273,25 +290,39 @@ int loadLpInputs(const char *cdfFile, double **lpTime, double **lpPhiScHighGain,
                 memcpy(*lpTime + (*numberOfRecords), data, numBytesToAdd);
                 break;
             case 1: // Vs_hgn
-                newMem = (double*) realloc(*lpPhiScHighGain, totalBytes);
+                newMem = realloc(*lpPhiScHighGain, totalBytes);
                 if (newMem == NULL)
                     return TIICT_MEMORY;
                 *lpPhiScHighGain = (double*) newMem;
                 memcpy(*lpPhiScHighGain + (*numberOfRecords), data, numBytesToAdd);
                 break;
             case 2: // Vs_lgn
-                newMem = (double*) realloc(*lpPhiScLowGain, totalBytes);
+                newMem = realloc(*lpPhiScLowGain, totalBytes);
                 if (newMem == NULL)
                     return TIICT_MEMORY;
                 *lpPhiScLowGain = (double*) newMem;
                 memcpy(*lpPhiScLowGain + (*numberOfRecords), data, numBytesToAdd);
                 break;
             case 3: // U_SC
-                newMem = (double*) realloc(*lpPhiSc, totalBytes);
+                newMem = realloc(*lpPhiSc, totalBytes);
                 if (newMem == NULL)
                     return TIICT_MEMORY;
                 *lpPhiSc = (double*) newMem;
                 memcpy(*lpPhiSc + (*numberOfRecords), data, numBytesToAdd);
+                break;
+            case 4: // n
+                newMem = realloc(*lpNi, totalBytes);
+                if (newMem == NULL)
+                    return TIICT_MEMORY;
+                *lpNi = (double*) newMem;
+                memcpy(*lpNi + (*numberOfRecords), data, numBytesToAdd);
+                break;
+            case 5: // Flagbits
+                newMem = realloc(*lpFlagbits, totalBytes);
+                if (newMem == NULL)
+                    return TIICT_MEMORY;
+                *lpFlagbits = (uint32_t*) newMem;
+                memcpy(*lpFlagbits + (*numberOfRecords), data, numBytesToAdd);
                 break;
             default:
                 return TIICT_CDF_READ;
@@ -315,12 +346,25 @@ int loadTiiData(ProcessorState *state)
     int month = state->args.month;
     int day = state->args.day;
 
+    int nCalRecs = 0;
+    int nTracisRecs = 0;
+
     // Get data for prior, requested, and following days
     for (int8_t i = -1; i < 2; i++)
     {
         state->args.day = day + i;
         loadTiiCalDataFromDate(i, state);
+        if (state->nRecs > nCalRecs)
+        {
+            state->gotCalibrationFile[i+1] = true;
+            nCalRecs = state->nRecs;
+        }
         loadTracisDataFromDate(i, state);
+        if (state->nTracisRecs > nTracisRecs)
+        {
+            state->gotTracisFile[i+1] = true;
+            nTracisRecs = state->nTracisRecs;
+        }
     }
     // Reset processing date
     state->args.year = year;
@@ -352,9 +396,9 @@ int loadTiiData(ProcessorState *state)
 
     double *tiiTime = (double*)state->dataBuffers[0];
 
-    zeroOrderInterpolateImageFlags((double*)state->tracisDataBuffers[0], (uint8_t*)state->tracisDataBuffers[1], state->nTracisRecs, tiiTime, state->nRecs, state->tracisImageFlagsH);
+    zeroOrderInterpolateU8((double*)state->tracisDataBuffers[0], (uint8_t*)state->tracisDataBuffers[1], state->nTracisRecs, tiiTime, state->nRecs, state->tracisImageFlagsH);
 
-    zeroOrderInterpolateImageFlags((double*)state->tracisDataBuffers[0], (uint8_t*)state->tracisDataBuffers[2], state->nTracisRecs, tiiTime, state->nRecs, state->tracisImageFlagsV);
+    zeroOrderInterpolateU8((double*)state->tracisDataBuffers[0], (uint8_t*)state->tracisDataBuffers[2], state->nTracisRecs, tiiTime, state->nRecs, state->tracisImageFlagsV);
 
     return TIICT_OK;
 }
@@ -378,7 +422,7 @@ void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state)
     state->args.year = timestructure.tm_year + 1900;
     state->args.month = timestructure.tm_mon + 1;
     state->args.day = timestructure.tm_mday;
-    setCalibrationFileName(state, state->args.year, state->args.month, state->args.day);
+    setCalibrationFileName(state, dayType, state->args.year, state->args.month, state->args.day);
 
     // Variables
     const char* variables[] = {
@@ -399,7 +443,7 @@ void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state)
         "Faceplate_Volt_Mon_H"  // 14
         };
 
-    loadCdf(dayType, state->calibrationFileName, variables, NUM_CAL_VARIABLES, state, 16, state->dataBuffers, &state->nRecs, &state->memoryAllocated);
+    loadCdf(dayType, state->calibrationFileNames[dayType + 1], variables, NUM_CAL_VARIABLES, state, 16, state->dataBuffers, &state->nRecs, &state->memoryAllocated);
 
     return;
 }
@@ -423,7 +467,7 @@ void loadTracisDataFromDate(const DayType dayType, ProcessorState *state)
     state->args.year = timestructure.tm_year + 1900;
     state->args.month = timestructure.tm_mon + 1;
     state->args.day = timestructure.tm_mday;
-    setTracisFileName(state, state->args.year, state->args.month, state->args.day);
+    setTracisFileName(state, dayType, state->args.year, state->args.month, state->args.day);
 
     // Variables
     const char* variables[] = {
@@ -432,7 +476,7 @@ void loadTracisDataFromDate(const DayType dayType, ProcessorState *state)
         "Image_anomaly_flags_H" // 2
         };
 
-    loadCdf(dayType, state->tracisFileName, variables, NUM_TRACIS_VARIABLES, state, 1.0/256.0, state->tracisDataBuffers, &state->nTracisRecs, &state->tracisMemoryAllocated);
+    loadCdf(dayType, state->tracisFileNames[dayType + 1], variables, NUM_TRACIS_VARIABLES, state, 1.0/256.0, state->tracisDataBuffers, &state->nTracisRecs, &state->tracisMemoryAllocated);
 
     return;
 }
@@ -622,36 +666,36 @@ void loadCdf(const DayType dayType, const char * filename, const char *variables
     return;
 }
 
-void setCalibrationFileName(ProcessorState *state, int year, int month, int day)
+void setCalibrationFileName(ProcessorState *state, DayType dayType, int year, int month, int day)
 {
     Arguments *a = &state->args;
-    snprintf(state->calibrationFileName, CDF_PATHNAME_LEN, "%s/%s/%04d/Swarm_%s/%02d/TiiClbr%s_Swarm_%s_%04d_%02d_%02d.cdf", a->calDir, a->calVersion, year, a->satellite, month, a->calVersion, a->satellite, year, month, day);
+    snprintf(state->calibrationFileNames[dayType + 1], CDF_PATHNAME_LEN, "%s/%s/%04d/Swarm_%s/%02d/TiiClbr%s_Swarm_%s_%04d_%02d_%02d.cdf", a->calDir, a->calVersion, year, a->satellite, month, a->calVersion, a->satellite, year, month, day);
 
     return;
 }
 
-void setTracisFileName(ProcessorState *state, int year, int month, int day)
+void setTracisFileName(ProcessorState *state, DayType dayType, int year, int month, int day)
 {
     Arguments *a = &state->args;
-    snprintf(state->tracisFileName, CDF_PATHNAME_LEN, "%s/%s/SW_OPER_EFI%cTISL1B_%04d%02d%02dT000000_%04d%02d%02dT235959_%s.cdf", a->tracisDir, a->tracisVersion, a->satellite[0], year, month, day, year, month, day, a->tracisVersion);
+    snprintf(state->tracisFileNames[dayType + 1], CDF_PATHNAME_LEN, "%s/%s/SW_OPER_EFI%cTISL1B_%04d%02d%02dT000000_%04d%02d%02dT235959_%s.cdf", a->tracisDir, a->tracisVersion, a->satellite[0], year, month, day, year, month, day, a->tracisVersion);
 
     return;
 }
 
-int checkCalDataAvailability(ProcessorState *state)
+int checkCalDataAvailability(ProcessorState *state, DayType dayType)
 {
-    setCalibrationFileName(state, state->args.year, state->args.month, state->args.day);
-    if (access(state->calibrationFileName, F_OK) != 0)
+    setCalibrationFileName(state, dayType, state->args.year, state->args.month, state->args.day);
+    if (access(state->calibrationFileNames[dayType+1], F_OK) != 0)
     {
-        fprintf(state->processingLogFile, "%sTII calibration file %s not found.\n", infoHeader, state->calibrationFileName);
+        fprintf(state->processingLogFile, "%sTII calibration file %s not found.\n", infoHeader, state->calibrationFileNames[dayType + 1]);
         return TIICT_NO_CAL_FILE;
     }
     CDFid calCdfId;
     CDFstatus status;
-    status = CDFopenCDF(state->calibrationFileName, &calCdfId);
+    status = CDFopenCDF(state->calibrationFileNames[dayType + 1], &calCdfId);
     if (status != CDF_OK) 
     {
-        fprintf(state->processingLogFile, "%sUnable to open %s.\n", infoHeader, state->calibrationFileName);
+        fprintf(state->processingLogFile, "%sUnable to open %s.\n", infoHeader, state->calibrationFileNames[dayType + 1]);
         return TIICT_CDF_READ;
     }
 

@@ -24,6 +24,7 @@
 #include <stdlib.h>
 #include <sys/errno.h>
 #include <sys/stat.h>
+#include <time.h>
 
 #include "utilities.h"
 
@@ -102,4 +103,22 @@ int makeSureDirExists(const char *exportDir, const char *exportVersion, const ch
     return status;
 
 
+}
+
+// From SLIDEM processor
+void utcDateString(time_t seconds, char *dateString)
+{
+    struct tm *d = gmtime(&seconds);
+    sprintf(dateString, "UTC=%04d-%02d-%02dT%02d:%02d:%02d", d->tm_year + 1900, d->tm_mon + 1, d->tm_mday, d->tm_hour, d->tm_min, d->tm_sec);
+
+    return;
+}
+
+void utcNowDateString(char *dateString)
+{
+    time_t seconds = time(NULL);
+    struct tm *d = gmtime(&seconds);
+    sprintf(dateString, "UTC=%04d-%02d-%02dT%02d:%02d:%02d", d->tm_year + 1900, d->tm_mon + 1, d->tm_mday, d->tm_hour, d->tm_min, d->tm_sec);
+
+    return;
 }

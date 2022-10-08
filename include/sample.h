@@ -5,7 +5,9 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-void zeroOrderInterpolateImageFlags(double *times, uint8_t *values, size_t nVals, double *requestedTimes, long nRequestedValues, uint8_t *newValues);
+void zeroOrderInterpolateU8(double *times, uint8_t *values, size_t nVals, double *requestedTimes, long nRequestedValues, uint8_t *newValues);
+
+void zeroOrderInterpolateU32(double *times, uint32_t *values, size_t nVals, double *requestedTimes, long nRequestedValues, uint32_t *newValues);
 
 void interpolate(double *times, double *values, size_t nVals, double *requestedTimes, long nRequestedValues, float *newValues);
 

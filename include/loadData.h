@@ -35,7 +35,7 @@ typedef enum DayType {
 int getLpInputFilename(const char satelliteLetter, long year, long month, long day, const char *path, char *filename);
 int loadLpCalData(ProcessorState *state);
 int getLpData(ProcessorState *state);
-int loadLpInputs(const char *cdfFile, double **lpTime, double **lpPhiScHighGain, double **lpPhiScLowGain, double **lpPhiSc, long *numberOfRecords);
+int loadLpInputs(const char *cdfFile, double **lpTime, double **lpPhiScHighGain, double **lpPhiScLowGain, double **lpPhiSc, double **ionDensity, uint32_t **flagbits, long *numberOfRecords);
 
 int loadTiiData(ProcessorState *state);
 void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state);
@@ -45,9 +45,9 @@ int loadData(ProcessorState *state);
 
 void loadCdf(const DayType dayType, const char * filename, const char *variables[], int nVars, ProcessorState *state, float sampleRate, uint8_t **dataBuffers, size_t *numberOfRecords, size_t *memoryAllocated);
 
-void setCalibrationFileName(ProcessorState *state, int year, int month, int day);
-void setTracisFileName(ProcessorState *state, int year, int month, int day);
+void setCalibrationFileName(ProcessorState *state, DayType dayType, int year, int month, int day);
+void setTracisFileName(ProcessorState *state, DayType dayType, int year, int month, int day);
 
-int checkCalDataAvailability(ProcessorState *state);
+int checkCalDataAvailability(ProcessorState *state, DayType dayType);
 
 #endif // _LOADDATA_H

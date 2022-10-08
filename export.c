@@ -34,6 +34,7 @@
 #include <time.h>
 #include <ctype.h>
 #include <math.h>
+#include <libgen.h>
 
 extern char infoHeader[50];
 
@@ -350,11 +351,17 @@ CDFstatus addVariableAttributes(CDFid id, varAttr attr)
             return status;
         }
     }
+    status = CDFputAttrzEntry(id, CDFgetAttrNum(id, "FORMAT"), varNum, CDF_CHAR, strlen(attr.format), attr.format);
+    if (status != CDF_OK)
+    {
+        printErrorMessage(status);
+        return status;
+    }
 
     return status;
 }
 
-void addAttributes(CDFid id, const char *dataset, const char *satellite, const char *version, double minTime, double maxTime)
+void addAttributes(CDFid id, ProcessorState *state, const char *dataset, const char *satellite, const char *version, double minTime, double maxTime)
 {
     long attrNum;
     char buf[1000];
@@ -362,6 +369,58 @@ void addAttributes(CDFid id, const char *dataset, const char *satellite, const c
     bool highRate = (strcmp(dataset, "TCT16") == 0);
 
     // Global attributes
+
+    CDFcreateAttr(id, "TITLE", GLOBAL_SCOPE, &attrNum);
+    sprintf(buf, "Swarm %s EFI TII High resolution data.", satellite);
+    addgEntry(id, attrNum, 0, buf);
+
+    const char *outFile = state->tct16BaseFileName;
+    if (!highRate)
+        outFile = state->tct02BaseFileName;
+    char cdfFile[FILENAME_MAX] = {0};
+    sprintf(cdfFile, "%s.cdf", outFile);
+    CDFcreateAttr(id, "File_Name", GLOBAL_SCOPE, &attrNum);
+    addgEntry(id, attrNum, 0, basename((char *)outFile));
+
+    CDFcreateAttr(id, "PI_name", GLOBAL_SCOPE, &attrNum);
+    addgEntry(id, attrNum, 0, "David J Knudsen");   
+    CDFcreateAttr(id, "PI_affiliation", GLOBAL_SCOPE, &attrNum);
+    addgEntry(id, attrNum, 0, "University of Calgary");
+    CDFcreateAttr(id, "Project_scientist", GLOBAL_SCOPE, &attrNum);
+    addgEntry(id, attrNum, 0, "Johnathan K. Burchill");   
+    addgEntry(id, attrNum, 1, "Alexei Kouznetsov");   
+    CDFcreateAttr(id, "Acknowledgement", GLOBAL_SCOPE, &attrNum);
+    addgEntry(id, attrNum, 0, "ESA Swarm EFI Ion Drift data are available from https://swarm-diss.eo.esa.int");
+
+    CDFcreateAttr(id, "Creator", GLOBAL_SCOPE, &attrNum);
+    addgEntry(id, attrNum, 0, "University of Calgary, Alberta, Canada");
+
+    CDFcreateAttr(id, "Creator_Software", GLOBAL_SCOPE, &attrNum);
+    addgEntry(id, attrNum, 0, "tiict");
+
+    CDFcreateAttr(id, "Creator_Version", GLOBAL_SCOPE, &attrNum);
+    addgEntry(id, attrNum, 0, SOFTWARE_VERSION);
+
+    CDFcreateAttr(id, "Generation_date", GLOBAL_SCOPE, &attrNum);
+    char genDate[UTC_DATE_LENGTH];
+    utcNowDateString(genDate);
+    addgEntry(id, attrNum, 0, genDate);
+
+    CDFcreateAttr(id, "Generated_by", GLOBAL_SCOPE, &attrNum);
+    addgEntry(id, attrNum, 0, "University of Calgary EFI team");
+
+    CDFcreateAttr(id, "Input_files", GLOBAL_SCOPE, &attrNum);
+    int fileNo = 0;
+    for (int i = 0; i < 3; i++)
+    {
+        if (state->gotCalibrationFile[i])
+            addgEntry(id, attrNum, fileNo++, basename(state->calibrationFileNames[i]));
+        if (state->gotTracisFile[i])
+            addgEntry(id, attrNum, fileNo++, basename(state->tracisFileNames[i]));
+        if (state->gotLpFile[i])
+            addgEntry(id, attrNum, fileNo++, basename(state->lpFileNames[i]));
+    }
+
     CDFcreateAttr(id, "File_naming_convention", GLOBAL_SCOPE, &attrNum);
     addgEntry(id, attrNum, 0, "SW_EXPT_EFIX");
     CDFcreateAttr(id, "Logical_file_id", GLOBAL_SCOPE, &attrNum);
@@ -376,13 +435,8 @@ void addAttributes(CDFid id, const char *dataset, const char *satellite, const c
     CDFcreateAttr(id, "Mission_group", GLOBAL_SCOPE, &attrNum);
     addgEntry(id, attrNum, 0, "Swarm");
     CDFcreateAttr(id, "MODS", GLOBAL_SCOPE, &attrNum);
-    addgEntry(id, attrNum, 0, "Second release of version 3, corrects data gaps associated with L0 overlaps.");
-    CDFcreateAttr(id, "PI_name", GLOBAL_SCOPE, &attrNum);
-    addgEntry(id, attrNum, 0, "David Knudsen");   
-    CDFcreateAttr(id, "PI_affiliation", GLOBAL_SCOPE, &attrNum);
-    addgEntry(id, attrNum, 0, "University of Calgary");
-    CDFcreateAttr(id, "Acknowledgement", GLOBAL_SCOPE, &attrNum);
-    addgEntry(id, attrNum, 0, "ESA Swarm EFI TII data are available from https://swarm-diss.eo.esa.int");
+    addgEntry(id, attrNum, 0, "Refer to release notes.");
+
     CDFcreateAttr(id, "Source_name", GLOBAL_SCOPE, &attrNum);
     sprintf(buf, "Swarm%s>Swarm %s", satellite, satellite);
     addgEntry(id, attrNum, 0, buf);
@@ -394,12 +448,7 @@ void addAttributes(CDFid id, const char *dataset, const char *satellite, const c
     addgEntry(id, attrNum, 0, "TII>Electric Field Instrument Thermal Ion Imager");
     CDFcreateAttr(id, "Discipline", GLOBAL_SCOPE, &attrNum);
     addgEntry(id, attrNum, 0, "Space Physics>Ionospheric Science");
-    CDFcreateAttr(id, "Generated_by", GLOBAL_SCOPE, &attrNum);
-    addgEntry(id, attrNum, 0, "University of Calgary EFI team");
-    CDFcreateAttr(id, "Generation_date", GLOBAL_SCOPE, &attrNum);
-    time_t created;
-    time(&created);
-    addgEntry(id, attrNum, 0, ctime(&created));
+
     CDFcreateAttr(id, "LINK_TEXT", GLOBAL_SCOPE, &attrNum);
     if (highRate)
     {
@@ -409,6 +458,7 @@ void addAttributes(CDFid id, const char *dataset, const char *satellite, const c
     {
         addgEntry(id, attrNum, 0, "2 Hz EFI TII ion drift and electric field data available at");
     }
+
     CDFcreateAttr(id, "LINK_TITLE", GLOBAL_SCOPE, &attrNum);
     addgEntry(id, attrNum, 0, "ESA Swarm Data Access");
     CDFcreateAttr(id, "HTTP_LINK", GLOBAL_SCOPE, &attrNum);
@@ -423,6 +473,7 @@ void addAttributes(CDFid id, const char *dataset, const char *satellite, const c
     addgEntry(id, attrNum, 1, "Satellite-trajectory coordinates: X: parallel to the satellite velocity vector; Y: to the right looking forward; Z: nadir");
     addgEntry(id, attrNum, 2, "Knudsen, D.J., Burchill, J.K., Buchert, S.C., Eriksson, A.I., Gill, R., Wahlund, J.E., Ahlen, L., Smith, M. and Moffat, B., 2017. Thermal ion imagers and Langmuir probes in the Swarm electric field instruments. Journal of Geophysical Research: Space Physics, 122(2), pp.2655-2673.");
     addgEntry(id, attrNum, 3, "Burchill, J.K. and Knudsen, D.J, 2020. EFI TII Cross-Track Flow Data Release Notes. Swarm DISC document SW-RN-UoC-GS-004, Revision 6.");
+
     CDFcreateAttr(id, "Time_resolution", GLOBAL_SCOPE, &attrNum);
     if (highRate)
     {
@@ -432,9 +483,6 @@ void addAttributes(CDFid id, const char *dataset, const char *satellite, const c
     {
         addgEntry(id, attrNum, 0, "0.5 seconds");
     }
-    CDFcreateAttr(id, "TITLE", GLOBAL_SCOPE, &attrNum);
-    sprintf(buf, "Swarm %s EFI TII High resolution data.", satellite);
-    addgEntry(id, attrNum, 0, buf);
     CDFcreateAttr(id, "Project", GLOBAL_SCOPE, &attrNum);
     addgEntry(id, attrNum, 0, "ESA Living Planet Programme");
     CDFcreateAttr(id, "Software_version", GLOBAL_SCOPE, &attrNum);
@@ -450,6 +498,7 @@ void addAttributes(CDFid id, const char *dataset, const char *satellite, const c
     }
     addgEntry(id, attrNum, 0, buf);
 
+
     CDFcreateAttr(id, "FIELDNAM", VARIABLE_SCOPE, &attrNum);
     CDFcreateAttr(id, "CATDESC", VARIABLE_SCOPE, &attrNum);
     CDFcreateAttr(id, "Type", VARIABLE_SCOPE, &attrNum);
@@ -460,41 +509,42 @@ void addAttributes(CDFid id, const char *dataset, const char *satellite, const c
     CDFcreateAttr(id, "LABLAXIS", VARIABLE_SCOPE, &attrNum);
     CDFcreateAttr(id, "VALIDMIN", VARIABLE_SCOPE, &attrNum);
     CDFcreateAttr(id, "VALIDMAX", VARIABLE_SCOPE, &attrNum);
+    CDFcreateAttr(id, "FORMAT", VARIABLE_SCOPE, &attrNum);
     CDFcreateAttr(id, "TIME_BASE", VARIABLE_SCOPE, &attrNum);
 
     const varAttr variableAttrs[NUM_EXPORT_VARIABLES] = {
-        {"Timestamp", "CDF_EPOCH", "*", "UT", minTime, maxTime},
-        {"Latitude", "CDF_FLOAT", "degrees", "Geocentric latitude.", -90., 90.},
-        {"Longitude", "CDF_FLOAT", "degrees", "Geocentric longitude.", -180., 180.},
-        {"Radius", "CDF_FLOAT", "m", "Geocentric radius.", 6400000., 7000000.},
-        {"QDLatitude", "CDF_FLOAT", "degrees", "Quasi-dipole magnetic latitude.", -90., 90.},
-        {"MLT", "CDF_FLOAT", "hour", "Magnetic local time.", 0., 24.},
-        {"Vixh", "CDF_FLOAT", "m/s", "Along-track ion drift from horizontal TII sensor in satellite-track coordinates.", -8000., 8000.},
-        {"Vixh_error", "CDF_FLOAT", "m/s", "Random error estimate for along-track ion drift from horizontal TII sensor in satellite-track coordinates. Negative value indicates no estimate available.", -42., 10000.},
-        {"Vixv", "CDF_FLOAT", "m/s", "Along-track ion drift from vertical TII sensor in satellite-track coordinates.", -8000., 8000.},
-        {"Vixv_error", "CDF_FLOAT", "m/s", "Random error estimate for along-track ion drift from vertical TII sensor in satellite-track coordinates. Negative value indicates no estimate available.", -42., 10000.},
-        {"Viy", "CDF_FLOAT", "m/s", "Cross-track horizontal ion drift from horizontal TII sensor in satellite-track coordinates.", -8000., 8000.},
-        {"Viy_error", "CDF_FLOAT", "m/s", "Random error estimate for cross-track horizontal ion drift from horizontal TII sensor in satellite-track coordinates. Negative value indicates no estimate available.", -42., 10000.},
-        {"Viz", "CDF_FLOAT", "m/s", "Cross-track vertical ion drift from vertical TII sensor in satellite-track coordinates.", -8000., 8000.},
-        {"Viz_error", "CDF_FLOAT", "m/s", "Random error estimate for cross-track vertical ion drift from vertical TII sensor in satellite-track coordinates. Negative value indicates no estimate available.", -42., 10000.},
-        {"VsatN", "CDF_FLOAT", "m/s", "Satellite velocity N component in north-east-centre coordinates.", -8000., 8000.},
-        {"VsatE", "CDF_FLOAT", "m/s", "Satellite velocity E component in north-east-centre coordinates.", -8000., 8000.},
-        {"VsatC", "CDF_FLOAT", "m/s", "Satellite velocity C component in north-east-centre coordinates.", -200., 200.},
-        {"Ehx", "CDF_FLOAT", "mV/m", "Electric field x component in satellite-track coordinates, derived from -VxB with along-track ion drift from horizontal sensor.", -400., 400.},
-        {"Ehy", "CDF_FLOAT", "mV/m", "Electric field y component in satellite-track coordinates, derived from -VxB with along-track ion drift from horizontal sensor.", -400., 400.},
-        {"Ehz", "CDF_FLOAT", "mV/m", "Electric field z component in satellite-track coordinates, derived from -VxB with along-track ion drift from horizontal sensor.", -400., 400.},
-        {"Evx", "CDF_FLOAT", "mV/m", "Electric field x component in satellite-track coordinates, derived from -VxB with along-track ion drift from vertical sensor.", -400., 400.},
-        {"Evy", "CDF_FLOAT", "mV/m", "Electric field y component in satellite-track coordinates, derived from -VxB with along-track ion drift from vertical sensor.", -400., 400.},
-        {"Evz", "CDF_FLOAT", "mV/m", "Electric field z component in satellite-track coordinates, derived from -VxB with along-track ion drift from vertical sensor.", -400., 400.},
-        {"Bx", "CDF_FLOAT", "nT", "Geomagnetic field x component in satellite-track coordinates, derived from the 1 Hz product.", -65000., 65000.},
-        {"By", "CDF_FLOAT", "nT", "Geomagnetic field y component in satellite-track coordinates, derived from the 1 Hz product.", -65000., 65000.},
-        {"Bz", "CDF_FLOAT", "nT", "Geomagnetic field z component in satellite-track coordinates, derived from the 1 Hz product.", -65000., 65000.},
-        {"Vicrx", "CDF_FLOAT", "m/s", "Ion drift corotation signal x component in satellite-track coorinates. This has been removed from ion drift and electric field.", -1000., 1000.},
-        {"Vicry", "CDF_FLOAT", "m/s", "Ion drift corotation signal y component in satellite-track coorinates. This has been removed from ion drift and electric field.", -1000., 1000.},
-        {"Vicrz", "CDF_FLOAT", "m/s", "Ion drift corotation signal z component in satellite-track coorinates. This has been removed from ion drift and electric field.", -1000., 1000.},
-        {"U_SC", "CDF_FLOAT", "V", "Satellite floating potential estimate from EXTD LP_HM dataset.", -50., 5.},
-        {"Quality_flags", "CDF_UINT2", "*", "Bitwise flag for each velocity component, where a value of 1 for a particular component signifies that calibration was successful, and that the baseline 1-sigma noise level is less than or equal to 100 m/s at 2 Hz. Electric field quality can be assessed from these flags according to -vxB. Bit0 (least significant) = Vixh, bit1 = Vixv, bit2 = Viy, bit3 = Viz. Refer to the release notes for details.", 0, 65535},
-        {"Calibration_flags", "CDF_UINT4", "*", "Information about the calibration process. Refer to the release notes for details.", 0, 4294967295}
+        {"Timestamp", "CDF_EPOCH", "*", "UT", minTime, maxTime, "%f"},
+        {"Latitude", "CDF_FLOAT", "degrees", "Geocentric latitude.", -90., 90., "%5.1f"},
+        {"Longitude", "CDF_FLOAT", "degrees", "Geocentric longitude.", -180., 180., "%6.1f"},
+        {"Radius", "CDF_FLOAT", "m", "Geocentric radius.", 6400000., 7000000., "%9.1f"},
+        {"QDLatitude", "CDF_FLOAT", "degrees", "Quasi-dipole magnetic latitude.", -90., 90., "%5.1f"},
+        {"MLT", "CDF_FLOAT", "hour", "Magnetic local time.", 0., 24., "%4.1f"},
+        {"Vixh", "CDF_FLOAT", "m/s", "Along-track ion drift from horizontal TII sensor in satellite-track coordinates.", -8000., 8000., "%7.1f"},
+        {"Vixh_error", "CDF_FLOAT", "m/s", "Random error estimate for along-track ion drift from horizontal TII sensor in satellite-track coordinates. Negative value indicates no estimate available.", -42., 10000., "%7.1f"},
+        {"Vixv", "CDF_FLOAT", "m/s", "Along-track ion drift from vertical TII sensor in satellite-track coordinates.", -8000., 8000., "%7.1f"},
+        {"Vixv_error", "CDF_FLOAT", "m/s", "Random error estimate for along-track ion drift from vertical TII sensor in satellite-track coordinates. Negative value indicates no estimate available.", -42., 10000., "%7.1f"},
+        {"Viy", "CDF_FLOAT", "m/s", "Cross-track horizontal ion drift from horizontal TII sensor in satellite-track coordinates.", -8000., 8000., "%7.1f"},
+        {"Viy_error", "CDF_FLOAT", "m/s", "Random error estimate for cross-track horizontal ion drift from horizontal TII sensor in satellite-track coordinates. Negative value indicates no estimate available.", -42., 10000., "%7.1f"},
+        {"Viz", "CDF_FLOAT", "m/s", "Cross-track vertical ion drift from vertical TII sensor in satellite-track coordinates.", -8000., 8000., "%7.1f"},
+        {"Viz_error", "CDF_FLOAT", "m/s", "Random error estimate for cross-track vertical ion drift from vertical TII sensor in satellite-track coordinates. Negative value indicates no estimate available.", -42., 10000., "%7.1f"},
+        {"VsatN", "CDF_FLOAT", "m/s", "Satellite velocity N component in north-east-centre coordinates.", -8000., 8000., "%7.1f"},
+        {"VsatE", "CDF_FLOAT", "m/s", "Satellite velocity E component in north-east-centre coordinates.", -8000., 8000., "%7.1f"},
+        {"VsatC", "CDF_FLOAT", "m/s", "Satellite velocity C component in north-east-centre coordinates.", -200., 200., "%6.1f"},
+        {"Ehx", "CDF_FLOAT", "mV/m", "Electric field x component in satellite-track coordinates, derived from -VxB with along-track ion drift from horizontal sensor.", -400., 400., "%7.2f"},
+        {"Ehy", "CDF_FLOAT", "mV/m", "Electric field y component in satellite-track coordinates, derived from -VxB with along-track ion drift from horizontal sensor.", -400., 400., "%7.2f"},
+        {"Ehz", "CDF_FLOAT", "mV/m", "Electric field z component in satellite-track coordinates, derived from -VxB with along-track ion drift from horizontal sensor.", -400., 400., "%7.2f"},
+        {"Evx", "CDF_FLOAT", "mV/m", "Electric field x component in satellite-track coordinates, derived from -VxB with along-track ion drift from vertical sensor.", -400., 400., "%7.2f"},
+        {"Evy", "CDF_FLOAT", "mV/m", "Electric field y component in satellite-track coordinates, derived from -VxB with along-track ion drift from vertical sensor.", -400., 400., "%7.2f"},
+        {"Evz", "CDF_FLOAT", "mV/m", "Electric field z component in satellite-track coordinates, derived from -VxB with along-track ion drift from vertical sensor.", -400., 400., "%7.2f"},
+        {"Bx", "CDF_FLOAT", "nT", "Geomagnetic field x component in satellite-track coordinates, derived from the 1 Hz product.", -65000., 65000., "%8.1f"},
+        {"By", "CDF_FLOAT", "nT", "Geomagnetic field y component in satellite-track coordinates, derived from the 1 Hz product.", -65000., 65000., "%8.1f"},
+        {"Bz", "CDF_FLOAT", "nT", "Geomagnetic field z component in satellite-track coordinates, derived from the 1 Hz product.", -65000., 65000., "%8.1f"},
+        {"Vicrx", "CDF_FLOAT", "m/s", "Ion drift corotation signal x component in satellite-track coorinates. This has been removed from ion drift and electric field.", -1000., 1000., "%7.1f"},
+        {"Vicry", "CDF_FLOAT", "m/s", "Ion drift corotation signal y component in satellite-track coorinates. This has been removed from ion drift and electric field.", -1000., 1000., "%7.1f"},
+        {"Vicrz", "CDF_FLOAT", "m/s", "Ion drift corotation signal z component in satellite-track coorinates. This has been removed from ion drift and electric field.", -1000., 1000., "%7.1f"},
+        {"U_SC", "CDF_FLOAT", "V", "Satellite floating potential estimate from EXTD LP_HM dataset.", -5., 5., "%5.2f"},
+        {"Quality_flags", "CDF_UINT2", "*", "Bitwise flag for each velocity component, where a value of 1 for a particular component signifies that calibration was successful, and that the baseline 1-sigma noise level is less than or equal to 100 m/s at 2 Hz. Electric field quality can be assessed from these flags according to -vxB. Bit0 (least significant) = Vixh, bit1 = Vixv, bit2 = Viy, bit3 = Viz. Refer to the release notes for details.", 0, 65535, "%d"},
+        {"Calibration_flags", "CDF_UINT4", "*", "Information about the calibration process. Refer to the release notes for details.", 0, 4294967295, "%d"}
     };
 
     for (uint8_t i = 0; i < NUM_EXPORT_VARIABLES; i++)
@@ -514,11 +564,10 @@ int exportTCT16Cdfs(ProcessorState *state, double startTime, double stopTime, lo
     toEncodeEPOCH(stopTime, 0, epochString);
     fprintf(state->processingLogFile, "%sStoptime: %s\n", infoHeader, epochString);
 
-    char cdfFileName[CDF_PATHNAME_LEN];
-    constructExportFileName("TCT16", startTime, stopTime, state->args.exportDir, state->args.exportVersion, state->args.satellite, cdfFileName);
+    constructExportFileName("TCT16", startTime, stopTime, state->args.exportDir, state->args.exportVersion, state->args.satellite, state->tct16BaseFileName);
 
     char zipFileName[FILENAME_MAX];
-    sprintf(zipFileName, "%s.ZIP", cdfFileName);
+    sprintf(zipFileName, "%s.ZIP", state->tct16BaseFileName);
     if (access(zipFileName, F_OK) == 0)
     {
         fprintf(state->processingLogFile, "%sTIICT ZIP file exists. Not exporting.\n", infoHeader);
@@ -529,7 +578,7 @@ int exportTCT16Cdfs(ProcessorState *state, double startTime, double stopTime, lo
 
     CDFid exportCdfId;
     CDFstatus status;
-    status = CDFcreateCDF(cdfFileName, &exportCdfId);
+    status = CDFcreateCDF(state->tct16BaseFileName, &exportCdfId);
     if (status != CDF_OK) 
     {
         printErrorMessage(status);
@@ -573,17 +622,17 @@ int exportTCT16Cdfs(ProcessorState *state, double startTime, double stopTime, lo
             createVarFrom1DVar(exportCdfId, "U_SC", CDF_REAL4, startIndex, stopIndex, state->potentials);
     
         createVarFrom1DVar(exportCdfId, "Quality_flags", CDF_UINT2, startIndex, stopIndex, state->flags);
-        createVarFrom1DVar(exportCdfId, "Calibration_flags", CDF_UINT4, startIndex, stopIndex, state->fitInfo);
+        createVarFrom1DVar(exportCdfId, "Calibration_flags", CDF_UINT4, startIndex, stopIndex, state->calibrationFlags);
 
         // add attributes
-        addAttributes(exportCdfId, "TCT16", state->args.satellite, state->args.exportVersion, startTime, stopTime);
+        addAttributes(exportCdfId, state, "TCT16", state->args.satellite, state->args.exportVersion, startTime, stopTime);
 
         // Close export file
         closeCdf(exportCdfId);
-        fprintf(state->processingLogFile, "%sExported %ld records to %s.cdf\n", infoHeader, (stopIndex - startIndex + 1), cdfFileName);
+        fprintf(state->processingLogFile, "%sExported %ld records to %s.cdf\n", infoHeader, (stopIndex - startIndex + 1), state->tct16BaseFileName);
         fflush(state->processingLogFile);
 
-        zipCdfFile(state, cdfFileName);
+        zipCdfFile(state, state->tct16BaseFileName);
     }
 
     return status;
@@ -622,7 +671,7 @@ int exportTCT02Cdfs(ProcessorState *state, double startTime, double stopTime, lo
         t0 = floor(TIME()/1000.0); // UT second reference
         for (uint8_t halfSecond = 0; halfSecond < 2; halfSecond ++)
         {
-            downSampled = downSampleHalfSecond(&timeIndex, storageIndex, t0 + 0.5 * halfSecond, stopIndex, dataBuffers, state->ectFieldH, state->ectFieldV, state->bctField, state->viErrors, state->potentials, state->flags, state->fitInfo, state->usePotentials);
+            downSampled = downSampleHalfSecond(&timeIndex, storageIndex, t0 + 0.5 * halfSecond, stopIndex, dataBuffers, state->ectFieldH, state->ectFieldV, state->bctField, state->viErrors, state->potentials, state->flags, state->calibrationFlags, state->usePotentials);
             if (downSampled)
             {
                 storageIndex++;
@@ -644,18 +693,17 @@ int exportTCT02Cdfs(ProcessorState *state, double startTime, double stopTime, lo
 
     CDFid exportCdfId;
     CDFstatus status;
-    char cdfFileName[CDF_PATHNAME_LEN];
-    constructExportFileName("TCT02", startTime, stopTime, state->args.exportDir, state->args.exportVersion, state->args.satellite, cdfFileName);
+    constructExportFileName("TCT02", startTime, stopTime, state->args.exportDir, state->args.exportVersion, state->args.satellite, state->tct02BaseFileName);
 
     char zipFileName[FILENAME_MAX];
-    sprintf(zipFileName, "%s.ZIP", cdfFileName);
+    sprintf(zipFileName, "%s.ZIP", state->tct02BaseFileName);
     if (access(zipFileName, F_OK) == 0)
     {
         fprintf(state->processingLogFile, "%sTIICT ZIP file exists. Not exporting.\n", infoHeader);
         return TIICT_ZIP_EXISTS;
     }
 
-    status = CDFcreateCDF(cdfFileName, &exportCdfId);
+    status = CDFcreateCDF(state->tct02BaseFileName, &exportCdfId);
     if (status != CDF_OK)
     {
         printErrorMessage(status);
@@ -698,18 +746,18 @@ int exportTCT02Cdfs(ProcessorState *state, double startTime, double stopTime, lo
             createVarFrom1DVar(exportCdfId, "U_SC", CDF_REAL4, startIndex, stopIndex, state->potentials);
 
         createVarFrom1DVar(exportCdfId, "Quality_flags", CDF_UINT2, startIndex, stopIndex, state->flags);
-        createVarFrom1DVar(exportCdfId, "Calibration_flags", CDF_UINT4, startIndex, stopIndex, state->fitInfo);
+        createVarFrom1DVar(exportCdfId, "Calibration_flags", CDF_UINT4, startIndex, stopIndex, state->calibrationFlags);
 
         // add attributes
         // update start and stop times to the averaged ones
-        addAttributes(exportCdfId, "TCT02", state->args.satellite, state->args.exportVersion, startTime, stopTime);
+        addAttributes(exportCdfId, state, "TCT02", state->args.satellite, state->args.exportVersion, startTime, stopTime);
 
         // Close export file
         closeCdf(exportCdfId);
-        fprintf(state->processingLogFile, "%sExported %ld records to %s.cdf\n", infoHeader, (stopIndex - startIndex + 1), cdfFileName);
+        fprintf(state->processingLogFile, "%sExported %ld records to %s.cdf\n", infoHeader, (stopIndex - startIndex + 1), state->tct02BaseFileName);
         fflush(state->processingLogFile);
 
-        status = zipCdfFile(state, cdfFileName);
+        status = zipCdfFile(state, state->tct02BaseFileName);
 
     }
 
@@ -728,6 +776,7 @@ int zipCdfFile(ProcessorState *state, char *cdfFileName)
         return TIICT_SHELL;
     }
     status = system("zip -q 1 > /dev/null");
+
     if (WIFEXITED(status) && WEXITSTATUS(status) == 12)
     {
         char command[6*FILENAME_MAX + 100];
@@ -781,15 +830,6 @@ int initLogFiles(ProcessorState *state)
         return status;
     sprintf(state->fitLogFilename, "%s/%s/logs/%s%04d%02d%02d.fit", a->exportDir, a->exportVersion, a->satellite, a->year, a->month, a->day);
     sprintf(state->processingLogFilename, "%s/%s/logs/%s%04d%02d%02d.log", a->exportDir, a->exportVersion, a->satellite, a->year, a->month, a->day);
-
-    // Offset model parameters
-    offset_model_fit_arguments f[4] = {
-        {0, "Northern ascending", 44.0, 50.0, 50.0, 44.0},
-        {1, "Equatorial descending", 44.0, 38.0, -38.0, -44.0},
-        {2, "Southern descending", -44.0, -50.0, -50.0, -44.0},
-        {3, "Equatorial ascending", -44.0, -38.0, 38.0, 44.0},
-    };
-    memcpy(state->fitargs, f, 4 * sizeof(offset_model_fit_arguments));
 
     state->fitFile = fopen(state->fitLogFilename, "a");
     if (state->fitFile == NULL)

@@ -30,6 +30,7 @@ typedef struct varAttr {
     char * desc;
     double validMin;
     double validMax;
+    char * format;
 } varAttr;
 
 int exportCdfs(ProcessorState *state);
@@ -42,7 +43,7 @@ CDFstatus addgEntry(CDFid id, long attrNum, long entryNum, const char *entry);
 
 CDFstatus addVariableAttributes(CDFid id, varAttr attr);
 
-void addAttributes(CDFid id, const char *calVersion, const char *satellite, const char *version, double minTime, double maxTime);
+void addAttributes(CDFid id, ProcessorState *state, const char *dataset, const char *satellite, const char *version, double minTime, double maxTime);
 
 int exportTCT16Cdfs(ProcessorState *state, double startTime, double stopTime, long startIndex, long stopIndex);
 int exportTCT02Cdfs(ProcessorState *state, double startTime, double stopTime, long startIndex, long stopIndex);

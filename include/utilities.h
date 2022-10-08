@@ -21,7 +21,10 @@
 #ifndef UTILITIES_H
 #define UTILITIES_H
 
+#include <time.h>
 #include <cdf.h>
+
+#define UTC_DATE_LENGTH 24
 
 // Constructs a full path to the export CDF file in the argument constructExportFileName.
 void constructExportFileName(const char *dataset, double startTime, double stopTime, const char *exportDir, const char *exportVersion, const char *satellite, char *cdfFileName);
@@ -33,5 +36,9 @@ void printErrorMessage(CDFstatus status);
 void closeCdf(CDFid id);
 
 int makeSureDirExists(const char *exportDir, const char *exportVersion, const char *subdir);
+
+// From SLIDEM processor
+void utcDateString(time_t seconds, char *dateString);
+void utcNowDateString(char *dateString);
 
 #endif // UTILITIES_H

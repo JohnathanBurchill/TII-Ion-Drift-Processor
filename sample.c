@@ -5,7 +5,7 @@
 #include <math.h>
 #include <stdio.h>
 
-void zeroOrderInterpolateImageFlags(double *times, uint8_t *values, size_t nVals, double *requestedTimes, long nRequestedValues, uint8_t *newValues)
+void zeroOrderInterpolateU8(double *times, uint8_t *values, size_t nVals, double *requestedTimes, long nRequestedValues, uint8_t *newValues)
 {
     
     size_t lastIndex = 0;
@@ -18,11 +18,37 @@ void zeroOrderInterpolateImageFlags(double *times, uint8_t *values, size_t nVals
         thisTime = requestedTimes[i];
 
         while (lastIndex < nVals && times[lastIndex] <= thisTime)
-        {
             lastIndex++;
-        }
         
+        // Copy flag
+        if (lastIndex > 0)
+            interpIndex = lastIndex - 1;
+        else
+            interpIndex = 0;
 
+        newValues[i] = values[interpIndex];
+
+    }
+
+    return;
+
+}
+
+void zeroOrderInterpolateU32(double *times, uint32_t *values, size_t nVals, double *requestedTimes, long nRequestedValues, uint32_t *newValues)
+{
+    
+    size_t lastIndex = 0;
+    double thisTime = 0;
+
+    size_t interpIndex = 0;
+
+    for (size_t i = 0; i < nRequestedValues; i++)
+    {
+        thisTime = requestedTimes[i];
+
+        while (lastIndex < nVals && times[lastIndex] <= thisTime)
+            lastIndex++;
+        
         // Copy flag
         if (lastIndex > 0)
             interpIndex = lastIndex - 1;

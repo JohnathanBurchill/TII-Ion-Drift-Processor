@@ -45,13 +45,13 @@ char infoHeader[50] = {0};
 
 int initQualityData(ProcessorState *state)
 {
-    // Quality flag and fitInfo flag initialized to zero
+    // Quality flag and calibrationFlags flag initialized to zero
     state->flags = (uint16_t*) malloc((size_t) (state->nRecs * sizeof(uint16_t)));
-    state->fitInfo = (uint32_t*) malloc((size_t) (state->nRecs * sizeof(uint32_t)));
+    state->calibrationFlags = (uint32_t*) malloc((size_t) (state->nRecs * sizeof(uint32_t)));
     // Error estimates from Mean Absolute Deviation (MAD): default is -42. :)
     state->viErrors = (float*) malloc((size_t) (state->nRecs * sizeof(float) * 4));
 
-    if (state->flags == NULL || state->fitInfo == NULL || state->viErrors == NULL)
+    if (state->flags == NULL || state->calibrationFlags == NULL || state->viErrors == NULL)
         return TIICT_MEMORY;
 
     for (long ind = 0; ind < state->nRecs; ind++)
@@ -61,11 +61,11 @@ int initQualityData(ProcessorState *state)
         state->viErrors[4*ind+2] = DEFAULT_VI_ERROR;
         state->viErrors[4*ind+3] = DEFAULT_VI_ERROR;
         state->flags[ind] = 0;
-        // FITINFO_OFFSET_NOT_REMOVED = 1 and FITINFO_INCOMPLETE_REGION = 1 are the defaults for fitInfo
+        // CALIBRATION_FLAGS_OFFSET_NOT_REMOVED = 1 and CALIBRATION_FLAGS_INCOMPLETE_REGION = 1 are the defaults for calibrationFlags
         // Set for each velocity component
         for (uint8_t k = 0; k < 4; k++)
         {
-            state->fitInfo[ind] |= ((FITINFO_OFFSET_NOT_REMOVED | FITINFO_INCOMPLETE_REGION)) << (k * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT);
+            state->calibrationFlags[ind] |= ((CALIBRATION_FLAGS_OFFSET_NOT_REMOVED | CALIBRATION_FLAGS_INCOMPLETE_REGION)) << (k * MAX_NUMBER_OF_CALIBRATION_FLAGS_BITS_PER_COMPONENT);
         }
     }
 
@@ -102,14 +102,24 @@ int calibrateFlows(ProcessorState *state)
     }
 
     // Choose a potential estimate (lpPhiSc, lpPhiScHighGain, or lpPhiScLowGain)
-    state->potentials = state->lpPhiSc;
+    // According to the EXTD LP release notes
+    //
+    // https://swarm-diss.eo.esa.int/?do=download&file=swarm%2FAdvanced%2FPlasma_Data%2F2_Hz_Langmuir_Probe_Extended_Dataset%2FSW-RN-IRF-GS-005_Extended_LP_Data_Probes.pdf
+    // 
+    // the recommendation is to use the high-gain Te and reject the measurement if overflow occurs.
+    // There is no recommendation for Vs (U_SC).
+    // We opt to use high-gain Vs and flag the along-track ion drift measurement quality based 
+    // on the LP flagbits (zero-order interpolated to the TII measurement times).
+
+    // If there were details provided on how the Vs blending is done for the U_SC parameter
+    // we could use that and flag data quality according to which probe(s) was used. 
+
+    state->potentials = state->lpPhiScHighGain;
 
     float enxh = 0.0;
     float enxv = 0.0;
     float vixh = 0.0;
     float vixv = 0.0;
-    float q = 1.602e-19;
-    float mass = 2.67e-26; // O+
 
     float shx = 0.0, shy = 0.0, svx = 0.0, svy = 0.0;
 
@@ -238,7 +248,7 @@ int calibrateFlows(ProcessorState *state)
     // We have effectively removed 4.8 eV from each energy by setting the energy to 0 at mid-latitude
     // Add it back in before calculating velocity, then remove satellite velocity
     float backgroundRamEnergyeV = 0.0;
-    float factor = 0.5 * mass / q;
+    float factor = 0.5 * MASS_OPLUS / ELECTRIC_CHARGE_OPLUS;
     if (state->usePotentials)
     {
         for (long timeIndex = 0; timeIndex < state->nRecs; timeIndex++)
@@ -484,8 +494,8 @@ int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, uint8_t interval,
                             for (timeIndex = beginIndex0; timeIndex < endIndex1; timeIndex++)
                             {
                                 // Got a complete region, but had a fit error
-                                state->fitInfo[timeIndex] &= ~(FITINFO_INCOMPLETE_REGION << (flagIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
-                                state->fitInfo[timeIndex] |= (FITINFO_GSL_FIT_ERROR << (flagIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
+                                state->calibrationFlags[timeIndex] &= ~(CALIBRATION_FLAGS_INCOMPLETE_REGION << (flagIndex * MAX_NUMBER_OF_CALIBRATION_FLAGS_BITS_PER_COMPONENT));
+                                state->calibrationFlags[timeIndex] |= (CALIBRATION_FLAGS_GSL_FIT_ERROR << (flagIndex * MAX_NUMBER_OF_CALIBRATION_FLAGS_BITS_PER_COMPONENT));
                             }
                         }
                     }
@@ -518,7 +528,7 @@ int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, uint8_t interval,
                             // Toggle off the "offset not removed" and "incomplete region" flag bits
                             if (setFlags)
                             {
-                                state->fitInfo[timeIndex] &= ~((FITINFO_OFFSET_NOT_REMOVED | FITINFO_INCOMPLETE_REGION) << (flagIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
+                                state->calibrationFlags[timeIndex] &= ~((CALIBRATION_FLAGS_OFFSET_NOT_REMOVED | CALIBRATION_FLAGS_INCOMPLETE_REGION) << (flagIndex * MAX_NUMBER_OF_CALIBRATION_FLAGS_BITS_PER_COMPONENT));
                                 // Update quality and calibration flags based on thresholds
                                 updateDataQualityFlags(state, flagIndex, fitargs->regionNumber, driftValue, mad, timeIndex);
                             }
@@ -566,43 +576,107 @@ int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, uint8_t interval,
 
 void updateDataQualityFlags(ProcessorState *state, uint8_t sensorIndex, uint8_t regionNumber, float driftValue, float mad, long timeIndex)
 {
+
     uint16_t *flags = state->flags;
-    uint32_t *fitInfo = state->fitInfo;
+    uint32_t *calibrationFlags = state->calibrationFlags;
     uint8_t *imageFlags = state->tracisImageFlagsH;
-    if (sensorIndex > 1)
+    // index == 0 Hx
+    // index == 1 Vx
+    // index == 2 Hy
+    // index == 3 Vy
+    if (sensorIndex == 1 || sensorIndex == 3)
         imageFlags = state->tracisImageFlagsV;
 
-    // We lower the quality flag even for peripheral anomalies
-    // This flag is obtained from zero-order interpolation of the
+    // We lower the quality flag for image anomalies
+    // This flag is obtained from zero-order interpolation at the TII times of the
     // nearest previous TII full image, every 10 s to 30 s or so
     // for most of the Swarm mission.
-    bool imageOK = imageFlags[timeIndex] == 0;
+    // TRACIS_FLAG_CLASSIC_WING_ANOMALY = 1 << 0,
+    // TRACIS_FLAG_UPPER_ANGELS_WING_ANOMALY = 1 << 1,
+    // TRACIS_FLAG_LOWER_ANGELS_WING_ANOMALY = 1 << 2,
+    // TRACIS_FLAG_PERIPHERAL_ANOMALY = 1 << 3,
+    // TRACIS_FLAG_MEASLES_ANOMALY = 1 << 4,
+    // TRACIS_FLAG_BIFURCATION_ANOMALY = 1 << 5
+    bool imageOK = (imageFlags[timeIndex] & 0b00111111) == 0;
 
-    // Flag is zero if drift magnitude is greater than FLAGS_MAXIMUM_DRIFT_VALUE
-    // TODO incorporate ion density from LP_HM into flagging
-    uint16_t flagMask = (1<<sensorIndex);
-    bool madOK = (mad < madThreshold(state->args.satellite[0], sensorIndex));
-    bool magOK = fabs(driftValue) <= FLAGS_MAXIMUM_DRIFT_VALUE;
 
-    // Currently quality flag is set to 1 only for Swarm A and B viy at middle-to-high latitudes (region 0 or region 2)
-    // Swarm C flags all zero for now
+    // Use Table 3-3 of EXTD LP release notes to determine if High Gain probe Ni and VSc are usable. Zero-order interpolated at TII times from LP quality flag
+    uint32_t lpFlag = state->lpFlagbits[timeIndex];
 
-    if (state->args.satellite[0] != 'C' && sensorIndex == 2 && (regionNumber == 0 || regionNumber == 2) && madOK && magOK && imageOK)
+    bool ionDensityOK = state->lpNi[timeIndex] >= FLAGS_MINIMUM_ION_DENSITY;
+    // Density will be noisy if both probes in high gain or low gain?
+    // Ignore this for now, because ion density estimate from high gain probe 
+    // should be fine even at large densities.
+    // ionDensityOK &= lpFlag & 0x0003 != 3 && lpFlag & 0x0003 != 0;
+    // Does not take into account inaccuracy in ion density due to LP processing
+    // assumptions or calibration issues
+    ionDensityOK &= ((lpFlag & (0x0001 << 21)) == 0);
+
+    bool phiScOK = true;
+    if (state->usePotentials)
     {
-        flags[timeIndex] |= flagMask;
+        // Quality of high-gain satellite potential
+        phiScOK &= (lpFlag & 0x0003) != 3 && (lpFlag & 0x0003) != 0;
+        phiScOK &= ((lpFlag & 0b00000000000010101010101001010100) == 0);
+        
+        // As recommended in EXTD LP release notes
+        float phi = state->potentials[timeIndex];
+        phiScOK &= phi >= -5.0 && phi <= 5.0;
     }
+
+    // Flag not OK if drift magnitude is greater than FLAGS_MAXIMUM_DRIFT_VALUE
+    bool magOK = true;
+
+    // Flag not OK if Median Absolute Deviation from drift at middle lattitude background 
+    // model fit regions is too large
+    bool madOK = true;
+
+    // If along-track directino and using satellite potential,
+    // driftValue is actually ion ram energy in eV with satellite potential and motion removed
+    // For now approximate MAD and drift threshold using energies
+    float maxDrift = FLAGS_MAXIMUM_DRIFT_VALUE_HIGH_LATITUDE;
+    float maxMad = madThreshold(state->args.satellite[0], sensorIndex);
+    if (regionNumber == 1 || regionNumber == 3)
+        maxDrift = FLAGS_MAXIMUM_DRIFT_VALUE_LOW_LATITUDE;
+    if (sensorIndex < 2 && state->usePotentials)
+    {
+        // ram energy
+        maxDrift = 0.5 * MASS_OPLUS / ELECTRIC_CHARGE_OPLUS * maxDrift * maxDrift;
+        maxMad = 0.5 * MASS_OPLUS / ELECTRIC_CHARGE_OPLUS * maxMad * maxMad;
+    }
+    magOK = (fabs(driftValue) <= maxDrift);
+    madOK = (mad <= maxMad);
+
+    // Set flags for all sensors all regions
+    uint16_t flagMask = (1<<sensorIndex);
+
+    if (imageOK && ionDensityOK && madOK && magOK)
+    {
+        if (sensorIndex >= 2 || phiScOK) // Hy or Vy, phiSc does not matter
+            flags[timeIndex] |= flagMask;
+    }
+
     // Set calibration info flag. Only set to one if baseline offset was subtracted
     if (!imageOK)
     {
-        fitInfo[timeIndex] |= (FITINFO_TII_IMAGE_QUALITY << (sensorIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
+        calibrationFlags[timeIndex] |= (CALIBRATION_FLAGS_TII_IMAGE_QUALITY << (sensorIndex * MAX_NUMBER_OF_CALIBRATION_FLAGS_BITS_PER_COMPONENT));
+    }
+    if (!ionDensityOK)
+    {
+        calibrationFlags[timeIndex] |= (CALIBRATION_FLAGS_ION_DENSITY << (sensorIndex * MAX_NUMBER_OF_CALIBRATION_FLAGS_BITS_PER_COMPONENT));
+    }
+    // Only needed for sensor Index 0 and 1 (along-track drift components)
+    if ((sensorIndex < 2) && !phiScOK)
+    {
+        calibrationFlags[timeIndex] |= (CALIBRATION_FLAGS_U_SC_QUALITY << (sensorIndex * MAX_NUMBER_OF_CALIBRATION_FLAGS_BITS_PER_COMPONENT));
     }
     if (!madOK)
     {
-        fitInfo[timeIndex] |= (FITINFO_MAD_EXCEEDED << (sensorIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
+        calibrationFlags[timeIndex] |= (CALIBRATION_FLAGS_MAD_EXCEEDED << (sensorIndex * MAX_NUMBER_OF_CALIBRATION_FLAGS_BITS_PER_COMPONENT));
     }
     if (!magOK)
     {
-        fitInfo[timeIndex] |= (FITINFO_DRIFT_MAGNITUDE_EXCEEDED << (sensorIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
+        calibrationFlags[timeIndex] |= (CALIBRATION_FLAGS_DRIFT_MAGNITUDE_EXCEEDED << (sensorIndex * MAX_NUMBER_OF_CALIBRATION_FLAGS_BITS_PER_COMPONENT));
     }
 
     return;
@@ -693,7 +767,7 @@ int calculateFields(ProcessorState *state)
         // E field from V sensor X, in cross-track frame, mV/m:
         ectFieldV[ind + 0] = -1.0 * (MYH() * bctField[ind + 2] - MYV() * bctField[ind + 1]) / 1000000000.0 * 1000.0; 
         ectFieldV[ind + 1] = -1.0 * (-1.0 * MXV() * bctField[ind + 2] + MYV() * bctField[ind + 0]) / 1000000000.0 * 1000.0; 
-        ectFieldV[ind + 2] = -1.0 * (MXV() * bctField[ind + 1] - MYH() * bctField[ind + 0]) / 1000000000.0 * 1000.0; 
+        ectFieldV[ind + 2] = -1.0 * (MXV() * bctField[ind + 1] - MYH() * bctField[ind + 0]) / 1000000000.0 * 1000.0;
 
     }
 
@@ -741,6 +815,15 @@ int initProcessor(int argc, char *argv[], ProcessorState *state)
     if (status != TIICT_OK)
         return status;
 
+    // Offset model parameters
+    offset_model_fit_arguments f[4] = {
+        {0, "Northern ascending", 44.0, 50.0, 50.0, 44.0},
+        {1, "Equatorial descending", 44.0, 38.0, -38.0, -44.0},
+        {2, "Southern descending", -44.0, -50.0, -50.0, -44.0},
+        {3, "Equatorial ascending", -44.0, -38.0, 38.0, 44.0},
+    };
+    memcpy(state->fitargs, f, 4 * sizeof(offset_model_fit_arguments));
+
     status = initLogFiles(state);
     if (status != TIICT_OK)
         return status;
@@ -749,7 +832,7 @@ int initProcessor(int argc, char *argv[], ProcessorState *state)
     initHeader(state);
 
     // Confirm requested date has records. Abort otherwise.
-    status = checkCalDataAvailability(state);
+    status = checkCalDataAvailability(state, REQUESTED_DAY);
     if (status != TIICT_OK)
         return status;
 
@@ -915,6 +998,16 @@ int shutdown(int status, ProcessorState *state)
         state->lpPhiSc = NULL;
     }
     // state->potentials is just a pointer to one of the above potentials
+    if (state->lpNi != NULL)
+    {
+        free(state->lpNi);
+        state->lpNi = NULL;
+    }
+    if (state->lpFlagbits != NULL)
+    {
+        free(state->lpFlagbits);
+        state->lpFlagbits = NULL;
+    }
 
     if (state->xhat != NULL)
     {
@@ -956,10 +1049,10 @@ int shutdown(int status, ProcessorState *state)
         free(state->flags);
         state->flags = NULL;
     }
-    if (state->fitInfo != NULL)
+    if (state->calibrationFlags != NULL)
     {
-        free(state->fitInfo);
-        state->fitInfo = NULL;
+        free(state->calibrationFlags);
+        state->calibrationFlags = NULL;
     }
 
     return status;

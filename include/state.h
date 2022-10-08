@@ -61,9 +61,14 @@ typedef struct ProcessorState {
     char processingLogFilename[FILENAME_MAX];
     FILE *processingLogFile;
 
+    char tct16BaseFileName[CDF_PATHNAME_LEN];
+    char tct02BaseFileName[CDF_PATHNAME_LEN];
+
     // Calibration CDF data
-    char calibrationFileName[CDF_PATHNAME_LEN];
-    char tracisFileName[CDF_PATHNAME_LEN];
+    char calibrationFileNames[3][CDF_PATHNAME_LEN];
+    bool gotCalibrationFile[3];
+    char tracisFileNames[3][CDF_PATHNAME_LEN];
+    bool gotTracisFile[3];
     uint8_t * dataBuffers[NUM_CAL_VARIABLES];
     uint8_t * tracisDataBuffers[NUM_TRACIS_VARIABLES];
     long nRecs;
@@ -76,17 +81,21 @@ typedef struct ProcessorState {
     uint8_t *tracisImageFlagsV;
 
     // LP data for floating potential
+    char lpFileNames[3][CDF_PATHNAME_LEN];
+    bool gotLpFile[3];
     float *lpPhiScHighGain;
     float *lpPhiScLowGain;
     float *lpPhiSc;
     size_t nLpRecs;
     float *potentials;
     bool usePotentials;
+    float *lpNi;
+    uint32_t *lpFlagbits;
 
     // Additional data
     float *viErrors;
     uint16_t *flags;
-    uint32_t *fitInfo;
+    uint32_t *calibrationFlags;
 
     float *xhat;
     float *yhat;

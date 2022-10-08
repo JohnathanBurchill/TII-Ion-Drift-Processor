@@ -27,15 +27,21 @@
 #define SECONDS_OF_DATA_REQUIRED_FOR_EXPORTING 60 // 1 minutes
 #define SECONDS_OF_BOUNDARY_DATA_REQUIRED_FOR_PROCESSING 1500 // 25 minutes to ensure coverage of each fit region
 
-#define FLAGS_MAXIMUM_DRIFT_VALUE 8000.0 // 8 km/s maximum drift for flagging
+#define ELECTRIC_CHARGE_OPLUS 1.602e-19
+#define MASS_OPLUS 2.67e-26
+
+#define FLAGS_MAXIMUM_DRIFT_VALUE_HIGH_LATITUDE 8000.0 // 8 km/s maximum drift for flagging
+#define FLAGS_MAXIMUM_DRIFT_VALUE_LOW_LATITUDE 500.0 // 0.5 km/s maximum drift for flagging
+#define FLAGS_MINIMUM_ION_DENSITY 10000.0
 #define DEFAULT_VI_ERROR -42.0
 #define MAX_ALLOWED_CDF_GAP_SECONDS 600.0 // CDF export split into separate files at gaps exceeding 10 minutes
+
 #define NUM_CAL_VARIABLES 15
 #define NUM_TRACIS_VARIABLES 3
 #define NUM_EXPORT_VARIABLES 32
 #define NUM_BUFFER_VARIABLES 31
 
-#define MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT 8
+#define MAX_NUMBER_OF_CALIBRATION_FLAGS_BITS_PER_COMPONENT 8
 #define GSL_FIT_MAXIMUM_ITERATIONS 500
 
 #define LP_MIN_NUMBER_OF_POTENTIALS 160000
