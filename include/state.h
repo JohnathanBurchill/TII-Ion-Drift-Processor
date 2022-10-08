@@ -71,8 +71,11 @@ typedef struct ProcessorState {
     long memoryAllocated;
     long tracisMemoryAllocated;
 
+    // TRACIS image flags interpolated to TII calibration data times
+    uint8_t *tracisImageFlagsH;
+    uint8_t *tracisImageFlagsV;
+
     // LP data for floating potential
-    double *lpTimes;
     float *lpPhiScHighGain;
     float *lpPhiScLowGain;
     float *lpPhiSc;

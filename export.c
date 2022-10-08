@@ -24,6 +24,7 @@
 #include "processing.h"
 #include "indexing.h"
 #include "utilities.h"
+#include "sample.h"
 
 #include <stdlib.h>
 #include <stdbool.h>

@@ -26,6 +26,7 @@
 #include "errors.h"
 #include "loadData.h"
 #include "export.h"
+#include "sample.h"
 
 #include <tii/detector.h>
 #include <tii/isp.h>
@@ -49,10 +50,10 @@ int initQualityData(ProcessorState *state)
     state->fitInfo = (uint32_t*) malloc((size_t) (state->nRecs * sizeof(uint32_t)));
     // Error estimates from Mean Absolute Deviation (MAD): default is -42. :)
     state->viErrors = (float*) malloc((size_t) (state->nRecs * sizeof(float) * 4));
+
     if (state->flags == NULL || state->fitInfo == NULL || state->viErrors == NULL)
-    {
         return TIICT_MEMORY;
-    }
+
     for (long ind = 0; ind < state->nRecs; ind++)
     {
         state->viErrors[4*ind+0] = DEFAULT_VI_ERROR;
@@ -169,7 +170,7 @@ int calibrateFlows(ProcessorState *state)
                     shx *= 450.5;
                     shy = 450.5; // Calibration 20210624, inner dome bias at -62 V.
                     svx *= 451.0;
-		    svy = 525.0; // Calibration 20210624, inner dome bias at -62 V.
+        		    svy = 525.0; // Calibration 20210624, inner dome bias at -62 V.
                 }
                 break;
             case 'C': // 20191126 slew experiment, plus simulations
@@ -519,7 +520,7 @@ int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, uint8_t interval,
                             {
                                 state->fitInfo[timeIndex] &= ~((FITINFO_OFFSET_NOT_REMOVED | FITINFO_INCOMPLETE_REGION) << (flagIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
                                 // Update quality and calibration flags based on thresholds
-                                updateDataQualityFlags(state->args.satellite, flagIndex, fitargs->regionNumber, driftValue, mad, timeIndex, state->flags, state->fitInfo);
+                                updateDataQualityFlags(state, flagIndex, fitargs->regionNumber, driftValue, mad, timeIndex);
                             }
                         }
                     }
@@ -563,19 +564,38 @@ int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, uint8_t interval,
 
 }
 
-void updateDataQualityFlags(const char *satellite, uint8_t sensorIndex, uint8_t regionNumber, float driftValue, float mad, long timeIndex, uint16_t *flags, uint32_t *fitInfo)
+void updateDataQualityFlags(ProcessorState *state, uint8_t sensorIndex, uint8_t regionNumber, float driftValue, float mad, long timeIndex)
 {
-    // Swarm C flags all zero for now
+    uint16_t *flags = state->flags;
+    uint32_t *fitInfo = state->fitInfo;
+    uint8_t *imageFlags = state->tracisImageFlagsH;
+    if (sensorIndex > 1)
+        imageFlags = state->tracisImageFlagsV;
+
+    // We lower the quality flag even for peripheral anomalies
+    // This flag is obtained from zero-order interpolation of the
+    // nearest previous TII full image, every 10 s to 30 s or so
+    // for most of the Swarm mission.
+    bool imageOK = imageFlags[timeIndex] == 0;
+
     // Flag is zero if drift magnitude is greater than FLAGS_MAXIMUM_DRIFT_VALUE
+    // TODO incorporate ion density from LP_HM into flagging
     uint16_t flagMask = (1<<sensorIndex);
-    bool madOK = (mad < madThreshold(satellite[0], sensorIndex));
+    bool madOK = (mad < madThreshold(state->args.satellite[0], sensorIndex));
     bool magOK = fabs(driftValue) <= FLAGS_MAXIMUM_DRIFT_VALUE;
+
     // Currently quality flag is set to 1 only for Swarm A and B viy at middle-to-high latitudes (region 0 or region 2)
-    if (satellite[0] != 'C' && sensorIndex == 2 && (regionNumber == 0 || regionNumber == 2) && madOK && magOK)
+    // Swarm C flags all zero for now
+
+    if (state->args.satellite[0] != 'C' && sensorIndex == 2 && (regionNumber == 0 || regionNumber == 2) && madOK && magOK && imageOK)
     {
         flags[timeIndex] |= flagMask;
     }
     // Set calibration info flag. Only set to one if baseline offset was subtracted
+    if (!imageOK)
+    {
+        fitInfo[timeIndex] |= (FITINFO_TII_IMAGE_QUALITY << (sensorIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
+    }
     if (!madOK)
     {
         fitInfo[timeIndex] |= (FITINFO_MAD_EXCEEDED << (sensorIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
@@ -684,168 +704,6 @@ int calculateFields(ProcessorState *state)
 
 }
 
-// Copied and modified from TRACIS interpolate.c
-void interpolate(double *times, double *values, size_t nVals, double *requestedTimes, long nRequestedValues, float *newValues)
-{
-    
-    size_t lastIndex = 0;
-    double thisTime = 0;
-    double t1 = 0, t2 = 0, dt = 0;
-    double fraction = 0;
-    double v1 = 0, v2 = 0, dv = 0;
-    double x = 0, y = 0, z = 0;
-    double rad = 0;
-    double lat = 0;
-    double lon = 0;
-    for (size_t i = 0; i < nRequestedValues; i++)
-    {
-        thisTime = requestedTimes[i];
-        // 
-        while (times[lastIndex] <= thisTime && lastIndex < nVals) 
-        {
-            lastIndex++;
-        }
-        // Extrapolate earlier or later, or the times are the same
-        if (times[lastIndex] >= thisTime || lastIndex == nVals - 1)
-        {
-            newValues[i] = (float)values[lastIndex];
-        }
-        // Interpolate
-        else
-        {
-            t1 = times[lastIndex];
-            t2 = times[lastIndex+1];
-            // Assumes t2 > t1
-            dt = thisTime - t1;
-            fraction = dt / (t2 - t1);
-            newValues[i] = (float)(values[lastIndex] + (values[lastIndex+1] - values[lastIndex]) * fraction);
-        }
-    }
-
-    return;
-
-}
-
-
-bool downSampleHalfSecond(long *index, long storageIndex, double t0, long maxIndex, uint8_t **dataBuffers, float *ectFieldH, float *ectFieldV, float *bctField, float *viErrors, float *potentials, uint16_t *flags, uint32_t *fitInfo, bool usePotentials)
-{
-    long timeIndex = *index;
-    uint8_t nSamples = 0;
-    double timeBuf = 0.0;
-    uint16_t flagBuf = 65535;
-    uint32_t fitInfoBuf = 0;
-    float floatBuf[NUM_BUFFER_VARIABLES]; // Time, flags, and fitInfo are handled separately; need one extra working buffer each for lattitude and longitude averages
-    float theta, phi, x, y, z;
-    bool downSampled = false;
-
-    for (uint8_t b = 0; b < NUM_BUFFER_VARIABLES; b++)
-    {
-        floatBuf[b] = 0.0;
-    }
-
-    while (((TIME()/1000. - t0) < 0.5) && (timeIndex <= maxIndex))
-    {
-        timeBuf += TIME();
-        // Handle lat and lon and mlt in cartesian coordinates
-        // For spherical coordinates
-        theta = M_PI / 2.0 - LAT() * M_PI / 180.0;
-        phi = LON() * M_PI / 180.0;
-        floatBuf[0] += cosf(phi) * sinf(theta);
-        floatBuf[1] += sinf(phi) * sinf(theta);
-        floatBuf[2] += cosf(theta);
-        floatBuf[3] += RADIUS();
-        // For magnetic coordinates
-        theta = M_PI / 2.0 - QDLAT() * M_PI / 180.0;
-        phi = MLT() / 24.0 * 2.0 * M_PI;
-        floatBuf[4] += cosf(phi) * sinf(theta);
-        floatBuf[5] += sinf(phi) * sinf(theta);
-        floatBuf[6] += cosf(theta);
-        floatBuf[7] += MXH();
-        floatBuf[8] += viErrors[timeIndex * 4 + 0];
-        floatBuf[9] += MXV();
-        floatBuf[10] += viErrors[timeIndex * 4 + 2];
-        floatBuf[11] += MYH();
-        floatBuf[12] += viErrors[timeIndex * 4 + 1];
-        floatBuf[13] += MYV();
-        floatBuf[14] += viErrors[timeIndex * 4 + 3];
-        floatBuf[15] += VSATN();
-        floatBuf[16] += VSATE();
-        floatBuf[17] += VSATC();
-        floatBuf[18] += ectFieldH[timeIndex * 3 + 0]; // EH xyz
-        floatBuf[19] += ectFieldH[timeIndex * 3 + 1];
-        floatBuf[20] += ectFieldH[timeIndex * 3 + 2];
-        floatBuf[21] += ectFieldV[timeIndex * 3 + 0]; // EV xyz
-        floatBuf[22] += ectFieldV[timeIndex * 3 + 1];
-        floatBuf[23] += ectFieldV[timeIndex * 3 + 2];
-        floatBuf[24] += bctField[timeIndex * 3 + 0]; // Bxyz
-        floatBuf[25] += bctField[timeIndex * 3 + 1];
-        floatBuf[26] += bctField[timeIndex * 3 + 2];
-        floatBuf[27] += VCORX();
-        floatBuf[28] += VCORY();
-        floatBuf[29] += VCORZ();
-        if (usePotentials)
-            floatBuf[30] += potentials[timeIndex];
-        flagBuf &= flags[timeIndex];
-        fitInfoBuf |= fitInfo[timeIndex];
-        nSamples++;
-        timeIndex++;
-    }
-    if (nSamples == 8)
-    {
-        // do the averaging and store result in original array
-        *((double*)dataBuffers[0] + (storageIndex)) = timeBuf / 8.0; // Average time
-        x = floatBuf[0] / 8.0;
-        y = floatBuf[1] / 8.0;
-        z = floatBuf[2] / 8.0;
-        *((float*)dataBuffers[7] + (storageIndex)) = atan2f(z, sqrtf(x*x + y*y)) * 180.0 / M_PI; // Lat
-        *((float*)dataBuffers[8] + (storageIndex)) = fmodf(atan2f(y, x) * 180.0 / M_PI, 360.0); // Lon
-        *((float*)dataBuffers[9] + (storageIndex)) = floatBuf[3] / 8.0; // radius
-        x = floatBuf[4] / 8.0;
-        y = floatBuf[5] / 8.0;
-        z = floatBuf[6] / 8.0;
-        *((float*)dataBuffers[5] + (storageIndex)) = atan2f(z, sqrtf(x*x + y*y)) * 180.0 / M_PI; // QD Lat
-        *((float*)dataBuffers[4] + (storageIndex)) = fmodf(atan2f(y, x) * 180.0 / M_PI + 360.0, 360.0) / 360. * 24.0; // MLT
-        *((float*)dataBuffers[1] + (2*storageIndex) + 0) = floatBuf[7] / 8.0; // VxH
-        viErrors[storageIndex * 4 + 0] = floatBuf[8] / 8.0 / sqrtf(8.0); // VxH error scaled for 2 Hz
-        *((float*)dataBuffers[2] + (2*storageIndex) + 0) = floatBuf[9] / 8.0; // VxV
-        viErrors[storageIndex * 4 + 2] = floatBuf[10] / 8.0 / sqrtf(8.0); // VxV error scaled for 2 Hz
-        *((float*)dataBuffers[1] + (2*storageIndex) + 1) = floatBuf[11] / 8.0; // VyH
-        viErrors[storageIndex * 4 + 1] = floatBuf[12] / 8.0 / sqrtf(8.0); // VyH error scaled for 2 Hz
-        *((float*)dataBuffers[2] + (2*storageIndex) + 1) = floatBuf[13] / 8.0; // VyV
-        viErrors[storageIndex * 4 + 3] = floatBuf[14] / 8.0 / sqrtf(8.0); // VyV error scaled for 2 Hz
-        *((float*)dataBuffers[11] + (3*storageIndex) + 0) = floatBuf[15] / 8.0; // VSatN
-        *((float*)dataBuffers[11] + (3*storageIndex) + 1) = floatBuf[16] / 8.0; // VSatE
-        *((float*)dataBuffers[11] + (3*storageIndex) + 2) = floatBuf[17] / 8.0; // VSatC
-        ectFieldH[storageIndex * 3 + 0] = floatBuf[18] / 8.0; // EHxyz
-        ectFieldH[storageIndex * 3 + 1] = floatBuf[19] / 8.0;
-        ectFieldH[storageIndex * 3 + 2] = floatBuf[20] / 8.0;
-        ectFieldV[storageIndex * 3 + 0] = floatBuf[21] / 8.0; // EVxyz
-        ectFieldV[storageIndex * 3 + 1] = floatBuf[22] / 8.0;
-        ectFieldV[storageIndex * 3 + 2] = floatBuf[23] / 8.0;
-        bctField[storageIndex * 3 + 0] = floatBuf[24] / 8.0; // Bxyz
-        bctField[storageIndex * 3 + 1] = floatBuf[25] / 8.0;
-        bctField[storageIndex * 3 + 2] = floatBuf[26] / 8.0;
-        *((float*)dataBuffers[10] + (3*storageIndex) + 0) = floatBuf[27] / 8.0; // Vicrxyz
-        *((float*)dataBuffers[10] + (3*storageIndex) + 1) = floatBuf[28] / 8.0;
-        *((float*)dataBuffers[10] + (3*storageIndex) + 2) = floatBuf[29] / 8.0;
-        if (usePotentials)
-            potentials[storageIndex] = floatBuf[30] / 8.0; // Floating potential U_SC
-        // Flags set to 0 at 16 Hz based on magnitude of flow,
-        // are not reset at 2 Hz, to ensure integrity of 2 Hz measurements
-        // One can review 16 Hz measurements to examine details of flow where even a
-        // single sample of the eight has a magnitude greater than 8 km/s
-        flags[storageIndex] = flagBuf;
-        fitInfo[storageIndex] = fitInfoBuf;
-
-        downSampled = true;
-
-    }
-
-    *index = timeIndex;
-    return downSampled;
-
-}
-
 int runProcessor(int argc, char *argv[])
 {
     int status = TIICT_OK;
@@ -906,6 +764,12 @@ int initProcessor(int argc, char *argv[], ProcessorState *state)
         state->dataBuffers[i] = NULL;
     }
     state->nRecs = 0;
+
+    for (uint8_t i = 0; i < NUM_TRACIS_VARIABLES; i++)
+    {
+        state->tracisDataBuffers[i] = NULL;
+    }
+    state->nTracisRecs = 0;
 
     // Turn off GSL failsafe error handler. We typically check the GSL return codes.
     gsl_set_error_handler_off();
@@ -1002,13 +866,13 @@ int shutdown(int status, ProcessorState *state)
     }
     if (state->processingLogFile != NULL)
     {
-        fprintf(state->processingLogFile, "%sProcessing aborted with status %d\n", infoHeader, status);
+        fprintf(state->processingLogFile, "%sProcessing stopped with status %d\n", infoHeader, status);
         fclose(state->processingLogFile);
         state->processingLogFile = NULL;
     }
     fflush(stdout);
 
-    // Free the memory
+    // Free memory
     for (uint8_t i = 0; i < NUM_CAL_VARIABLES; i++)
         if (state->dataBuffers[i] != NULL)
         {
@@ -1016,11 +880,25 @@ int shutdown(int status, ProcessorState *state)
             state->dataBuffers[i] = NULL;
         }
 
-    if (state->lpTimes != NULL)
+    for (uint8_t i = 0; i < NUM_TRACIS_VARIABLES; i++)
+        if (state->tracisDataBuffers[i] != NULL)
+        {
+            free(state->tracisDataBuffers[i]);
+            state->tracisDataBuffers[i] = NULL;
+        }
+
+    if (state->tracisImageFlagsH != NULL)
     {
-        free(state->lpTimes);
-        state->lpTimes = NULL;
+        free(state->tracisImageFlagsH);
+        state->tracisImageFlagsH = NULL;
     }
+
+    if (state->tracisImageFlagsV != NULL)
+    {
+        free(state->tracisImageFlagsV);
+        state->tracisImageFlagsV = NULL;
+    }
+
     if (state->lpPhiScHighGain != NULL)
     {
         free(state->lpPhiScHighGain);

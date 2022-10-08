@@ -43,11 +43,11 @@ SET(LIBS ${LIBS} ${MATH} ${GSL_LIBRARY} )
 INCLUDE_DIRECTORIES(${INCLUDE_DIRS} ${GSL_INCLUDE_DIRS})
 
 ADD_LIBRARY(Utilities utilities.c)
-ADD_LIBRARY(Processor processing.c export.c loadData.c utilities.c)
+ADD_LIBRARY(Processor processing.c export.c loadData.c utilities.c sample.c)
 TARGET_INCLUDE_DIRECTORIES(Processor PRIVATE)
 TARGET_LINK_LIBRARIES(Processor ${LIBS} -lgslcblas -ltii -lcdf)
 
-ADD_EXECUTABLE(tiict tiict.c processing.c export.c loadData.c)
+ADD_EXECUTABLE(tiict tiict.c)
 TARGET_INCLUDE_DIRECTORIES(tiict PRIVATE)
 TARGET_LINK_LIBRARIES(tiict Processor)
 

@@ -23,6 +23,7 @@
 #include "indexing.h"
 #include "utilities.h"
 #include "processing.h"
+#include "sample.h"
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -95,7 +96,6 @@ int getLpInputFilename(const char satelliteLetter, long year, long month, long d
 int loadLpCalData(ProcessorState *state)
 {
     // Get LP floating potentials
-    state->lpTimes = NULL;
     state->lpPhiScHighGain = NULL;
     state->lpPhiScLowGain = NULL;
     state->lpPhiSc = NULL;
@@ -170,17 +170,14 @@ int getLpData(ProcessorState *state)
     }
 
     // interpolate LP data to TII times
-    state->lpPhiScHighGain = malloc(sizeof(float) * state->nRecs);
-    state->lpPhiScLowGain = malloc(sizeof(float) * state->nRecs);
-    state->lpPhiSc = malloc(sizeof(float) * state->nRecs);
+    state->lpPhiScHighGain = (float*)calloc(state->nRecs, sizeof(float));
+    state->lpPhiScLowGain = (float*)calloc(state->nRecs, sizeof(float));
+    state->lpPhiSc = (float*)calloc(state->nRecs, sizeof(float));
     if (state->lpPhiScHighGain == NULL || state->lpPhiScLowGain == NULL || state->lpPhiSc == NULL)
     {
         fprintf(state->processingLogFile, "%sUnable to allocate memory for LP interpolation.", infoHeader);
         return TIICT_MEMORY;
     }
-    bzero(state->lpPhiScHighGain, sizeof(float) * state->nRecs);
-    bzero(state->lpPhiScLowGain, sizeof(float) * state->nRecs);
-    bzero(state->lpPhiSc, sizeof(float) * state->nRecs);
 
     double *tiiTime = (double*)state->dataBuffers[0];
 
@@ -344,6 +341,21 @@ int loadTiiData(ProcessorState *state)
         return TIICT_NOT_ENOUGH_TRACIS_RECORDS;
     }
 
+    // interpolate TRACIS image flags to TII times
+    state->tracisImageFlagsH = (uint8_t*) calloc(state->nRecs, sizeof(uint8_t));
+    state->tracisImageFlagsV = (uint8_t*) calloc(state->nRecs, sizeof(uint8_t));
+    if (state->tracisImageFlagsH == NULL || state->tracisImageFlagsV == NULL)
+    {
+        fprintf(state->processingLogFile, "%sUnable to allocate memory for TRACIS interpolation.", infoHeader);
+        return TIICT_MEMORY;
+    }
+
+    double *tiiTime = (double*)state->dataBuffers[0];
+
+    zeroOrderInterpolateImageFlags((double*)state->tracisDataBuffers[0], (uint8_t*)state->tracisDataBuffers[1], state->nTracisRecs, tiiTime, state->nRecs, state->tracisImageFlagsH);
+
+    zeroOrderInterpolateImageFlags((double*)state->tracisDataBuffers[0], (uint8_t*)state->tracisDataBuffers[2], state->nTracisRecs, tiiTime, state->nRecs, state->tracisImageFlagsV);
+
     return TIICT_OK;
 }
 
@@ -476,8 +488,9 @@ void loadCdf(const DayType dayType, const char * filename, const char *variables
     }
 
     // Determine start and stop record numbers to load
-    long startRecord;
-    long stopRecord;
+    long startRecord = 0;
+    long stopRecord = 0;
+    long nRecsToLoad = 0;
     double timeReference, recordTime;
     // get epoch variable number
     long epochNum = CDFgetVarNum(calCdfId, (char *)variables[0]);
@@ -535,8 +548,8 @@ void loadCdf(const DayType dayType, const char * filename, const char *variables
     }
 
     // Update number of records
-    nRecs = stopRecord - startRecord + 1;
-    if ((dayType == REQUESTED_DAY && nRecs < (long)ceil(sampleRate*SECONDS_OF_DATA_REQUIRED_FOR_PROCESSING)) || ((dayType == PREVIOUS_DAY || dayType == NEXT_DAY) && nRecs < (long)ceil(sampleRate*SECONDS_OF_BOUNDARY_DATA_REQUIRED_FOR_PROCESSING)))
+    nRecsToLoad = stopRecord - startRecord + 1;
+    if ((dayType == REQUESTED_DAY && nRecsToLoad < (long)ceil(sampleRate*SECONDS_OF_DATA_REQUIRED_FOR_PROCESSING)) || ((dayType == PREVIOUS_DAY || dayType == NEXT_DAY) && nRecsToLoad < (long)ceil(sampleRate*SECONDS_OF_BOUNDARY_DATA_REQUIRED_FOR_PROCESSING)))
     {
         // Not enough to do anything useful 
         CDFcloseCDF(calCdfId);
@@ -553,10 +566,6 @@ void loadCdf(const DayType dayType, const char * filename, const char *variables
             fprintf(state->processingLogFile, "%sVariable %s not found in %s.\n", infoHeader, variables[i], filename);
             closeCdf(calCdfId);
             return;
-        }
-        else
-        {
-            // fprintf(state->processingLogFile, "%s OK\n", infoHeader);
         }
     }
     
@@ -584,8 +593,8 @@ void loadCdf(const DayType dayType, const char * filename, const char *variables
         {
             numValues *= dimSizes[j];
         }
-        numBytesPrev = numValues * (state->nRecs) * numVarBytes;
-        numBytesToAdd = numValues * nRecs * numVarBytes;
+        numBytesPrev = numValues * (*numberOfRecords) * numVarBytes;
+        numBytesToAdd = numValues * nRecsToLoad * numVarBytes;
         numBytesNew = numBytesPrev + numBytesToAdd;
         calibrationMemorySize += numBytesNew;
         newMem = realloc(dataBuffers[i], (size_t) numBytesNew);
@@ -606,7 +615,7 @@ void loadCdf(const DayType dayType, const char * filename, const char *variables
 
     // Update number of records found and memory allocated
     if (numberOfRecords != NULL)
-        *numberOfRecords += nRecs;
+        *numberOfRecords += nRecsToLoad;
     if (memoryAllocated != NULL)
         *memoryAllocated = calibrationMemorySize;
 
