@@ -120,8 +120,8 @@ int main(int argc, char *argv[])
 	char *startDate = argv[1];
 	char *endDate = argv[2];
 	char *calVersion = argv[3];
-	char *exportVersion  = argv[4];
-	char *tracisVersion = argv[5];
+	char *tracisVersion = argv[4];
+	char *exportVersion  = argv[5];
 	char *calDir = argv[6];
 	char *tracisDir = argv[7];
 	char *lpDir = argv[8];
