@@ -380,7 +380,7 @@ void addAttributes(CDFid id, ProcessorState *state, const char *dataset, const c
     char cdfFile[FILENAME_MAX] = {0};
     sprintf(cdfFile, "%s.cdf", outFile);
     CDFcreateAttr(id, "File_Name", GLOBAL_SCOPE, &attrNum);
-    addgEntry(id, attrNum, 0, basename((char *)outFile));
+    addgEntry(id, attrNum, 0, basename(cdfFile));
 
     CDFcreateAttr(id, "PI_name", GLOBAL_SCOPE, &attrNum);
     addgEntry(id, attrNum, 0, "David J Knudsen");   
