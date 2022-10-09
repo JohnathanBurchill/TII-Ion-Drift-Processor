@@ -38,6 +38,7 @@ int exportCdfs(ProcessorState *state);
 CDFstatus createVarFrom1DVar(CDFid id, char *name, long dataType, long startIndex, long stopIndex, void *buffer);
 CDFstatus createVarFrom2DVar(CDFid id, char *name, long dataType, long startIndex, long stopIndex, void *buffer, uint8_t index, uint8_t dimSize);
 
+CDFstatus create2DVarFrom1DArray(CDFid id, char *name, long dataType, long startIndex, long stopIndex, void *buffer1D, uint8_t dimSize);
 
 CDFstatus addgEntry(CDFid id, long attrNum, long entryNum, const char *entry);
 
