@@ -106,15 +106,9 @@ int calibrateFlows(ProcessorState *state)
     //
     // https://swarm-diss.eo.esa.int/?do=download&file=swarm%2FAdvanced%2FPlasma_Data%2F2_Hz_Langmuir_Probe_Extended_Dataset%2FSW-RN-IRF-GS-005_Extended_LP_Data_Probes.pdf
     // 
-    // the recommendation is to use the high-gain Te and reject the measurement if overflow occurs.
-    // There is no recommendation for Vs (U_SC).
-    // We opt to use high-gain Vs and flag the along-track ion drift measurement quality based 
-    // on the LP flagbits (zero-order interpolated to the TII measurement times).
+    // Low-gain U_SC is used in LP L1b processing. Will use the same here.
 
-    // If there were details provided on how the Vs blending is done for the U_SC parameter
-    // we could use that and flag data quality according to which probe(s) was used. 
-
-    state->potentials = state->lpPhiScHighGain;
+    state->potentials = state->lpPhiScLowGain;
 
     float enxh = 0.0;
     float enxv = 0.0;
@@ -617,7 +611,7 @@ void updateDataQualityFlags(ProcessorState *state, uint8_t sensorIndex, uint8_t 
     {
         // Quality of high-gain satellite potential
         phiScOK &= (lpFlag & 0x0003) != 3 && (lpFlag & 0x0003) != 0;
-        phiScOK &= ((lpFlag & 0b00000000000010101010101001010100) == 0);
+        phiScOK &= ((lpFlag & 0b00000000000101010101010010101000) == 0);
         
         // As recommended in EXTD LP release notes
         float phi = state->potentials[timeIndex];
