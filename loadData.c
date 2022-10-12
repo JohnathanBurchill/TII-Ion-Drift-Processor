@@ -151,6 +151,13 @@ int getLpData(ProcessorState *state)
 
     for (int i = 0; i < 3; i++)
     {
+        // Only load LP data for this date if there are calibration data
+        if (state->gotCalibrationFile[i] != true)
+        {
+            date.tm_mday = date.tm_mday + 1;
+            continue;
+        }
+
         timegm(&date);
         bzero(lpFile, FILENAME_MAX);
         res = getLpInputFilename(state->args.satellite[0], date.tm_year+1900, date.tm_mon+1, date.tm_mday, state->args.lpDir, lpFile);
@@ -359,11 +366,15 @@ int loadTiiData(ProcessorState *state)
             state->gotCalibrationFile[i+1] = true;
             nCalRecs = state->nRecs;
         }
-        loadTracisDataFromDate(i, state);
-        if (state->nTracisRecs > nTracisRecs)
+        if (state->gotCalibrationFile[i+1])
         {
-            state->gotTracisFile[i+1] = true;
-            nTracisRecs = state->nTracisRecs;
+            // Only load TRACIS if we loaded TII cal data for this date
+            loadTracisDataFromDate(i, state);
+            if (state->nTracisRecs > nTracisRecs)
+            {
+                state->gotTracisFile[i+1] = true;
+                nTracisRecs = state->nTracisRecs;
+            }
         }
     }
     // Reset processing date

@@ -45,6 +45,9 @@ int calibrateFlows(ProcessorState *state);
 int removeOffsetsAndSetFlags(ProcessorState *state, bool setFlags);
 int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, uint8_t interval, bool setFlags);
 
+void setCalFlags(ProcessorState *state, long t1, long t2, int flagIndex, int flagValue);
+void unsetCalFlags(ProcessorState *state, long t1, long t2, int flagIndex, int flagValue);
+
 void updateDataQualityFlags(ProcessorState *state, uint8_t sensorIndex, uint8_t regionNumber, float driftValue, float mad, long timeIndex);
 
 float madThreshold(char satellite, int sensorIndex);

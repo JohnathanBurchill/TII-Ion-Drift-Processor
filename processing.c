@@ -102,13 +102,9 @@ int calibrateFlows(ProcessorState *state)
     }
 
     // Choose a potential estimate (lpPhiSc, lpPhiScHighGain, or lpPhiScLowGain)
-    // According to the EXTD LP release notes
-    //
-    // https://swarm-diss.eo.esa.int/?do=download&file=swarm%2FAdvanced%2FPlasma_Data%2F2_Hz_Langmuir_Probe_Extended_Dataset%2FSW-RN-IRF-GS-005_Extended_LP_Data_Probes.pdf
-    // 
-    // Low-gain U_SC is used in LP L1b processing. Will use the same here.
-
+    // Potential is estimated from low-gain probe for LP L1b processing
     state->potentials = state->lpPhiScLowGain;
+
 
     float enxh = 0.0;
     float enxv = 0.0;
@@ -296,16 +292,16 @@ int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, uint8_t interval,
     long long timeIndex = 0;
     uint8_t **dataBuffers = state->dataBuffers;
     double epoch0 = TIME();
-    uint16_t minDataPointsNeeded = 80;
     float previousQDLat = QDLAT();
     float driftValue;
     bool regionBegin = false;
     long long beginIndex0 = 0, beginIndex1 = 0, endIndex0 = 0, endIndex1 = 0, modelDataIndex = 0, modelDataMidPoint = 0;
 
-    double c0, c1, cov00, cov01, cov11, sumsq;
+    double c0, c1, c2, c3;
     double seconds, fitTime;
     int gslStatus;
     long long numModelPoints, numModel1Points, numModel2Points; // data for fit, and for median calculations at each end
+    long long validNumModelPoints, validNumModel1Points, validNumModel2Points;
     bool gotFirstModelData = false;
     bool gotStartOfSecondModelData = false;
     bool gotSecondModelData = false;
@@ -345,15 +341,24 @@ int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, uint8_t interval,
     gsl_vector *modelValues, *model1Values, *model2Values, *fitCoefficients, *work1, *work2;
     gsl_multifit_robust_workspace * gslFitWorkspace;
     gsl_multifit_robust_stats stats;
-    const size_t p = 2; // linear fit
+    // TODO what type of background model?
+    size_t p = FIT_MODEL_DEGREE; // Quadratic fit ?
 
     double tregion11, tregion12, tregion21, tregion22;
+
+    float measurement = 0.0;
+
+    long nValidPoints1 = 0;
+    long nValidPoints2 = 0;
 
     for (timeIndex = 0; timeIndex < state->nRecs; timeIndex++)
     {
         c0 = 0.0;
         c1 = 0.0;
+        c2 = 0.0;
+        c3 = 0.0;
         seconds = (TIME() - epoch0) / 1000.;
+
         if ((firstDirection == 1 && QDLAT() >= fitargs->lat1 && previousQDLat < fitargs->lat1) || (firstDirection == -1 && QDLAT() <= fitargs->lat1 && previousQDLat > fitargs->lat1))
         {
             // Start a new region search
@@ -420,7 +425,7 @@ int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, uint8_t interval,
             {
                 numFits++;
                 numModel1Points = beginIndex1 - beginIndex0;
-                numModel2Points = endIndex1 - endIndex0;
+                numModel2Points = endIndex1 - endIndex0;                
                 numModelPoints = numModel1Points + numModel2Points;
                 fprintf(state->fitFile, "%d %d %lld %lld %f %f %f %f", fitargs->regionNumber, numFits, numModel1Points, numModel2Points, tregion11, tregion12, tregion21, tregion22);
                 // Allocate fit buffers
@@ -433,23 +438,12 @@ int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, uint8_t interval,
                 fitCoefficients = gsl_vector_alloc(p);
                 cov = gsl_matrix_alloc(p, p);
 
-                // Load times into the model data buffer
-                modelDataIndex = 0;
-                for (timeIndex = beginIndex0; timeIndex < beginIndex1; timeIndex++)
-                {
-                    fitTime = (TIME() - epoch0)/1000.;
-                    gsl_matrix_set(modelTimesMatrix, modelDataIndex, 0, 1.0);
-                    gsl_matrix_set(modelTimesMatrix, modelDataIndex++, 1, fitTime); // seconds from start of file
-                }
-                for (timeIndex = endIndex0; timeIndex < endIndex1; timeIndex++)
-                {
-                    fitTime = (TIME() - epoch0)/1000.;
-                    gsl_matrix_set(modelTimesMatrix, modelDataIndex, 0, 1.0);
-                    gsl_matrix_set(modelTimesMatrix, modelDataIndex++, 1, fitTime); // seconds from start of file
-                }
                 // Load values into model data buffer once each for HX, HY, VX, VY
                 for (uint8_t k = 0; k < 4; k++)
                 {
+                    // Load times into the model data buffer
+                    // Do this for each sensor fit, since valid points may be different 
+                    // each time
                     uint8_t flagIndex = k; // Defined flags as bit 0 -> HX, bit 1 -> VX, bit 2-> HY and bit 3-> VY. Data are stored in memory differently.
                     if (flagIndex == 1)
                         flagIndex = 2;
@@ -457,17 +451,90 @@ int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, uint8_t interval,
                         flagIndex = 1;
 
                     modelDataIndex = 0;
+                    // Set region 1 and 2 data to get first estimate of mads and medians
+                    validNumModel1Points = 0;
+                    validNumModel2Points = 0;
                     for (timeIndex = beginIndex0; timeIndex < beginIndex1; timeIndex++)
                     {
-                        gsl_vector_set(model1Values, modelDataIndex, *ADDR(1 + k / 2, k % 2, 2)); 
-                        gsl_vector_set(modelValues, modelDataIndex++, *ADDR(1 + k / 2, k % 2, 2)); 
+                        measurement = *ADDR(1 + k / 2, k % 2, 2);
+                        gsl_vector_set(model1Values, validNumModel1Points++, measurement); 
                     }
-                    modelDataMidPoint = modelDataIndex;
                     for (timeIndex = endIndex0; timeIndex < endIndex1; timeIndex++)
                     {
-                        gsl_vector_set(model2Values, modelDataIndex - modelDataMidPoint, *ADDR(1 + k / 2, k % 2, 2)); 
-                        gsl_vector_set(modelValues, modelDataIndex++, *ADDR(1 + k / 2, k % 2, 2)); 
+                        measurement = *ADDR(1 + k / 2, k % 2, 2);
+                        gsl_vector_set(model2Values, validNumModel2Points++, *ADDR(1 + k / 2, k % 2, 2)); 
                     }
+                    double mad1 = gsl_stats_mad(model1Values->data, 1, validNumModel1Points, work1->data); // For first segment
+                    double mad2 = gsl_stats_mad(model2Values->data, 1, validNumModel2Points, work2->data); // For last segment
+
+                    // -> The order of values in model1Values->data and model2Values->data is not preserved with gsl_stats_median()
+                    double median1 = gsl_stats_median(model1Values->data, 1, numModel1Points);
+                    double median2 = gsl_stats_median(model2Values->data, 1, numModel2Points);
+
+                    if (mad1 > FIT_MAX_MAD || mad2 > FIT_MAX_MAD)
+                    {
+                        setCalFlags(state, beginIndex0, endIndex1, flagIndex, CALIBRATION_FLAGS_MAD_EXCEEDED);
+                        unsetCalFlags(state, beginIndex0, endIndex1, flagIndex, CALIBRATION_FLAGS_INCOMPLETE_REGION);
+                        continue;
+                    }
+                    if (fabs(median1) > FIT_MAX_ABS_MEDIAN || fabs(median2) > FIT_MAX_ABS_MEDIAN)
+                    {
+                        setCalFlags(state, beginIndex0, endIndex1, flagIndex, CALIBRATION_FLAGS_DRIFT_MAGNITUDE_EXCEEDED);
+                        unsetCalFlags(state, beginIndex0, endIndex1, flagIndex, CALIBRATION_FLAGS_INCOMPLETE_REGION);
+                        continue;
+                    }
+                    if (validNumModel1Points < MIN_POINTS_PER_REGION_FOR_FIT || validNumModel2Points < MIN_POINTS_PER_REGION_FOR_FIT)
+                    {
+                        // We have at least one incomplete region, no background subtraction
+                        // Flags are already set
+                        continue;
+                    }
+                    // Do not include outliers, and only process if we have at least 80 points
+                    validNumModelPoints = 0;
+                    validNumModel1Points = 0;
+                    validNumModel2Points = 0;
+
+                    for (timeIndex = beginIndex0; timeIndex < beginIndex1; timeIndex++)
+                    {
+                        measurement = *ADDR(1 + k / 2, k % 2, 2);
+                        fitTime = (TIME() - epoch0)/1000.;
+                        if (fabsf(measurement - median1) < FIT_OUTLIER_MAD_THRESHOLD * mad1)
+                        {
+                            double ft = 1.0;
+                            gsl_matrix_set(modelTimesMatrix, validNumModelPoints, 0, ft);
+                            for (int pi = 1; pi < p; pi++)
+                            {
+                                ft *= fitTime;
+                                gsl_matrix_set(modelTimesMatrix, validNumModelPoints, pi, ft);
+                            }
+                            gsl_vector_set(modelValues, validNumModelPoints++, measurement);
+                            validNumModel1Points++;
+                        }
+                    }
+                    for (timeIndex = endIndex0; timeIndex < endIndex1; timeIndex++)
+                    {
+                        measurement = *ADDR(1 + k / 2, k % 2, 2);
+                        fitTime = (TIME() - epoch0)/1000.;
+                        if (fabsf(measurement - median2) < FIT_OUTLIER_MAD_THRESHOLD * mad2)
+                        {
+                            double ft = 1.0;
+                            gsl_matrix_set(modelTimesMatrix, validNumModelPoints, 0, ft);
+                            for (int pi = 1; pi < p; pi++)
+                            {
+                                ft *= fitTime;
+                                gsl_matrix_set(modelTimesMatrix, validNumModelPoints, pi, ft);
+                            }
+                            gsl_vector_set(modelValues, validNumModelPoints++, measurement);
+                            validNumModel2Points++;
+                        }
+                    }
+
+                    if (validNumModel1Points < MIN_POINTS_PER_REGION_FOR_FIT || validNumModel2Points < MIN_POINTS_PER_REGION_FOR_FIT)
+                    {
+                        // Not enough points for a reliable fit
+                        continue;
+                    }
+
                     // Robust linear model fit and removal
                     gslFitWorkspace = gsl_multifit_robust_alloc(fitType, numModelPoints, p);
                     gslStatus = gsl_multifit_robust_maxiter(GSL_FIT_MAXIMUM_ITERATIONS, gslFitWorkspace);
@@ -485,34 +552,43 @@ int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, uint8_t interval,
                         fprintf(state->fitFile, " -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d", gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus);
                         if (setFlags)
                         {
-                            for (timeIndex = beginIndex0; timeIndex < endIndex1; timeIndex++)
-                            {
-                                // Got a complete region, but had a fit error
-                                state->calibrationFlags[timeIndex] &= ~(CALIBRATION_FLAGS_INCOMPLETE_REGION << (flagIndex * MAX_NUMBER_OF_CALIBRATION_FLAGS_BITS_PER_COMPONENT));
-                                state->calibrationFlags[timeIndex] |= (CALIBRATION_FLAGS_GSL_FIT_ERROR << (flagIndex * MAX_NUMBER_OF_CALIBRATION_FLAGS_BITS_PER_COMPONENT));
-                            }
+                            // Got a full region, but there was a fit error
+                            // First unset the incomplete region flag
+                            unsetCalFlags(state, beginIndex0, endIndex1, flagIndex, CALIBRATION_FLAGS_INCOMPLETE_REGION);
+                            // Now set the fit error flag
+                            setCalFlags(state, beginIndex0, endIndex1, flagIndex, CALIBRATION_FLAGS_GSL_FIT_ERROR);
                         }
+                        
                     }
                     else
                     {
                         c0 = gsl_vector_get(fitCoefficients, 0);
-                        c1 = gsl_vector_get(fitCoefficients, 1);
+                        c1 = 0.0;
+                        c2 = 0.0;
+                        c3 = 0.0;
+                        if (p >= 2)
+                            c1 = gsl_vector_get(fitCoefficients, 1);                        
+                        if (p >= 3)
+                            c2 = gsl_vector_get(fitCoefficients, 2);
+                        if (p >= 4)
+                            c3 = gsl_vector_get(fitCoefficients, 3);
                         stats = gsl_multifit_robust_statistics(gslFitWorkspace);
                         gsl_multifit_robust_free(gslFitWorkspace);
                         // check median absolute deviation and median of signal
                         // Note that median calculation sorts the array, so do this last
                         double mad = stats.sigma_mad; // For full data fitted
-                        double mad1 = gsl_stats_mad(model1Values->data, 1, numModel1Points, work1->data); // For first segment
-                        double mad2 = gsl_stats_mad(model2Values->data, 1, numModel2Points, work2->data); // For last segment
-                        double median1 = gsl_stats_median(model1Values->data, 1, numModel1Points);
-                        double median2 = gsl_stats_median(model2Values->data, 1, numModel2Points);
+                        // TODO print c2
                         fprintf(state->fitFile, " %f %f %f %f %f %f %f %f %f", c0, c1, stats.adj_Rsq, stats.rmse, median1, median2, mad, mad1, mad2);
                         // Remove the offsets and assign flags for this region
                         for (timeIndex = beginIndex0; timeIndex < endIndex1; timeIndex++)
                         {
                             // remove offset
-                            *ADDR(1 + k / 2, k % 2, 2) -= (((TIME() - epoch0)/1000.0) * c1 + c0);
+                            double x = (TIME() - epoch0)/1000.0;
+                            *ADDR(1 + k / 2, k % 2, 2) -= (x * x * x * c3 + x * x * c2 + x * c1 + c0);
+                            // Get drift value for flags
                             driftValue = *ADDR(1 + k / 2, k % 2, 2);
+
+
                             // Assign error estimate
                             // TODO: use interpolated MADs derived start and end of pass?
                             state->viErrors[4*timeIndex + k] = mad;
@@ -568,8 +644,22 @@ int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, uint8_t interval,
 
 }
 
+void setCalFlags(ProcessorState *state, long t1, long t2, int flagIndex, int flagValue)
+{
+    for (long timeIndex = t1; timeIndex < t2; timeIndex++)
+        state->calibrationFlags[timeIndex] |= (flagValue << (flagIndex * MAX_NUMBER_OF_CALIBRATION_FLAGS_BITS_PER_COMPONENT));
+}
+
+void unsetCalFlags(ProcessorState *state, long t1, long t2, int flagIndex, int flagValue)
+{
+    for (long timeIndex = t1; timeIndex < t2; timeIndex++)
+        state->calibrationFlags[timeIndex] &= ~(flagValue << (flagIndex * MAX_NUMBER_OF_CALIBRATION_FLAGS_BITS_PER_COMPONENT));
+}
+
 void updateDataQualityFlags(ProcessorState *state, uint8_t sensorIndex, uint8_t regionNumber, float driftValue, float mad, long timeIndex)
 {
+
+    uint8_t **dataBuffers = state->dataBuffers;
 
     uint16_t *flags = state->flags;
     uint32_t *calibrationFlags = state->calibrationFlags;
@@ -591,7 +681,8 @@ void updateDataQualityFlags(ProcessorState *state, uint8_t sensorIndex, uint8_t 
     // TRACIS_FLAG_PERIPHERAL_ANOMALY = 1 << 3,
     // TRACIS_FLAG_MEASLES_ANOMALY = 1 << 4,
     // TRACIS_FLAG_BIFURCATION_ANOMALY = 1 << 5
-    bool imageOK = (imageFlags[timeIndex] & 0b00111111) == 0;
+    // bool imageOK = (imageFlags[timeIndex] & 0b00111111) == 0;
+    bool imageOK = (imageFlags[timeIndex] & 0b00111001) == 0;
 
 
     // Use Table 3-3 of EXTD LP release notes to determine if High Gain probe Ni and VSc are usable. Zero-order interpolated at TII times from LP quality flag
@@ -636,7 +727,8 @@ void updateDataQualityFlags(ProcessorState *state, uint8_t sensorIndex, uint8_t 
     {
         // ram energy
         maxDrift = 0.5 * MASS_OPLUS / ELECTRIC_CHARGE_OPLUS * maxDrift * maxDrift;
-        maxMad = 0.5 * MASS_OPLUS / ELECTRIC_CHARGE_OPLUS * maxMad * maxMad;
+        // Use dE = m/q * v * dV, where dV is maxMad and v is VSATN
+        maxMad = MASS_OPLUS / ELECTRIC_CHARGE_OPLUS * fabsf(VSATN()) * maxMad;
     }
     magOK = (fabs(driftValue) <= maxDrift);
     madOK = (mad <= maxMad);
@@ -811,10 +903,10 @@ int initProcessor(int argc, char *argv[], ProcessorState *state)
 
     // Offset model parameters
     offset_model_fit_arguments f[4] = {
-        {0, "Northern ascending", 44.0, 50.0, 50.0, 44.0},
-        {1, "Equatorial descending", 44.0, 38.0, -38.0, -44.0},
-        {2, "Southern descending", -44.0, -50.0, -50.0, -44.0},
-        {3, "Equatorial ascending", -44.0, -38.0, 38.0, 44.0},
+        {0, "Northern ascending", FIT_P_QD_1, FIT_P_QD_2, FIT_P_QD_2, FIT_P_QD_1},
+        {1, "Equatorial descending", FIT_E_QD_1, FIT_E_QD_2, -FIT_E_QD_2, -FIT_E_QD_1},
+        {2, "Southern descending", -FIT_P_QD_1, -FIT_P_QD_2, -FIT_P_QD_2, -FIT_P_QD_1},
+        {3, "Equatorial ascending", -FIT_E_QD_1, -FIT_E_QD_2, FIT_E_QD_2, FIT_E_QD_1},
     };
     memcpy(state->fitargs, f, 4 * sizeof(offset_model_fit_arguments));
 

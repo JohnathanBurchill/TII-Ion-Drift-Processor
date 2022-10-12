@@ -42,7 +42,16 @@
 #define NUM_BUFFER_VARIABLES 31
 
 #define MAX_NUMBER_OF_CALIBRATION_FLAGS_BITS_PER_COMPONENT 8
-#define GSL_FIT_MAXIMUM_ITERATIONS 500
+#define GSL_FIT_MAXIMUM_ITERATIONS 300
+#define MIN_POINTS_PER_REGION_FOR_FIT 200
+#define FIT_MAX_MAD 300.0 // m/s
+#define FIT_MAX_ABS_MEDIAN 5000.0 // m/s
+#define FIT_OUTLIER_MAD_THRESHOLD 4.0
+#define FIT_MODEL_DEGREE 3 // Quadratic offset model
+#define FIT_P_QD_1 50 // High-latitude equatorward boundary
+#define FIT_P_QD_2 55 // High-latitude poleward boundary
+#define FIT_E_QD_1 50 // Low-latitude poleward boundary
+#define FIT_E_QD_2 45 // Low-latitude equatorward boundary
 
 #define LP_MIN_NUMBER_OF_POTENTIALS 160000
 
