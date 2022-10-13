@@ -193,17 +193,6 @@ int main(int argc, char* argv[])
     int qdlatIndex = 0;
     int mltIndex = 0;
 
-    if (deltaqdlat <= 0.0)
-    {
-        fprintf(stderr, "%s: deltaqdlat must be greater than 0.0\n", argv[0]);
-        exit(EXIT_FAILURE);
-    }
-    if (deltamlt <= 0.0)
-    {
-        fprintf(stderr, "%s: deltamlt must be greater than 0.0\n", argv[0]);
-        exit(EXIT_FAILURE);
-    }
-
     int nQDLats = (int)floor((qdlatmax - qdlatmin) / deltaqdlat);
     int nMLTs = (int)floor((mltmax - mltmin) / deltamlt);
     if (nQDLats <= 0)
