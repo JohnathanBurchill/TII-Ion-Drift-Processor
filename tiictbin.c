@@ -119,14 +119,14 @@ int main(int argc, char* argv[])
             nOptions++;
             viyToEastward = true;
         }
-        else if (strncmp(argv[i], "--qualityflagmask=", 18) == 0)
+        else if (strncmp(argv[i], "--quality-flag-mask=", 20) == 0)
         {
             nOptions++;
             int base = 10;
             int sign = 1;
-            size_t offset = 18;
+            size_t offset = 20;
             size_t len = strlen(argv[i]);
-            if (len < 19)
+            if (len < 21)
             {
                 fprintf(stderr, "Invalid quality flag mask value.\n");
                 exit(EXIT_FAILURE);
@@ -136,7 +136,7 @@ int main(int argc, char* argv[])
                 sign = -1;
                 offset++;
             }
-            if (len > 20)
+            if (len > 22)
             {
                 if (strncmp(argv[i] + offset, "0b", 2) == 0)
                 {
@@ -152,10 +152,10 @@ int main(int argc, char* argv[])
             qualityFlagMask = (int32_t) strtol(argv[i] + offset, (char **)NULL, base);
             qualityFlagMask *= sign;
         }
-        else if (strncmp(argv[i], "--qualityflagmasktype=", 22) == 0)
+        else if (strncmp(argv[i], "--quality-flag-mask-type=", 25) == 0)
         {
             nOptions++;
-            if (strcmp(argv[i] + 22, "OR") == 0)
+            if (strcmp(argv[i] + 25, "OR") == 0)
                 qualityMaskIsAnd = false;
             else
                 qualityMaskIsAnd = true;
@@ -585,14 +585,14 @@ uint8_t getMinorVersion(const char *filename)
 
 void usage(char *name)
 {
-    fprintf(stdout, "usage: %s directory satelliteLetter parameterName statistic qdlatmin qdlatmax deltaqdlat mltmin mltmax deltamlt [firstDate] [lastDate] [--viy-to-eastward] [--qualityflagmask=mask] [--qualityflagmasktype=type] [--no-file-progress] [--help] [--about]\n", name);
+    fprintf(stdout, "usage: %s directory satelliteLetter parameterName statistic qdlatmin qdlatmax deltaqdlat mltmin mltmax deltamlt [firstDate] [lastDate] [--viy-to-eastward] [--quality-flag-mask=mask] [--quality-flag-mask-type=type] [--no-file-progress] [--help] [--about]\n", name);
     fprintf(stdout, "Options:\n");
     fprintf(stdout, "\t--help or -h\t\tprints this message.\n");
     fprintf(stdout, "\t--about \t\tdescribes the program, declares license.\n");
     fprintf(stdout, "\t--available-statistics\tprints a list of statistics to calculate. Pass one statistic per call.\n");
     fprintf(stdout, "\t--viy-to-eastward\tflips sign of Viy for descending part of the orbit so that positive ion drift is always eastward.\n");
-    fprintf(stdout, "\t--qualityflagmask=value\tselects (mask > 0) or rejects (mask < 0) measurements with quality flag bitwise-and-matching abs(mask) according to the mask type given by --qualityflagmasktype, e.g., --qualityflagmask=0b0110 or --qualityflagmask=-15\n");
-    fprintf(stdout, "\t--qualityflagmasktype={AND|OR}\tinterpret --qualityflagmask values as bitwise AND or OR\n");
+    fprintf(stdout, "\t--quality-flag-mask=value\tselects (mask > 0) or rejects (mask < 0) measurements with quality flag bitwise-and-matching abs(mask) according to the mask type given by --quality-flag-mask-type, e.g., --quality-flag-mask=0b0110 or --quality-flag-mask=-15\n");
+    fprintf(stdout, "\t--quality-flag-mask-type={AND|OR}\tinterpret --qualityflagmask values as bitwise AND or OR\n");
     fprintf(stdout, "\t--no-file-progress\tdo not print progress of files being processed\n");
 
     return;    
