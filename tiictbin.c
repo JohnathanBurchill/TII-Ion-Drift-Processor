@@ -59,6 +59,13 @@ int main(int argc, char* argv[])
 
     bool showFileProgress = true;
 
+    char firstDate[255] = {0};
+    snprintf(firstDate, 9, "%s", "20131208");
+    char lastDate[255] = {0};
+    time_t today = time(NULL);
+    timeParts = gmtime(&today);
+    sprintf(lastDate, "%4d%02d%02d", timeParts->tm_year + 1900, timeParts->tm_mon + 1, timeParts->tm_mday);
+
     for (int i = 1; i < argc; i++)
     {
         if (strcmp(argv[i], "--about") == 0)
@@ -81,6 +88,26 @@ int main(int argc, char* argv[])
         {
             usage(argv[0]);
             exit(EXIT_FAILURE);
+        }
+        else if (strncmp(argv[i], "--first-date=", 13) == 0)
+        {
+            if (strlen(argv[i]) != 21)
+            {
+                fprintf(stderr, "%s: invalid date\n", argv[i]);
+                exit(EXIT_FAILURE);
+            }
+            nOptions++;
+            snprintf(firstDate, 9, "%s", argv[i] + 13);
+        }
+        else if (strncmp(argv[i], "--last-date=", 12) == 0)
+        {
+            if (strlen(argv[i]) != 20)
+            {
+                fprintf(stderr, "%s: invalid date\n", argv[i]);
+                exit(EXIT_FAILURE);
+            }
+            nOptions++;
+            snprintf(lastDate, 9, "%s", argv[i] + 12);
         }
         else if (strcmp(argv[i], "--no-file-progress") == 0)
         {
@@ -135,12 +162,10 @@ int main(int argc, char* argv[])
         }
         else if (strncmp(argv[i], "--", 2) == 0)
         {
-            fprintf(stderr, "Unknown option %s\n", argv[i]);
+            fprintf(stderr, "Unknown or incomplete option %s\n", argv[i]);
             exit(EXIT_FAILURE);
         }
-
     }
-
 
     if (argc != 11 + nOptions)
     {
@@ -165,16 +190,6 @@ int main(int argc, char* argv[])
     float mltmin = atof(argv[8]);
     float mltmax = atof(argv[9]);
     float deltamlt = atof(argv[10]);
-    char *firstDate = "20131208";
-    char lastDate[255] = {0};
-    time_t today = time(NULL);
-    timeParts = gmtime(&today);
-    sprintf(lastDate, "%4d%02d%02d", timeParts->tm_year + 1900, timeParts->tm_mon + 1, timeParts->tm_mday);
-    if (argc > 11 && strncmp(argv[11], "--", 2) != 0)
-        firstDate = argv[11];
-    if (argc > 12 && strncmp(argv[12], "--", 2) != 0)
-        sprintf(lastDate, "%s", argv[12]);
-
     int qdlatIndex = 0;
     int mltIndex = 0;
 
@@ -201,6 +216,8 @@ int main(int argc, char* argv[])
         fprintf(stderr, "%s: invalid MLT bin specification.\n", argv[0]);
         exit(EXIT_FAILURE);
     }
+
+    fprintf(stderr, "Analyzing Swarm %s files between %s and %s\n", satelliteLetter, firstDate, lastDate);
 
     // Flag mask
     char *flagParams[4] = {"Vixh", "Vixv", "Viy", "Viz"};
