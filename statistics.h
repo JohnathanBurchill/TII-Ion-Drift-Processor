@@ -25,7 +25,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 
-#define BIN_STORAGE_BLOCK_SIZE 1024 // Number of elements to increment bin storage by
+#define BIN_STORAGE_BLOCK_SIZE 1048576 // Number of elements to increment bin storage by at a time
 
 #define NSTATISTICS 7
 

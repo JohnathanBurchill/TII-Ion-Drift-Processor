@@ -65,7 +65,7 @@ int main(int argc, char* argv[])
     time_t today = time(NULL);
     timeParts = gmtime(&today);
     sprintf(lastDate, "%4d%02d%02d", timeParts->tm_year + 1900, timeParts->tm_mon + 1, timeParts->tm_mday);
-
+    
     for (int i = 1; i < argc; i++)
     {
         if (strcmp(argv[i], "--about") == 0)
@@ -307,6 +307,10 @@ int main(int argc, char* argv[])
     int percentCheck = (int) ceil(0.1 * (float)nFiles);
     float value = 0.0;
 
+    fprintf(stdout, "Time range is inclusive. Bin specification for remaining quantities x and bin boundaries x1 and x2: x1 <= x < x2\n");
+    fprintf(stdout, "Row legend:\n");
+    fprintf(stdout, "firstDate lastDate MLT1 MLT2 QDLat1 QDLat2 %s(%s) binCount validRegionFraction totalReadFraction\n", statistic, parameterName);
+
     size_t index = 0;
     while ((entry = readdir(dir)) != NULL)
     {
@@ -421,27 +425,28 @@ int main(int argc, char* argv[])
         }
     }
  
-    float qdlat = 0.0;
-    float mlt = 0.0;
+    float qdlat1 = 0.0;
+    float qdlat2 = 0.0;
+    float mlt1 = 0.0;
+    float mlt2 = 0.0;
     float result = 0.0;
-    char statExpression[50];
-    snprintf(statExpression, 50, "%s(%s)", statistic, parameterName);
-    fprintf(stdout, "  MLT\t QDLat\t%35s\t       Count\n", statExpression);
 
     for (size_t q = 0; q < nQDLats; q++)
     {
         for (size_t m = 0; m < nMLTs; m++)
         {
             index = m * nQDLats + q;
-            qdlat = qdlatmin + deltaqdlat * ((float)q + 0.5);
-            mlt = mltmin + deltamlt* ((float)m + 0.5);
+            qdlat1 = qdlatmin + deltaqdlat * ((float)q);
+            qdlat2 = qdlat1 + deltaqdlat;
+            mlt1 = mltmin + deltamlt* ((float)m);
+            mlt2 = mlt1 + deltamlt;
             if (calculateStatistic(statistic, binStorage, binSizes, index, (void*) &result))
                 result = GSL_NAN;
-            fprintf(stdout, "%5.2f\t%6.2f\t%35.2f\t%12ld\n", mlt, qdlat, result, binSizes[index]);
+            fprintf(stdout, "%8s %8s %5.2f %5.2f %6.2f %6.2f %f %ld %f %f\n", firstDate, lastDate, mlt1, mlt2, qdlat1, qdlat2, result, binSizes[index], (float)binSizes[index] / (float) nValsWithinBinLimits, (float)binSizes[index] / (float)nValsRead);
         }
     }
 
-    fprintf(stderr, "Values read: %12ld\tValues within bin limits: %12ld\tValues binned: %12ld (%6.2lf%% of those within bin limits)\n", nValsRead, nValsWithinBinLimits, nValsBinned, 100.0 * (double)nValsBinned / (double)nValsWithinBinLimits);
+    fprintf(stderr, "Summary of counts: Values read: %12ld\tValues within bin limits: %12ld\tValues binned: %12ld (%6.2lf%% of those within bin limits)\n", nValsRead, nValsWithinBinLimits, nValsBinned, 100.0 * (double)nValsBinned / (double)nValsWithinBinLimits);
 
     freeBinStorage(binStorage, binSizes, binMaxSizes, nMLTs, nQDLats);
 
