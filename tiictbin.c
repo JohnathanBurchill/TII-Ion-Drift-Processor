@@ -52,6 +52,10 @@ int main(int argc, char* argv[])
     snprintf(date, strlen(dateString), "%s", dateString);
 
     bool viyToEastward = false;
+    int32_t qualityFlagMask = 0;
+    bool qualityMaskIsAnd = true;
+
+    int nOptions = 0;
 
     for (int i = 1; i < argc; i++)
     {
@@ -63,30 +67,75 @@ int main(int argc, char* argv[])
             fprintf(stdout, "This is free software, and you are welcome to redistribute it\n");
             fprintf(stdout, "under the terms of the GNU General Public License.\n");
 
-            exit(0);
+            exit(EXIT_SUCCESS);
         }
-        if (strcmp(argv[i], "--viy-to-eastward") == 0)
-            viyToEastward = true;
-
         if (strcmp(argv[i], "--available-statistics") == 0)
         {
             fprintf(stderr, "Available statistics:\n");
             printAvailableStatistics(stderr);
-            exit(1);
+            exit(EXIT_FAILURE);
         }
 
         if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-help") == 0)
         {
             usage(argv[0]);
-            exit(1);
+            exit(EXIT_FAILURE);
         }
+        if (strcmp(argv[i], "--viy-to-eastward") == 0)
+        {
+            nOptions++;
+            viyToEastward = true;
+        }
+        if (strncmp(argv[i], "--qualityflagmask=", 18) == 0)
+        {
+            nOptions++;
+            int base = 10;
+            int sign = 1;
+            size_t offset = 18;
+            size_t len = strlen(argv[i]);
+            if (len < 19)
+            {
+                fprintf(stderr, "Invalid quality flag mask value.\n");
+                exit(EXIT_FAILURE);
+            }
+            if ((argv[i] + offset)[0] == '-')
+            {
+                sign = -1;
+                offset++;
+            }
+            if (len > 20)
+            {
+                if (strncmp(argv[i] + offset, "0b", 2) == 0)
+                {
+                    offset += 2;
+                    base = 2;
+                }
+                else if (strncmp(argv[i] + offset, "0x", 2) == 0)
+                {
+                    offset += 2;
+                    base = 16;
+                }
+            }
+            qualityFlagMask = (int32_t) strtol(argv[i] + offset, (char **)NULL, base);
+            qualityFlagMask *= sign;
+        }
+
+        if (strncmp(argv[i], "--qualityflagmasktype=", 22) == 0)
+        {
+            nOptions++;
+            if (strcmp(argv[i] + 22, "OR") == 0)
+                qualityMaskIsAnd = false;
+            else
+                qualityMaskIsAnd = true;
+        }
+
     }
 
 
-    if (argc < 11 || argc > 14)
+    if (argc != 11 + nOptions)
     {
         usage(argv[0]);
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     const char *directory = argv[1];
     const char *satelliteLetter = argv[2];
@@ -97,7 +146,7 @@ int main(int argc, char* argv[])
         fprintf(stderr, "Invalid statistic '%s'\n", statistic);
         fprintf(stderr, "Must be one of:\n");
         printAvailableStatistics(stderr);
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     float qdlatmin = atof(argv[5]);
@@ -122,12 +171,12 @@ int main(int argc, char* argv[])
     if (deltaqdlat <= 0.0)
     {
         fprintf(stderr, "%s: deltaqdlat must be greater than 0.0\n", argv[0]);
-        exit(0);
+        exit(EXIT_FAILURE);
     }
     if (deltamlt <= 0.0)
     {
         fprintf(stderr, "%s: deltamlt must be greater than 0.0\n", argv[0]);
-        exit(0);
+        exit(EXIT_FAILURE);
     }
 
     int nQDLats = (int)floor((qdlatmax - qdlatmin) / deltaqdlat);
@@ -135,13 +184,46 @@ int main(int argc, char* argv[])
     if (nQDLats <= 0)
     {
         fprintf(stderr, "%s: invalid QD latitude bin specification.\n", argv[0]);
-        exit(0);
+        exit(EXIT_FAILURE);
     }
     if (nMLTs <= 0)
     {
         fprintf(stderr, "%s: invalid MLT bin specification.\n", argv[0]);
-        exit(0);
+        exit(EXIT_FAILURE);
     }
+
+    // Flag mask
+    char *flagParams[4] = {"Vixh", "Vixv", "Viy", "Viz"};
+    if (qualityFlagMask == 0)
+    {
+        fprintf(stderr, "Quality mask: selecting %s irrespective of data quality.\n", parameterName);
+    }
+    else
+    {
+        if (qualityFlagMask > 0)
+            fprintf(stderr, "Quality mask: INCLUDING %s for good values of ", parameterName);
+        else
+            fprintf(stderr, "Quality mask: EXCLUDING %s for good values of ", parameterName);
+
+        int maskBit = 0;
+        int nFlaggedParams = 0;
+        int unsignedMask = abs(qualityFlagMask);
+        for (int b = 0; b < 4; b++)
+        {
+            maskBit = (unsignedMask >> b) & 0x1;
+            if (maskBit)
+            {
+                nFlaggedParams++;
+                if (nFlaggedParams > 1)
+                    fprintf(stderr, "%s", qualityMaskIsAnd ? " AND " : " OR ");
+                fprintf(stderr, "%s", flagParams[b]);
+            }
+        }
+        fprintf(stderr, "\n");                
+
+    }
+
+    uint16_t positiveQualityFlagMask = (uint16_t) abs(qualityFlagMask);
 
     // Allocate memory for binning
     float **binStorage = NULL;
@@ -150,7 +232,7 @@ int main(int argc, char* argv[])
     if (allocateBinStorage(&binStorage, &binSizes, &binMaxSizes, nMLTs, nQDLats, BIN_STORAGE_BLOCK_SIZE))
     {
         fprintf(stderr, "Could not allocate bin storage memory.\n");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     // Access bins with bins[mltIndex * nQDLats + qdlatIndex];
 
@@ -164,7 +246,7 @@ int main(int argc, char* argv[])
     if (dir == NULL)
     {
         fprintf(stdout, "Could not open directory %s for reading.\n", directory);
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     char *filename;
     long nFiles = 0;
@@ -186,7 +268,7 @@ int main(int argc, char* argv[])
     if (dir == NULL)
     {
         fprintf(stdout, "Could not open directory %s for reading.\n", directory);
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     long processedFiles = 0;
     float percentDone = 0.0;
@@ -233,13 +315,26 @@ int main(int argc, char* argv[])
             // The macros TIME(), QDLAT(), etc. give the value at index timeIndex.
             double epoch0 = TIME()/1000.0;
 
-            uint8_t minorVersion = getMinorVersion(filename);
-            // Number of records
-            // Include all measurements for Swarm C, which are set to 0 flag always,
-            // except those for which baseline calibration was not done or was problematic: CALFLAG() == 0
+            bool includeValue = false;
+            uint16_t maskedValue = 0;
+
             for (timeIndex = 0; timeIndex < nRecs; timeIndex++)
             {
-                if (FLAG() == 4 || (satellite == 'C' && minorVersion == 1) || (satellite == 'C' && fourByteCalFlag == true && (CALFLAG() == 0)))
+                uint16_t flag = FLAG();
+                maskedValue = (FLAG() & positiveQualityFlagMask);
+                // Is flag matched by mask?
+                if (positiveQualityFlagMask == 0)
+                    includeValue = true;
+                else if (qualityMaskIsAnd)
+                    includeValue = (maskedValue == positiveQualityFlagMask);
+                else
+                    includeValue = (maskedValue > 0);
+                
+                // Exclude this match?
+                if (qualityFlagMask < 0)
+                    includeValue = !includeValue;
+
+                if (includeValue)
                 {
                     // Access bins with bins[mltIndex * nQDLats + qdlatIndex];
                     if (isfinite(PARAMETER()))
@@ -264,7 +359,7 @@ int main(int argc, char* argv[])
                                 if(adjustBinStorage(binStorage, binMaxSizes, index, BIN_STORAGE_BLOCK_SIZE))
                                 {
                                     fprintf(stderr, "Unable to allocate additional bin storage.\n");
-                                    exit(1);
+                                    exit(EXIT_FAILURE);
                                 }
  
                             }
@@ -291,7 +386,9 @@ int main(int argc, char* argv[])
     float mlt = 0.0;
     float result = 0.0;
     long nVals = 0;
-    fprintf(stdout, "QDLat\tMLT\t%s(%s)\tCount\n", statistic, parameterName);
+    char statExpression[50];
+    snprintf(statExpression, 50, "%s(%s)", statistic, parameterName);
+    fprintf(stdout, "  MLT\t QDLat\t%35s\t       Count\n", statExpression);
 
     for (size_t q = 0; q < nQDLats; q++)
     {
@@ -303,7 +400,7 @@ int main(int argc, char* argv[])
             if (calculateStatistic(statistic, binStorage, binSizes, index, (void*) &result))
                 result = GSL_NAN;
             nVals += binSizes[index];
-            fprintf(stdout, "%.2f\t%.2f\t%.2f\t%ld\n", qdlat, mlt, result, binSizes[index]);
+            fprintf(stdout, "%5.2f\t%6.2f\t%35.2f\t%12ld\n", mlt, qdlat, result, binSizes[index]);
         }
     }
 
@@ -381,17 +478,14 @@ CDFstatus loadCrossTrackData(const char *filename, uint8_t **dataBuffers, long *
         ""
     };
     variables[NUM_DATA_VARIABLES-1] = (char *) parameterName;
-    if (minorVersion == 1)
-    {
-        variables[3] = "flags";
-    }
-    for (uint8_t i = 0; (i<nVars-1) || (i == nVars-1 && minorVersion == 2); i++)
+    for (uint8_t i = 0; i < NUM_DATA_VARIABLES; i++)
     {
         status = CDFconfirmzVarExistence(calCdfId, variables[i]);
         if (status != CDF_OK)
         {
             printErrorMessage(status);
             fprintf(stdout, "%sError reading variable %s. Skipping this file.\n", infoHeader, variables[i]);
+            fflush(stdout);
             closeCdf(calCdfId);
             return status;
         }
@@ -400,7 +494,7 @@ CDFstatus loadCrossTrackData(const char *filename, uint8_t **dataBuffers, long *
     long varNum, numValues, numVarBytes;
     long numBytesPrev, numBytesToAdd, numBytesNew;
 
-    for (uint8_t i = 0; (i<nVars-1) || (i == nVars-1 && minorVersion == 2); i++)
+    for (uint8_t i = 0; i<NUM_DATA_VARIABLES; i++)
     {
         varNum = CDFgetVarNum(calCdfId, variables[i]);
         if (varNum < CDF_OK)
@@ -454,12 +548,15 @@ uint8_t getMinorVersion(const char *filename)
 
 void usage(char *name)
 {
-    fprintf(stdout, "usage: %s directory satelliteLetter parameterName statistic qdlatmin qdlatmax deltaqdlat mltmin mltmax deltamlt [firstDate] [lastDate] [--viy-to-eastward] [--help] [--about]\n", name);
+    fprintf(stdout, "usage: %s directory satelliteLetter parameterName statistic qdlatmin qdlatmax deltaqdlat mltmin mltmax deltamlt [firstDate] [lastDate] [--viy-to-eastward] [--qualityflagmask=mask] [--qualityflagmasktype=type] [--help] [--about]\n", name);
     fprintf(stdout, "Options:\n");
     fprintf(stdout, "\t--help or -h\t\tprints this message.\n");
     fprintf(stdout, "\t--about \t\tdescribes the program, declares license.\n");
     fprintf(stdout, "\t--available-statistics\tprints a list of statistics to calculate. Pass one statistic per call.\n");
     fprintf(stdout, "\t--viy-to-eastward\tflips sign of Viy for descending part of the orbit so that positive ion drift is always eastward.\n");
+    fprintf(stdout, "\t--qualityflagmask=value\tselects (mask > 0) or rejects (mask < 0) measurements with quality flag bitwise-and-matching abs(mask) according to the mask type given by --qualityflagmasktype, e.g., --qualityflagmask=0b0110 or --qualityflagmask=-15\n");
+    fprintf(stdout, "\t--qualityflagmasktype={AND|OR}\tinterpret --qualityflagmask values as bitwise AND or OR\n");
+
 
     return;    
 }

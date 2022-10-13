@@ -33,7 +33,8 @@ static char *availableStatistics[NSTATISTICS] = {
     "StandardDeviation",
     "MedianAbsoluteDeviation",
     "Min",
-    "Max"
+    "Max",
+    "Count"
 };
 
 int allocateBinStorage(float ***bins, size_t **binSizes, size_t **binMaxSizes, size_t nMLTs, size_t nQDLats, size_t sizePerBin)
@@ -151,6 +152,10 @@ int calculateStatistic(const char *statistic, float **bins, size_t *binSizes, si
     else if (strcmp(statistic, "Max")==0)
     {
         *(float*)returnValue = gsl_stats_float_max(bins[mltQdIndex], 1, binSizes[mltQdIndex]);
+    }
+    else if (strcmp(statistic, "Count")==0)
+    {
+        *(float*)returnValue = (float) binSizes[mltQdIndex];
     }
     else
     {
