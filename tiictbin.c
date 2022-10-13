@@ -57,6 +57,8 @@ int main(int argc, char* argv[])
 
     int nOptions = 0;
 
+    bool showFileProgress = true;
+
     for (int i = 1; i < argc; i++)
     {
         if (strcmp(argv[i], "--about") == 0)
@@ -69,24 +71,28 @@ int main(int argc, char* argv[])
 
             exit(EXIT_SUCCESS);
         }
-        if (strcmp(argv[i], "--available-statistics") == 0)
+        else if (strcmp(argv[i], "--available-statistics") == 0)
         {
             fprintf(stderr, "Available statistics:\n");
             printAvailableStatistics(stderr);
             exit(EXIT_FAILURE);
         }
-
-        if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-help") == 0)
+        else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-help") == 0)
         {
             usage(argv[0]);
             exit(EXIT_FAILURE);
         }
-        if (strcmp(argv[i], "--viy-to-eastward") == 0)
+        else if (strcmp(argv[i], "--no-file-progress") == 0)
+        {
+            nOptions++;
+            showFileProgress = false;
+        }
+        else if (strcmp(argv[i], "--viy-to-eastward") == 0)
         {
             nOptions++;
             viyToEastward = true;
         }
-        if (strncmp(argv[i], "--qualityflagmask=", 18) == 0)
+        else if (strncmp(argv[i], "--qualityflagmask=", 18) == 0)
         {
             nOptions++;
             int base = 10;
@@ -119,14 +125,18 @@ int main(int argc, char* argv[])
             qualityFlagMask = (int32_t) strtol(argv[i] + offset, (char **)NULL, base);
             qualityFlagMask *= sign;
         }
-
-        if (strncmp(argv[i], "--qualityflagmasktype=", 22) == 0)
+        else if (strncmp(argv[i], "--qualityflagmasktype=", 22) == 0)
         {
             nOptions++;
             if (strcmp(argv[i] + 22, "OR") == 0)
                 qualityMaskIsAnd = false;
             else
                 qualityMaskIsAnd = true;
+        }
+        else if (strncmp(argv[i], "--", 2) == 0)
+        {
+            fprintf(stderr, "Unknown option %s\n", argv[i]);
+            exit(EXIT_FAILURE);
         }
 
     }
@@ -250,6 +260,11 @@ int main(int argc, char* argv[])
     }
     char *filename;
     long nFiles = 0;
+
+    long nValsRead = 0;
+    long nValsWithinBinLimits = 0;
+    long nValsBinned = 0;
+
     while ((entry = readdir(dir)) != NULL)
     {
         filename = entry->d_name;
@@ -320,6 +335,8 @@ int main(int argc, char* argv[])
 
             for (timeIndex = 0; timeIndex < nRecs; timeIndex++)
             {
+                nValsRead++;
+
                 uint16_t flag = FLAG();
                 maskedValue = (FLAG() & positiveQualityFlagMask);
                 // Is flag matched by mask?
@@ -334,15 +351,17 @@ int main(int argc, char* argv[])
                 if (qualityFlagMask < 0)
                     includeValue = !includeValue;
 
-                if (includeValue)
+                // Access bins with bins[mltIndex * nQDLats + qdlatIndex];
+                if (isfinite(PARAMETER()))
                 {
-                    // Access bins with bins[mltIndex * nQDLats + qdlatIndex];
-                    if (isfinite(PARAMETER()))
+                    mltIndex = (int) floor((MLT() - mltmin) / deltamlt);
+                    qdlatIndex = (int) floor((QDLAT() - qdlatmin) / deltaqdlat);
+                    if (mltIndex >= 0 && mltIndex < nMLTs && qdlatIndex >=0 && qdlatIndex < nQDLats)
                     {
-                        mltIndex = (int) floor((MLT() - mltmin) / deltamlt);
-                        qdlatIndex = (int) floor((QDLAT() - qdlatmin) / deltaqdlat);
-                        if (mltIndex >= 0 && mltIndex < nMLTs && qdlatIndex >=0 && qdlatIndex < nQDLats)
+                        nValsWithinBinLimits++;
+                        if (includeValue)
                         {
+                            nValsBinned++;
                             // TODO handle vector parameters
                             value = PARAMETER();
                             if (viyToEastward)
@@ -361,7 +380,7 @@ int main(int argc, char* argv[])
                                     fprintf(stderr, "Unable to allocate additional bin storage.\n");
                                     exit(EXIT_FAILURE);
                                 }
- 
+
                             }
                             binStorage[index][binSizes[index]] = value;
                             binSizes[index]++;
@@ -376,16 +395,18 @@ int main(int argc, char* argv[])
                 free(dataBuffers[i]);
             }
             processedFiles++;
-            percentDone = (float)processedFiles / (float)nFiles * 100.0;
-            if (processedFiles % percentCheck == 0)
-                fprintf(stderr, "Processed %ld of %ld files (%3.0f%%)\n", processedFiles, nFiles, percentDone);
+            if (showFileProgress)
+            {
+                percentDone = (float)processedFiles / (float)nFiles * 100.0;
+                if (processedFiles % percentCheck == 0)
+                    fprintf(stderr, "Processed %ld of %ld files (%3.0f%%)\n", processedFiles, nFiles, percentDone);
+            }
         }
     }
  
     float qdlat = 0.0;
     float mlt = 0.0;
     float result = 0.0;
-    long nVals = 0;
     char statExpression[50];
     snprintf(statExpression, 50, "%s(%s)", statistic, parameterName);
     fprintf(stdout, "  MLT\t QDLat\t%35s\t       Count\n", statExpression);
@@ -399,12 +420,11 @@ int main(int argc, char* argv[])
             mlt = mltmin + deltamlt* ((float)m + 0.5);
             if (calculateStatistic(statistic, binStorage, binSizes, index, (void*) &result))
                 result = GSL_NAN;
-            nVals += binSizes[index];
             fprintf(stdout, "%5.2f\t%6.2f\t%35.2f\t%12ld\n", mlt, qdlat, result, binSizes[index]);
         }
     }
 
-    fprintf(stderr, "%ld values binned.\n", nVals);
+    fprintf(stderr, "Values read: %12ld\tValues within bin limits: %12ld\tValues binned: %12ld (%6.2lf%% of those within bin limits)\n", nValsRead, nValsWithinBinLimits, nValsBinned, 100.0 * (double)nValsBinned / (double)nValsWithinBinLimits);
 
     freeBinStorage(binStorage, binSizes, binMaxSizes, nMLTs, nQDLats);
 
@@ -548,7 +568,7 @@ uint8_t getMinorVersion(const char *filename)
 
 void usage(char *name)
 {
-    fprintf(stdout, "usage: %s directory satelliteLetter parameterName statistic qdlatmin qdlatmax deltaqdlat mltmin mltmax deltamlt [firstDate] [lastDate] [--viy-to-eastward] [--qualityflagmask=mask] [--qualityflagmasktype=type] [--help] [--about]\n", name);
+    fprintf(stdout, "usage: %s directory satelliteLetter parameterName statistic qdlatmin qdlatmax deltaqdlat mltmin mltmax deltamlt [firstDate] [lastDate] [--viy-to-eastward] [--qualityflagmask=mask] [--qualityflagmasktype=type] [--no-file-progress] [--help] [--about]\n", name);
     fprintf(stdout, "Options:\n");
     fprintf(stdout, "\t--help or -h\t\tprints this message.\n");
     fprintf(stdout, "\t--about \t\tdescribes the program, declares license.\n");
@@ -556,7 +576,7 @@ void usage(char *name)
     fprintf(stdout, "\t--viy-to-eastward\tflips sign of Viy for descending part of the orbit so that positive ion drift is always eastward.\n");
     fprintf(stdout, "\t--qualityflagmask=value\tselects (mask > 0) or rejects (mask < 0) measurements with quality flag bitwise-and-matching abs(mask) according to the mask type given by --qualityflagmasktype, e.g., --qualityflagmask=0b0110 or --qualityflagmask=-15\n");
     fprintf(stdout, "\t--qualityflagmasktype={AND|OR}\tinterpret --qualityflagmask values as bitwise AND or OR\n");
-
+    fprintf(stdout, "\t--no-file-progress\tdo not print progress of files being processed\n");
 
     return;    
 }
