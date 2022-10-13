@@ -307,10 +307,6 @@ int main(int argc, char* argv[])
     int percentCheck = (int) ceil(0.1 * (float)nFiles);
     float value = 0.0;
 
-    fprintf(stdout, "Time range is inclusive. Bin specification for remaining quantities x and bin boundaries x1 and x2: x1 <= x < x2\n");
-    fprintf(stdout, "Row legend:\n");
-    fprintf(stdout, "firstDate lastDate MLT1 MLT2 QDLat1 QDLat2 %s(%s) binCount validRegionFraction totalReadFraction\n", statistic, parameterName);
-
     size_t index = 0;
     while ((entry = readdir(dir)) != NULL)
     {
@@ -431,6 +427,10 @@ int main(int argc, char* argv[])
     float mlt2 = 0.0;
     float result = 0.0;
 
+    fprintf(stdout, "Time range is inclusive. Bin specification for remaining quantities x and bin boundaries x1 and x2: x1 <= x < x2\n");
+    fprintf(stdout, "Row legend:\n");
+    fprintf(stdout, "firstDate lastDate MLT1 MLT2 QDLat1 QDLat2 %s(%s) binCount validRegionFraction totalReadFraction\n", statistic, parameterName);
+
     for (size_t q = 0; q < nQDLats; q++)
     {
         for (size_t m = 0; m < nMLTs; m++)
@@ -446,7 +446,8 @@ int main(int argc, char* argv[])
         }
     }
 
-    fprintf(stderr, "Summary of counts: Values read: %12ld\tValues within bin limits: %12ld\tValues binned: %12ld (%6.2lf%% of those within bin limits)\n", nValsRead, nValsWithinBinLimits, nValsBinned, 100.0 * (double)nValsBinned / (double)nValsWithinBinLimits);
+    fprintf(stderr, "Summary of counts\n");
+    fprintf(stderr, "\tValues read: %ld; Values within bin limits: %ld; Values binned: %ld (%6.2lf%% of those within bin limits)\n", nValsRead, nValsWithinBinLimits, nValsBinned, 100.0 * (double)nValsBinned / (double)nValsWithinBinLimits);
 
     freeBinStorage(binStorage, binSizes, binMaxSizes, nMLTs, nQDLats);
 
