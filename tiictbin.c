@@ -206,20 +206,20 @@ int main(int argc, char* argv[])
         exit(EXIT_FAILURE);
     }
 
-    fprintf(stderr, "Analyzing Swarm %s files between %s and %s\n", satelliteLetter, firstDate, lastDate);
+    fprintf(stdout, "Analyzing Swarm %s files between %s and %s\n", satelliteLetter, firstDate, lastDate);
 
     // Flag mask
     char *flagParams[4] = {"Vixh", "Vixv", "Viy", "Viz"};
     if (qualityFlagMask == 0)
     {
-        fprintf(stderr, "Quality mask: selecting %s irrespective of data quality.\n", parameterName);
+        fprintf(stdout, "Quality mask: selecting %s irrespective of data quality.\n", parameterName);
     }
     else
     {
         if (qualityFlagMask > 0)
-            fprintf(stderr, "Quality mask: INCLUDING %s for good values of ", parameterName);
+            fprintf(stdout, "Quality mask: INCLUDING %s for good values of ", parameterName);
         else
-            fprintf(stderr, "Quality mask: EXCLUDING %s for good values of ", parameterName);
+            fprintf(stdout, "Quality mask: EXCLUDING %s for good values of ", parameterName);
 
         int maskBit = 0;
         int nFlaggedParams = 0;
@@ -435,8 +435,8 @@ int main(int argc, char* argv[])
         }
     }
 
-    fprintf(stderr, "Summary of counts\n");
-    fprintf(stderr, "\tValues read: %ld; Values within bin limits: %ld; Values binned: %ld (%6.2lf%% of those within bin limits)\n", nValsRead, nValsWithinBinLimits, nValsBinned, 100.0 * (double)nValsBinned / (double)nValsWithinBinLimits);
+    fprintf(stdout, "Summary of counts\n");
+    fprintf(stdout, "\tValues read: %ld; Values within bin limits: %ld; Values binned: %ld (%6.2lf%% of those within bin limits)\n", nValsRead, nValsWithinBinLimits, nValsBinned, 100.0 * (double)nValsBinned / (double)nValsWithinBinLimits);
 
     freeBinStorage(binStorage, binSizes, binMaxSizes, nMLTs, nQDLats);
 
