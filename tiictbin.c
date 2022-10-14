@@ -80,8 +80,8 @@ int main(int argc, char* argv[])
         }
         else if (strcmp(argv[i], "--available-statistics") == 0)
         {
-            fprintf(stderr, "Available statistics:\n");
-            printAvailableStatistics(stderr);
+            fprintf(stdout, "Available statistics:\n");
+            printAvailableStatistics(stdout);
             exit(EXIT_FAILURE);
         }
         else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-help") == 0)
@@ -231,11 +231,11 @@ int main(int argc, char* argv[])
             {
                 nFlaggedParams++;
                 if (nFlaggedParams > 1)
-                    fprintf(stderr, "%s", qualityMaskIsAnd ? " AND " : " OR ");
-                fprintf(stderr, "%s", flagParams[b]);
+                    fprintf(stdout, "%s", qualityMaskIsAnd ? " AND " : " OR ");
+                fprintf(stdout, "%s", flagParams[b]);
             }
         }
-        fprintf(stderr, "\n");                
+        fprintf(stdout, "\n");                
 
     }
 
@@ -244,8 +244,9 @@ int main(int argc, char* argv[])
     // Allocate memory for binning
     float **binStorage = NULL;
     size_t *binSizes = NULL;
+    size_t *binValidSizes = NULL;
     size_t *binMaxSizes = NULL;
-    if (allocateBinStorage(&binStorage, &binSizes, &binMaxSizes, nMLTs, nQDLats, BIN_STORAGE_BLOCK_SIZE))
+    if (allocateBinStorage(&binStorage, &binSizes, &binValidSizes, &binMaxSizes, nMLTs, nQDLats, BIN_STORAGE_BLOCK_SIZE))
     {
         fprintf(stderr, "Could not allocate bin storage memory.\n");
         exit(EXIT_FAILURE);
@@ -293,7 +294,7 @@ int main(int argc, char* argv[])
     }
     long processedFiles = 0;
     float percentDone = 0.0;
-    int percentCheck = (int) ceil(0.1 * (float)nFiles);
+    int percentCheck = (int) ceil(0.01 * (float)nFiles);
     float value = 0.0;
 
     size_t index = 0;
@@ -364,10 +365,13 @@ int main(int argc, char* argv[])
                     qdlatIndex = (int) floor((QDLAT() - qdlatmin) / deltaqdlat);
                     if (mltIndex >= 0 && mltIndex < nMLTs && qdlatIndex >=0 && qdlatIndex < nQDLats)
                     {
+                        index = mltIndex * nQDLats + qdlatIndex;
+                        // Measurement lies within a QDLat and MLT bin
+                        binValidSizes[index]++;
                         nValsWithinBinLimits++;
+
                         if (includeValue)
                         {
-                            nValsBinned++;
                             // TODO handle vector parameters
                             value = PARAMETER();
                             if (viyToEastward)
@@ -378,7 +382,6 @@ int main(int argc, char* argv[])
                                     value = -value;
                                 }
                             }
-                            index = mltIndex * nQDLats + qdlatIndex;
                             if (binSizes[index] >= binMaxSizes[index])
                             {
                                 if(adjustBinStorage(binStorage, binMaxSizes, index, BIN_STORAGE_BLOCK_SIZE))
@@ -390,6 +393,7 @@ int main(int argc, char* argv[])
                             }
                             binStorage[index][binSizes[index]] = value;
                             binSizes[index]++;
+                            nValsBinned++;
                         }
                     }
                 }
@@ -405,11 +409,14 @@ int main(int argc, char* argv[])
             {
                 percentDone = (float)processedFiles / (float)nFiles * 100.0;
                 if (processedFiles % percentCheck == 0)
-                    fprintf(stderr, "Processed %ld of %ld files (%3.0f%%)\n", processedFiles, nFiles, percentDone);
+                    fprintf(stderr, "\rProcessed %ld of %ld files (%3.0f%%)", processedFiles, nFiles, percentDone);
             }
         }
     }
- 
+
+    if (showFileProgress)
+        fprintf(stderr, "\r\n");
+
     float qdlat1 = 0.0;
     float qdlat2 = 0.0;
     float mlt1 = 0.0;
@@ -419,6 +426,9 @@ int main(int argc, char* argv[])
     fprintf(stdout, "Time range is inclusive. Bin specification for remaining quantities x and bin boundaries x1 and x2: x1 <= x < x2\n");
     fprintf(stdout, "Row legend:\n");
     fprintf(stdout, "firstDate lastDate MLT1 MLT2 QDLat1 QDLat2 %s(%s) binCount validRegionFraction totalReadFraction\n", statistic, parameterName);
+
+    float denomBinValidSizes = 0.0;
+    float denomNValsRead = nValsRead > 0 ? (float) nValsRead : 1.0;
 
     for (size_t q = 0; q < nQDLats; q++)
     {
@@ -431,14 +441,17 @@ int main(int argc, char* argv[])
             mlt2 = mlt1 + deltamlt;
             if (calculateStatistic(statistic, binStorage, binSizes, index, (void*) &result))
                 result = GSL_NAN;
-            fprintf(stdout, "%8s %8s %5.2f %5.2f %6.2f %6.2f %f %ld %f %f\n", firstDate, lastDate, mlt1, mlt2, qdlat1, qdlat2, result, binSizes[index], (float)binSizes[index] / (float) nValsWithinBinLimits, (float)binSizes[index] / (float)nValsRead);
+
+            denomBinValidSizes = binValidSizes[index] > 0 ? (float) binValidSizes[index] : 1.0;
+
+            fprintf(stdout, "%8s %8s %5.2f %5.2f %6.2f %6.2f %f %ld %f %f\n", firstDate, lastDate, mlt1, mlt2, qdlat1, qdlat2, result, binSizes[index], (float)binSizes[index] / denomBinValidSizes, (float)binSizes[index] / denomNValsRead);
         }
     }
 
     fprintf(stdout, "Summary of counts\n");
     fprintf(stdout, "\tValues read: %ld; Values within bin limits: %ld; Values binned: %ld (%6.2lf%% of those within bin limits)\n", nValsRead, nValsWithinBinLimits, nValsBinned, 100.0 * (double)nValsBinned / (double)nValsWithinBinLimits);
 
-    freeBinStorage(binStorage, binSizes, binMaxSizes, nMLTs, nQDLats);
+    freeBinStorage(binStorage, binSizes, binValidSizes, binMaxSizes, nMLTs, nQDLats);
 
     closedir(dir);
 

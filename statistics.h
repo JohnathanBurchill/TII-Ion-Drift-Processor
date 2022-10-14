@@ -38,11 +38,11 @@ enum STATISTICS_STATUS
     STATISTICS_UNSUPPORTED_STATISTIC    
 };
 
-int allocateBinStorage(float ***bins, size_t **binSizes, size_t **binMaxSizes, size_t nMLTs, size_t nQDLats, size_t sizePerBin);
+int allocateBinStorage(float ***bins, size_t **binSizes, size_t **binValidSizes, size_t **binMaxSizes, size_t nMLTs, size_t nQDLats, size_t sizePerBin);
 
 int adjustBinStorage(float **bins, size_t *binMaxSizes, int mltQdLatIndex, long numberOfElementsToAdd);
 
-void freeBinStorage(float **bins, size_t *binSizes, size_t *binMaxSizes, int nMLTs, int nQDLats);
+void freeBinStorage(float **bins, size_t *binSizes, size_t *binValidSizes, size_t *binMaxSizes, int nMLTs, int nQDLats);
 
 void printAvailableStatistics(FILE *dest);
 bool validStatistic(const char *statistic);
