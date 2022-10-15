@@ -28,7 +28,7 @@
 #define SECONDS_OF_BOUNDARY_DATA_REQUIRED_FOR_PROCESSING 1500 // 25 minutes to ensure coverage of each fit region
 
 #define ELECTRIC_CHARGE_OPLUS 1.602e-19
-#define MASS_OPLUS 2.67e-26
+#define MASS_OPLUS 2.66e-26
 
 #define FLAGS_MAXIMUM_DRIFT_VALUE_HIGH_LATITUDE 8000.0 // 8 km/s maximum drift for flagging
 #define FLAGS_MAXIMUM_DRIFT_VALUE_LOW_LATITUDE 500.0 // 0.5 km/s maximum drift for flagging
