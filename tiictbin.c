@@ -593,11 +593,13 @@ uint8_t getMinorVersion(const char *filename)
 
 void usage(char *name)
 {
-    fprintf(stdout, "usage: %s directory satelliteLetter parameterName statistic qdlatmin qdlatmax deltaqdlat mltmin mltmax deltamlt [firstDate] [lastDate] [--viy-to-eastward] [--quality-flag-mask=mask] [--quality-flag-mask-type=type] [--no-file-progress] [--help] [--about]\n", name);
+    fprintf(stdout, "usage: %s directory satelliteLetter parameterName statistic qdlatmin qdlatmax deltaqdlat mltmin mltmax deltamlt [--first-date=yyyymmdd] [--last-date=yyyymmdd] [--viy-to-eastward] [--quality-flag-mask=mask] [--quality-flag-mask-type=type] [--no-file-progress] [--help] [--about]\n", name);
     fprintf(stdout, "Options:\n");
     fprintf(stdout, "\t--help or -h\t\tprints this message.\n");
     fprintf(stdout, "\t--about \t\tdescribes the program, declares license.\n");
     fprintf(stdout, "\t--available-statistics\tprints a list of statistics to calculate. Pass one statistic per call.\n");
+    fprintf(stdout, "\t--first-date=yyyymmdd\tFirst date to include in statistics.\n");
+    fprintf(stdout, "\t--last-date=yyyymmdd\tLast date to include in statistics.\n");
     fprintf(stdout, "\t--viy-to-eastward\tflips sign of Viy for descending part of the orbit so that positive ion drift is always eastward.\n");
     fprintf(stdout, "\t--quality-flag-mask=value\tselects (mask > 0) or rejects (mask < 0) measurements with quality flag bitwise-and-matching abs(mask) according to the mask type given by --quality-flag-mask-type, e.g., --quality-flag-mask=0b0110 or --quality-flag-mask=-15\n");
     fprintf(stdout, "\t--quality-flag-mask-type={AND|OR}\tinterpret --qualityflagmask values as bitwise AND or OR\n");
