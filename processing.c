@@ -61,6 +61,7 @@ int initQualityData(ProcessorState *state)
         state->viErrors[4*ind+2] = DEFAULT_VI_ERROR;
         state->viErrors[4*ind+3] = DEFAULT_VI_ERROR;
         state->flags[ind] = 0;
+        state->calibrationFlags[ind] = 0;
         // CALIBRATION_FLAGS_OFFSET_NOT_REMOVED = 1 and CALIBRATION_FLAGS_INCOMPLETE_REGION = 1 are the defaults for calibrationFlags
         // Set for each velocity component
         for (uint8_t k = 0; k < 4; k++)
@@ -682,8 +683,7 @@ void updateDataQualityFlags(ProcessorState *state, uint8_t sensorIndex, uint8_t 
     // TRACIS_FLAG_MEASLES_ANOMALY = 1 << 4,
     // TRACIS_FLAG_BIFURCATION_ANOMALY = 1 << 5
     // bool imageOK = (imageFlags[timeIndex] & 0b00111111) == 0;
-    bool imageOK = (imageFlags[timeIndex] & 0b00111001) == 0;
-
+    bool imageOK = (imageFlags[timeIndex] & 0b00110001) == 0;
 
     // Use Table 3-3 of EXTD LP release notes to determine if High Gain probe Ni and VSc are usable. Zero-order interpolated at TII times from LP quality flag
     uint32_t lpFlag = state->lpFlagbits[timeIndex];
