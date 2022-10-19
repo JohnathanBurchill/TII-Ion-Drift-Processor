@@ -484,7 +484,7 @@ void loadTracisDataFromDate(const DayType dayType, ProcessorState *state)
     const char* variables[] = {
         "Timestamp",            // index 0
         "Image_anomaly_flags_H",// 1
-        "Image_anomaly_flags_H" // 2
+        "Image_anomaly_flags_V" // 2
         };
 
     loadCdf(dayType, state->tracisFileNames[dayType + 1], variables, NUM_TRACIS_VARIABLES, state, 1.0/256.0, state->tracisDataBuffers, &state->nTracisRecs, &state->tracisMemoryAllocated);
