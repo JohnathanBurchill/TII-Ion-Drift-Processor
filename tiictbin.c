@@ -51,7 +51,7 @@ int main(int argc, char* argv[])
     char date[255];
     snprintf(date, strlen(dateString), "%s", dateString);
 
-    bool viyToEastward = false;
+    bool flipParamWhenDescending = false;
     int32_t qualityFlagMask = 0;
     bool qualityMaskIsAnd = true;
 
@@ -114,10 +114,10 @@ int main(int argc, char* argv[])
             nOptions++;
             showFileProgress = false;
         }
-        else if (strcmp(argv[i], "--viy-to-eastward") == 0)
+        else if (strcmp(argv[i], "--flip-when-descending") == 0)
         {
             nOptions++;
-            viyToEastward = true;
+            flipParamWhenDescending = true;
         }
         else if (strncmp(argv[i], "--quality-flag-mask=", 20) == 0)
         {
@@ -374,9 +374,9 @@ int main(int argc, char* argv[])
                         {
                             // TODO handle vector parameters
                             value = PARAMETER();
-                            if (viyToEastward)
+                            if (flipParamWhenDescending)
                             {
-                                // Flip sign of Viy to make positive viy always eastward as requested 
+                                // Flip sign of parameter when moving southward, i.e. to make Viy eastward and Vixh or Vixv northward 
                                 if (VSATN() < 0)
                                 {
                                     value = -value;
@@ -593,14 +593,14 @@ uint8_t getMinorVersion(const char *filename)
 
 void usage(char *name)
 {
-    fprintf(stdout, "usage: %s directory satelliteLetter parameterName statistic qdlatmin qdlatmax deltaqdlat mltmin mltmax deltamlt [--first-date=yyyymmdd] [--last-date=yyyymmdd] [--viy-to-eastward] [--quality-flag-mask=mask] [--quality-flag-mask-type=type] [--no-file-progress] [--help] [--about]\n", name);
+    fprintf(stdout, "usage: %s directory satelliteLetter parameterName statistic qdlatmin qdlatmax deltaqdlat mltmin mltmax deltamlt [--first-date=yyyymmdd] [--last-date=yyyymmdd] [--flip-when-descending] [--quality-flag-mask=mask] [--quality-flag-mask-type=type] [--no-file-progress] [--help] [--about]\n", name);
     fprintf(stdout, "Options:\n");
     fprintf(stdout, "\t--help or -h\t\tprints this message.\n");
     fprintf(stdout, "\t--about \t\tdescribes the program, declares license.\n");
     fprintf(stdout, "\t--available-statistics\tprints a list of statistics to calculate. Pass one statistic per call.\n");
     fprintf(stdout, "\t--first-date=yyyymmdd\tFirst date to include in statistics.\n");
     fprintf(stdout, "\t--last-date=yyyymmdd\tLast date to include in statistics.\n");
-    fprintf(stdout, "\t--viy-to-eastward\tflips sign of Viy for descending part of the orbit so that positive ion drift is always eastward.\n");
+    fprintf(stdout, "\t--flip-when-descending\tflips sign of Viy for descending part of the orbit so that positive ion drift is always eastward.\n");
     fprintf(stdout, "\t--quality-flag-mask=value\tselects (mask > 0) or rejects (mask < 0) measurements with quality flag bitwise-and-matching abs(mask) according to the mask type given by --quality-flag-mask-type, e.g., --quality-flag-mask=0b0110 or --quality-flag-mask=-15\n");
     fprintf(stdout, "\t--quality-flag-mask-type={AND|OR}\tinterpret --qualityflagmask values as bitwise AND or OR\n");
     fprintf(stdout, "\t--no-file-progress\tdo not print progress of files being processed\n");
