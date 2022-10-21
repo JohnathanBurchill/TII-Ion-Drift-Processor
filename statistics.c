@@ -37,22 +37,22 @@ static char *availableStatistics[NSTATISTICS] = {
     "Count"
 };
 
-int allocateBinStorage(float ***bins, size_t **binSizes, size_t **binValidSizes, size_t **binMaxSizes, size_t nMLTs, size_t nQDLats, size_t sizePerBin)
+int allocateBinStorage(float ***bins, size_t **binSizes, size_t **binValidSizes, size_t **binMaxSizes, size_t nBins, size_t sizePerBin, bool useEqualArea)
 {
-    *bins = (float **) malloc(nMLTs * nQDLats * sizeof(float **));
-    *binSizes = (size_t *) malloc(nMLTs * nQDLats * sizeof(size_t));
-    *binValidSizes = (size_t *) malloc(nMLTs * nQDLats * sizeof(size_t));
-    *binMaxSizes = (size_t *) malloc(nMLTs * nQDLats * sizeof(size_t));
+    *bins = (float **) malloc(nBins * sizeof(float **));
+    *binSizes = (size_t *) malloc(nBins * sizeof(size_t));
+    *binValidSizes = (size_t *) malloc(nBins * sizeof(size_t));
+    *binMaxSizes = (size_t *) malloc(nBins * sizeof(size_t));
     if (*bins == NULL || *binSizes == NULL || *binValidSizes == NULL || *binMaxSizes == NULL)
         return STATISTICS_MEM;
-    for (size_t i = 0; i < nMLTs * nQDLats; i++)
+    for (size_t i = 0; i < nBins; i++)
     {
         (*bins)[i] = NULL;
         (*binSizes)[i] = 0;
         (*binValidSizes)[i] = 0;
         (*binMaxSizes)[i] = 0;
     }
-    for (size_t i = 0; i < nMLTs * nQDLats; i++)
+    for (size_t i = 0; i < nBins; i++)
     {
         (*bins)[i] = (float*)malloc((size_t)(sizePerBin * sizeof(float)));
         if ((*bins)[i] == NULL)
@@ -75,9 +75,9 @@ int adjustBinStorage(float **bins, size_t *binMaxSizes, int mltQdLatIndex, long 
     return STATISTICS_OK;
 }
 
-void freeBinStorage(float **bins, size_t *binSizes, size_t *binValidSizes, size_t *binMaxSizes, int nMLTs, int nQDLats)
+void freeBinStorage(float **bins, size_t *binSizes, size_t *binValidSizes, size_t *binMaxSizes, size_t nBins)
 {
-    for (int i = 0; i < nMLTs * nQDLats; i++)
+    for (int i = 0; i < nBins; i++)
     {
         free(bins[i]);
     }

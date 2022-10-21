@@ -41,6 +41,17 @@
 
 char infoHeader[50];
 
+static inline float solidAngle(float lat1, float lat2, float mlt1, float mlt2)
+{
+    // lat2 is more northward than lat1
+    return (mlt2 - mlt1) * (cosf((90.0 - lat2) * M_PI / 180.0) - cosf((90.0 - lat1) * M_PI / 180.0));
+}
+
+static inline int nRingBins(float ringSolidAngle, float solidAngleUnit)
+{
+    return (int) fabsf(roundf(ringSolidAngle / solidAngleUnit));
+} 
+
 int main(int argc, char* argv[])
 {
     time_t currentTime;
@@ -65,6 +76,8 @@ int main(int argc, char* argv[])
     time_t today = time(NULL);
     timeParts = gmtime(&today);
     sprintf(lastDate, "%4d%02d%02d", timeParts->tm_year + 1900, timeParts->tm_mon + 1, timeParts->tm_mday);
+
+    bool useEqualArea = false;
     
     for (int i = 1; i < argc; i++)
     {
@@ -113,6 +126,11 @@ int main(int argc, char* argv[])
         {
             nOptions++;
             showFileProgress = false;
+        }
+        else if (strcmp(argv[i], "--equal-area-bins") == 0)
+        {
+            nOptions++;
+            useEqualArea = true;
         }
         else if (strcmp(argv[i], "--flip-when-descending") == 0)
         {
@@ -200,7 +218,7 @@ int main(int argc, char* argv[])
         fprintf(stderr, "%s: invalid QD latitude bin specification.\n", argv[0]);
         exit(EXIT_FAILURE);
     }
-    if (nMLTs <= 0)
+    if (nMLTs <= 0 && !useEqualArea)
     {
         fprintf(stderr, "%s: invalid MLT bin specification.\n", argv[0]);
         exit(EXIT_FAILURE);
@@ -246,7 +264,42 @@ int main(int argc, char* argv[])
     size_t *binSizes = NULL;
     size_t *binValidSizes = NULL;
     size_t *binMaxSizes = NULL;
-    if (allocateBinStorage(&binStorage, &binSizes, &binValidSizes, &binMaxSizes, nMLTs, nQDLats, BIN_STORAGE_BLOCK_SIZE))
+
+    size_t nBins = 0;
+
+    printf("nQDLatS: %d\n", nQDLats);
+
+    int *nMltsVsLatitude = (int*) calloc(nQDLats, sizeof(int));
+    int *cumulativeMltsVsLatitude = (int*) calloc(nQDLats, sizeof(int)); 
+    if (nMltsVsLatitude == NULL || cumulativeMltsVsLatitude == NULL)
+    {
+        fprintf(stderr, "Unable to allocate memory for nMltsVsLatitude[].\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // Approximate bin area
+    // Will adjust deltaMlt to get bin areas closest to this
+    float solidAngleUnit = solidAngle(90.0 - deltaqdlat, 90.0, mltmin, mltmax) / (float)nMLTs;
+    float ringSolidAngle = 0.0;
+
+    float lat = 0.0;
+    // q = 0 is middle of lowest latitude bin
+    cumulativeMltsVsLatitude[0] = 0;
+    for (int q = 0; q < nQDLats; q++)
+    {
+        if (!useEqualArea)
+            nMltsVsLatitude[q] = nMLTs;
+        else
+        {
+            ringSolidAngle = solidAngle(qdlatmin + q * deltaqdlat, qdlatmin + (q+1) * deltaqdlat, mltmin, mltmax);
+            nMltsVsLatitude[q] = nRingBins(ringSolidAngle, solidAngleUnit);
+        }        
+        nBins += nMltsVsLatitude[q];
+        if (q > 0)
+            cumulativeMltsVsLatitude[q] = cumulativeMltsVsLatitude[q-1] + nMltsVsLatitude[q - 1];
+    }
+
+    if (allocateBinStorage(&binStorage, &binSizes, &binValidSizes, &binMaxSizes, nBins, BIN_STORAGE_BLOCK_SIZE, useEqualArea))
     {
         fprintf(stderr, "Could not allocate bin storage memory.\n");
         exit(EXIT_FAILURE);
@@ -328,9 +381,8 @@ int main(int argc, char* argv[])
             bool fourByteCalFlag = false;
             status = loadCrossTrackData(fullPath, dataBuffers, &nRecs, &fourByteCalFlag, parameterName);
             if (status != CDF_OK)
-            {
                 continue;
-            }
+
             double *pEpoch = (double*) dataBuffers[0];
             long long timeIndex = 0;
 
@@ -361,11 +413,14 @@ int main(int argc, char* argv[])
                 // Access bins with bins[mltIndex * nQDLats + qdlatIndex];
                 if (isfinite(PARAMETER()))
                 {
-                    mltIndex = (int) floor((MLT() - mltmin) / deltamlt);
                     qdlatIndex = (int) floor((QDLAT() - qdlatmin) / deltaqdlat);
-                    if (mltIndex >= 0 && mltIndex < nMLTs && qdlatIndex >=0 && qdlatIndex < nQDLats)
+                    if (qdlatIndex < 0 || qdlatIndex >= nQDLats)
+                        continue;
+                    deltamlt = (mltmax - mltmin) / (float)nMltsVsLatitude[qdlatIndex];
+                    mltIndex = (int) floor((MLT() - mltmin) / deltamlt);
+                    if (mltIndex >= 0 && mltIndex < nMltsVsLatitude[qdlatIndex])
                     {
-                        index = mltIndex * nQDLats + qdlatIndex;
+                        index = cumulativeMltsVsLatitude[qdlatIndex] + mltIndex;
                         // Measurement lies within a QDLat and MLT bin
                         binValidSizes[index]++;
                         nValsWithinBinLimits++;
@@ -374,14 +429,10 @@ int main(int argc, char* argv[])
                         {
                             // TODO handle vector parameters
                             value = PARAMETER();
-                            if (flipParamWhenDescending)
-                            {
-                                // Flip sign of parameter when moving southward, i.e. to make Viy eastward and Vixh or Vixv northward 
-                                if (VSATN() < 0)
-                                {
-                                    value = -value;
-                                }
-                            }
+                            // Flip sign of parameter when moving southward, i.e. to make Viy eastward and Vixh or Vixv northward
+                            if (flipParamWhenDescending && VSATN() < 0.0)
+                                value = -value;
+
                             if (binSizes[index] >= binMaxSizes[index])
                             {
                                 if(adjustBinStorage(binStorage, binMaxSizes, index, BIN_STORAGE_BLOCK_SIZE))
@@ -432,12 +483,13 @@ int main(int argc, char* argv[])
 
     for (size_t q = 0; q < nQDLats; q++)
     {
-        for (size_t m = 0; m < nMLTs; m++)
+        for (size_t m = 0; m < nMltsVsLatitude[q]; m++)
         {
-            index = m * nQDLats + q;
+            index = cumulativeMltsVsLatitude[q] + m;
             qdlat1 = qdlatmin + deltaqdlat * ((float)q);
             qdlat2 = qdlat1 + deltaqdlat;
-            mlt1 = mltmin + deltamlt* ((float)m);
+            deltamlt = (mltmax - mltmin) / (float)nMltsVsLatitude[q];
+            mlt1 = mltmin + deltamlt * (float)m;
             mlt2 = mlt1 + deltamlt;
             if (calculateStatistic(statistic, binStorage, binSizes, index, (void*) &result))
                 result = GSL_NAN;
@@ -451,7 +503,11 @@ int main(int argc, char* argv[])
     fprintf(stdout, "Summary of counts\n");
     fprintf(stdout, "\tValues read: %ld; Values within bin limits: %ld; Values binned: %ld (%6.2lf%% of those within bin limits)\n", nValsRead, nValsWithinBinLimits, nValsBinned, 100.0 * (double)nValsBinned / (double)nValsWithinBinLimits);
 
-    freeBinStorage(binStorage, binSizes, binValidSizes, binMaxSizes, nMLTs, nQDLats);
+    freeBinStorage(binStorage, binSizes, binValidSizes, binMaxSizes, nBins);
+    if (nMltsVsLatitude != NULL)
+        free(nMltsVsLatitude);
+    if (cumulativeMltsVsLatitude != NULL)
+        free(cumulativeMltsVsLatitude);
 
     closedir(dir);
 
@@ -593,7 +649,7 @@ uint8_t getMinorVersion(const char *filename)
 
 void usage(char *name)
 {
-    fprintf(stdout, "usage: %s directory satelliteLetter parameterName statistic qdlatmin qdlatmax deltaqdlat mltmin mltmax deltamlt [--first-date=yyyymmdd] [--last-date=yyyymmdd] [--flip-when-descending] [--quality-flag-mask=mask] [--quality-flag-mask-type=type] [--no-file-progress] [--help] [--about]\n", name);
+    fprintf(stdout, "usage: %s directory satelliteLetter parameterName statistic qdlatmin qdlatmax deltaqdlat mltmin mltmax deltamlt [--first-date=yyyymmdd] [--last-date=yyyymmdd] [--equal-area-bins] [--flip-when-descending] [--quality-flag-mask=mask] [--quality-flag-mask-type=type] [--no-file-progress] [--help] [--about]\n", name);
     fprintf(stdout, "Options:\n");
     fprintf(stdout, "\t--help or -h\t\tprints this message.\n");
     fprintf(stdout, "\t--about \t\tdescribes the program, declares license.\n");
@@ -604,6 +660,9 @@ void usage(char *name)
     fprintf(stdout, "\t--quality-flag-mask=value\tselects (mask > 0) or rejects (mask < 0) measurements with quality flag bitwise-and-matching abs(mask) according to the mask type given by --quality-flag-mask-type, e.g., --quality-flag-mask=0b0110 or --quality-flag-mask=-15\n");
     fprintf(stdout, "\t--quality-flag-mask-type={AND|OR}\tinterpret --qualityflagmask values as bitwise AND or OR\n");
     fprintf(stdout, "\t--no-file-progress\tdo not print progress of files being processed\n");
+    fprintf(stdout, "\t--equal-area-bins\tgenerate an equal-area grid centered on the magnetic pole. In this case deltaMlt determines the number of MLTs in a polar cap with half-angle deltaqdlat spanning mltmin to mltmax.\n");
 
     return;    
 }
+
+
