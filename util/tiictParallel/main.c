@@ -171,7 +171,6 @@ int main(int argc, char *argv[])
 	int seconds = 0;
 	int minutes = 0;
 	int hours = 0;
-	mvprintw(TIICT_LABEL, "TIICT parallel processor");
 
 	char *satellites[3] = {"A", "B", "C"};
 
@@ -192,6 +191,7 @@ int main(int argc, char *argv[])
 		completed = 0;
 		queued =0;
 		erase();
+        mvprintw(TIICT_LABEL, "Processing TIICT version %s", exportVersion);
 		mvprintw(SAT_ORIGIN, "Swarm %s: %d threads", satellites[sat], nThreads);
 		mvprintw(START_DATE_ORIGIN, "From: %s\n", startDate);
 		mvprintw(END_DATE_ORIGIN, "  To: %s\n", endDate);
