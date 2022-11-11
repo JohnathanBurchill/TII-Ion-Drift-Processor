@@ -1,6 +1,6 @@
 /*
 
-    TII Cross-Track Ion Drift Processor: tiictbin.c
+    TII Cross-Track Ion Drift Processor: cdfbin.c
 
     Copyright (C) 2022  Johnathan K Burchill
 
@@ -18,6 +18,10 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+#include "cdfbin.h"
+#include "utilities.h"
+#include "statistics.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -28,9 +32,6 @@
 #include <ctype.h>
 #include <dirent.h>
 
-#include "utilities.h"
-#include "tiictbin.h"
-#include "statistics.h"
 #include <cdf.h>
 
 // https://www.gnu.org/software/gsl/doc/html/

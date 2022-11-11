@@ -1,6 +1,6 @@
 /*
 
-    TII Cross-Track Ion Drift Processor: tiictbin.h
+    TII Cross-Track Ion Drift Processor: cdfbin.h
 
     Copyright (C) 2022  Johnathan K Burchill
 
@@ -18,8 +18,8 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef _TIICTBIN_H
-#define _TIICTBIN_H
+#ifndef _CDFBIN_H
+#define _CDFBIN_H
 
 #include <stdio.h>
 #include <stdint.h>
@@ -54,4 +54,4 @@ uint8_t getMinorVersion(const char *filename);
 
 void usage(char *name);
 
-#endif // _TIICTBIN_H
+#endif // _CDFBIN_H
