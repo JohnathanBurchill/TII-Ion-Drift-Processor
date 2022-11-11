@@ -79,6 +79,8 @@ int main(int argc, char* argv[])
 
     bool useEqualArea = false;
     
+    bool tctData = false;
+
     for (int i = 1; i < argc; i++)
     {
         if (strcmp(argv[i], "--about") == 0)
@@ -178,6 +180,11 @@ int main(int argc, char* argv[])
             else
                 qualityMaskIsAnd = true;
         }
+        else if (strncmp(argv[i], "--tct-data", 10) == 0)
+        {
+            nOptions++;
+            tctData = true;
+        }
         else if (strncmp(argv[i], "--", 2) == 0)
         {
             fprintf(stderr, "Unknown or incomplete option %s\n", argv[i]);
@@ -185,7 +192,7 @@ int main(int argc, char* argv[])
         }
     }
 
-    if (argc != 11 + nOptions)
+    if (argc != 12 + nOptions)
     {
         usage(argv[0]);
         exit(EXIT_FAILURE);
@@ -193,7 +200,8 @@ int main(int argc, char* argv[])
     const char *directory = argv[1];
     const char *satelliteLetter = argv[2];
     const char *parameterName = argv[3];
-    const char *statistic = argv[4];
+    const char *flagName = argv[4];
+    const char *statistic = argv[5];
     if (!validStatistic(statistic))
     {
         fprintf(stderr, "Invalid statistic '%s'\n", statistic);
@@ -202,12 +210,12 @@ int main(int argc, char* argv[])
         exit(EXIT_FAILURE);
     }
 
-    float qdlatmin = atof(argv[5]);
-    float qdlatmax = atof(argv[6]);
-    float deltaqdlat = atof(argv[7]);
-    float mltmin = atof(argv[8]);
-    float mltmax = atof(argv[9]);
-    float deltamlt = atof(argv[10]);
+    float qdlatmin = atof(argv[6]);
+    float qdlatmax = atof(argv[7]);
+    float deltaqdlat = atof(argv[8]);
+    float mltmin = atof(argv[9]);
+    float mltmax = atof(argv[10]);
+    float deltamlt = atof(argv[11]);
     int qdlatIndex = 0;
     int mltIndex = 0;
 
@@ -227,37 +235,40 @@ int main(int argc, char* argv[])
     fprintf(stdout, "Analyzing Swarm %s files between %s and %s\n", satelliteLetter, firstDate, lastDate);
 
     // Flag mask
-    char *flagParams[4] = {"Vixh", "Vixv", "Viy", "Viz"};
-    if (qualityFlagMask == 0)
+    if (tctData)
     {
-        fprintf(stdout, "Quality mask: selecting %s irrespective of data quality.\n", parameterName);
-    }
-    else
-    {
-        if (qualityFlagMask > 0)
-            fprintf(stdout, "Quality mask: INCLUDING %s for good values of ", parameterName);
-        else
-            fprintf(stdout, "Quality mask: EXCLUDING %s for good values of ", parameterName);
-
-        int maskBit = 0;
-        int nFlaggedParams = 0;
-        int unsignedMask = abs(qualityFlagMask);
-        for (int b = 0; b < 4; b++)
+        char *flagParams[4] = {"Vixh", "Vixv", "Viy", "Viz"};
+        if (qualityFlagMask == 0)
         {
-            maskBit = (unsignedMask >> b) & 0x1;
-            if (maskBit)
-            {
-                nFlaggedParams++;
-                if (nFlaggedParams > 1)
-                    fprintf(stdout, "%s", qualityMaskIsAnd ? " AND " : " OR ");
-                fprintf(stdout, "%s", flagParams[b]);
-            }
+            fprintf(stdout, "Quality mask: selecting %s irrespective of data quality.\n", parameterName);
         }
-        fprintf(stdout, "\n");                
+        else
+        {
+            if (qualityFlagMask > 0)
+                fprintf(stdout, "Quality mask: INCLUDING %s for good values of ", parameterName);
+            else
+                fprintf(stdout, "Quality mask: EXCLUDING %s for good values of ", parameterName);
 
+            int maskBit = 0;
+            int nFlaggedParams = 0;
+            int unsignedMask = abs(qualityFlagMask);
+            for (int b = 0; b < 4; b++)
+            {
+                maskBit = (unsignedMask >> b) & 0x1;
+                if (maskBit)
+                {
+                    nFlaggedParams++;
+                    if (nFlaggedParams > 1)
+                        fprintf(stdout, "%s", qualityMaskIsAnd ? " AND " : " OR ");
+                    fprintf(stdout, "%s", flagParams[b]);
+                }
+            }
+            fprintf(stdout, "\n");                
+
+        }
     }
 
-    uint16_t positiveQualityFlagMask = (uint16_t) abs(qualityFlagMask);
+    uint32_t positiveQualityFlagMask = (uint32_t) abs(qualityFlagMask);
 
     // Allocate memory for binning
     float **binStorage = NULL;
@@ -266,8 +277,6 @@ int main(int argc, char* argv[])
     size_t *binMaxSizes = NULL;
 
     size_t nBins = 0;
-
-    printf("nQDLatS: %d\n", nQDLats);
 
     int *nMltsVsLatitude = (int*) calloc(nQDLats, sizeof(int));
     int *cumulativeMltsVsLatitude = (int*) calloc(nQDLats, sizeof(int)); 
@@ -349,6 +358,9 @@ int main(int argc, char* argv[])
     float percentDone = 0.0;
     int percentCheck = (int) ceil(0.01 * (float)nFiles);
     float value = 0.0;
+    bool includeValue = false;
+    uint32_t maskedValue = 0;
+    uint32_t flag;
 
     size_t index = 0;
     while ((entry = readdir(dir)) != NULL)
@@ -377,9 +389,9 @@ int main(int argc, char* argv[])
             }
             long nRecs = 0;
             char fullPath[CDF_PATHNAME_LEN];
+            long flagType = 0;
             sprintf(fullPath, "%s/%s", directory, filename);
-            bool fourByteCalFlag = false;
-            status = loadCrossTrackData(fullPath, dataBuffers, &nRecs, &fourByteCalFlag, parameterName);
+            status = loadCdfData(fullPath, dataBuffers, &nRecs, parameterName, flagName, &flagType);
             if (status != CDF_OK)
                 continue;
 
@@ -389,15 +401,49 @@ int main(int argc, char* argv[])
             // The macros TIME(), QDLAT(), etc. give the value at index timeIndex.
             double epoch0 = TIME()/1000.0;
 
-            bool includeValue = false;
-            uint16_t maskedValue = 0;
-
+            timeIndex = 0;
+            float lastQDLat = QDLAT();
+            float dir = 0.0;
+            if (nRecs > 2)
+            {
+                timeIndex = 1;
+                dir = QDLAT() - lastQDLat;
+            }
             for (timeIndex = 0; timeIndex < nRecs; timeIndex++)
             {
                 nValsRead++;
 
-                uint16_t flag = FLAG();
-                maskedValue = (FLAG() & positiveQualityFlagMask);
+                switch(flagType)
+                {
+                    case CDF_UINT1:
+                    case CDF_BYTE:
+                    case CDF_UCHAR:
+                        flag = (uint32_t)*((uint8_t*)dataBuffers[3] + (size_t)timeIndex);
+                        break;
+
+                    case CDF_UINT2:
+                        flag = (uint32_t)*((uint16_t*)dataBuffers[3] + (size_t)timeIndex);
+                        break;
+
+                    case CDF_CHAR:
+                    case CDF_INT1:
+                        flag = (uint32_t)*((int8_t*)dataBuffers[3] + (size_t)timeIndex);
+                        break;
+    
+                    case CDF_INT2:
+                        flag = (uint32_t)*((int16_t*)dataBuffers[3] + (size_t)timeIndex);
+                        break;
+
+                    case CDF_INT4:
+                        flag = (uint32_t)*((int32_t*)dataBuffers[3] + (size_t)timeIndex);
+                        break;
+
+                    default:
+                        flag = *((uint32_t*)dataBuffers[3] + (size_t)timeIndex);
+                        break;
+                }
+
+                maskedValue = (flag & positiveQualityFlagMask);
                 // Is flag matched by mask?
                 if (positiveQualityFlagMask == 0)
                     includeValue = true;
@@ -410,7 +456,9 @@ int main(int argc, char* argv[])
                 if (qualityFlagMask < 0)
                     includeValue = !includeValue;
 
-                // Access bins with bins[mltIndex * nQDLats + qdlatIndex];
+                dir = QDLAT() - lastQDLat;
+                lastQDLat = QDLAT();
+                // Access bins as bins[cumulativeMltsVsLatitude[qdlatIndex] + mltIndex];
                 if (isfinite(PARAMETER()))
                 {
                     qdlatIndex = (int) floor((QDLAT() - qdlatmin) / deltaqdlat);
@@ -430,7 +478,8 @@ int main(int argc, char* argv[])
                             // TODO handle vector parameters
                             value = PARAMETER();
                             // Flip sign of parameter when moving southward, i.e. to make Viy eastward and Vixh or Vixv northward
-                            if (flipParamWhenDescending && VSATN() < 0.0)
+
+                            if (flipParamWhenDescending && dir < 0.0)
                                 value = -value;
 
                             if (binSizes[index] >= binMaxSizes[index])
@@ -513,7 +562,7 @@ int main(int argc, char* argv[])
 
 }
 
-CDFstatus loadCrossTrackData(const char *filename, uint8_t **dataBuffers, long *numberOfRecords, bool *fourByteCalFlag, const char *parameterName)
+CDFstatus loadCdfData(const char *filename, uint8_t **dataBuffers, long *numberOfRecords, const char *parameterName, const char *flagVarName, long *flagType)
 {
     CDFstatus status = CDF_OK;
     char validationFileName[CDF_PATHNAME_LEN];
@@ -569,16 +618,13 @@ CDFstatus loadCrossTrackData(const char *filename, uint8_t **dataBuffers, long *
 
     // Variables
     uint8_t nVars = NUM_DATA_VARIABLES;
-    char* variables[NUM_DATA_VARIABLES] = {
+    const char* variables[NUM_DATA_VARIABLES] = {
         "Timestamp",
         "MLT",
         "QDLatitude",
-        "Quality_flags",
-        "Calibration_flags",
-        "VsatN"
-        ""
+        flagVarName,
+        parameterName
     };
-    variables[NUM_DATA_VARIABLES-1] = (char *) parameterName;
     for (uint8_t i = 0; i < NUM_DATA_VARIABLES; i++)
     {
         status = CDFconfirmzVarExistence(calCdfId, variables[i]);
@@ -597,7 +643,7 @@ CDFstatus loadCrossTrackData(const char *filename, uint8_t **dataBuffers, long *
 
     for (uint8_t i = 0; i<NUM_DATA_VARIABLES; i++)
     {
-        varNum = CDFgetVarNum(calCdfId, variables[i]);
+        varNum = CDFgetVarNum(calCdfId, (char*)variables[i]);
         if (varNum < CDF_OK)
         {
             printErrorMessage(varNum);
@@ -608,12 +654,13 @@ CDFstatus loadCrossTrackData(const char *filename, uint8_t **dataBuffers, long *
         status = CDFgetzVarNumDims(calCdfId, varNum, &numDims);
         status = CDFgetzVarDimSizes(calCdfId, varNum, dimSizes);
         status = CDFgetzVarDataType(calCdfId, varNum, &dataType);
+        if (strcmp(variables[i], flagVarName) == 0)
+        {
+            if (flagType != NULL)
+                *flagType = dataType;           
+        }
         // Calculate new size of memory to allocate
         status = CDFgetDataTypeSize(dataType, &numVarBytes);
-        if (i == 4 && numVarBytes == 4)
-        {
-            *fourByteCalFlag = true;            
-        }
 
         numValues = 1;
         for (uint8_t j = 0; j < numDims; j++)
@@ -649,7 +696,7 @@ uint8_t getMinorVersion(const char *filename)
 
 void usage(char *name)
 {
-    fprintf(stdout, "usage: %s directory satelliteLetter parameterName statistic qdlatmin qdlatmax deltaqdlat mltmin mltmax deltamlt [--first-date=yyyymmdd] [--last-date=yyyymmdd] [--equal-area-bins] [--flip-when-descending] [--quality-flag-mask=mask] [--quality-flag-mask-type=type] [--no-file-progress] [--help] [--about]\n", name);
+    fprintf(stdout, "usage: %s <directory> <satelliteLetter> <parameterName> <qualityFlagName> <statistic> <qdlatmin> <qdlatmax> <deltaqdlat> <mltmin> <mltmax> <deltamlt> [--first-date=yyyymmdd] [--last-date=yyyymmdd] [--equal-area-bins] [--flip-when-descending] [--quality-flag-mask=mask] [--quality-flag-mask-type=type] [--tct-data] [--no-file-progress] [--help] [--about]\n", name);
     fprintf(stdout, "Options:\n");
     fprintf(stdout, "\t--help or -h\t\tprints this message.\n");
     fprintf(stdout, "\t--about \t\tdescribes the program, declares license.\n");
@@ -661,6 +708,7 @@ void usage(char *name)
     fprintf(stdout, "\t--quality-flag-mask-type={AND|OR}\tinterpret --qualityflagmask values as bitwise AND or OR\n");
     fprintf(stdout, "\t--no-file-progress\tdo not print progress of files being processed\n");
     fprintf(stdout, "\t--equal-area-bins\tgenerate an equal-area grid centered on the magnetic pole. In this case deltaMlt determines the number of MLTs in a polar cap with half-angle deltaqdlat spanning mltmin to mltmax.\n");
+    fprintf(stdout, "\t--tct-data\tTII cross-track ion drift data: print extra flag information.\n");
 
     return;    
 }

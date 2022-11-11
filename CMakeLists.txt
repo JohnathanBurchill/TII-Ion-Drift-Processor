@@ -63,9 +63,9 @@ ADD_EXECUTABLE(tiictvariability tiictvariability.c)
 TARGET_INCLUDE_DIRECTORIES(tiictvariability PRIVATE )
 TARGET_LINK_LIBRARIES(tiictvariability Utilities ${LIBS} -lgslcblas -lcdf)
 
-ADD_EXECUTABLE(tiictbin tiictbin.c statistics.c)
-TARGET_INCLUDE_DIRECTORIES(tiictbin PRIVATE )
-TARGET_LINK_LIBRARIES(tiictbin Utilities ${LIBS} -lgslcblas -lcdf)
+ADD_EXECUTABLE(cdfbin cdfbin.c statistics.c)
+TARGET_INCLUDE_DIRECTORIES(cdfbin PRIVATE )
+TARGET_LINK_LIBRARIES(cdfbin Utilities ${LIBS} -lgslcblas -lcdf)
 
 # ADD_EXECUTABLE(tiictfitstatistics tiictfitstatistics.c)
 # TARGET_INCLUDE_DIRECTORIES(tiictfitstatistics PRIVATE )
@@ -77,7 +77,7 @@ add_subdirectory(util)
 install(TARGETS tiict DESTINATION $ENV{HOME}/bin)
 install(TARGETS tiictinspect DESTINATION $ENV{HOME}/bin)
 install(TARGETS tiictqualityflags DESTINATION $ENV{HOME}/bin)
-install(TARGETS tiictbin DESTINATION $ENV{HOME}/bin)
+install(TARGETS cdfbin DESTINATION $ENV{HOME}/bin)
 # install(TARGETS tiictfitstatistics DESTINATION $ENV{HOME}/bin)
 
 

@@ -30,28 +30,24 @@
 #define SOFTWARE_VERSION "1.0"
 #define SOFTWARE_VERSION_STRING "tiictbin 2022-09-10"
 
-#define NUM_DATA_VARIABLES 7
+#define NUM_DATA_VARIABLES 5
 
-CDFstatus loadCrossTrackData(const char *filename, uint8_t **dataBuffers, long *numberOfRecords, bool *fourByteCalFlag, const char *parameterName);
+CDFstatus loadCdfData(const char *filename, uint8_t **dataBuffers, long *numberOfRecords, const char *parameterName, const char *flagVarName, long *flagType);
 
 #define ADDR(n, m, d) (((float*)dataBuffers[(n)]+(d*timeIndex + m)))
 #define MEAS(n, m, d) ((float)(*(ADDR(n, m, d))))
 #define TIME() ((double)*((double*)dataBuffers[0]+(timeIndex)))
 #define MLT() (MEAS(1, 0, 1))
 #define QDLAT() (MEAS(2, 0, 1))
-#define FLAG() ((uint16_t)*((uint16_t*)dataBuffers[3]+(timeIndex)))
-#define CALFLAG() ((uint32_t)*((uint32_t*)dataBuffers[4]+(timeIndex)))
 
-#define VSATN() (MEAS(5, 0, 1))
+#define PARAMETER() (MEAS(4, 0, 1))
 
-#define PARAMETER() (MEAS(6, 0, 1))
+#define PARAMETERVEC2X() (MEAS(4, 0, 2))
+#define PARAMETERVEC2Y() (MEAS(4, 1, 2))
 
-#define PARAMETERVEC2X() (MEAS(6, 0, 2))
-#define PARAMETERVEC2Y() (MEAS(6, 1, 2))
-
-#define PARAMETERVEC3X() (MEAS(6, 0, 3))
-#define PARAMETERVEC3Y() (MEAS(6, 1, 3))
-#define PARAMETERVEC3Z() (MEAS(6, 2, 3))
+#define PARAMETERVEC3X() (MEAS(4, 0, 3))
+#define PARAMETERVEC3Y() (MEAS(4, 1, 3))
+#define PARAMETERVEC3Z() (MEAS(4, 2, 3))
 
 
 uint8_t getMinorVersion(const char *filename);
