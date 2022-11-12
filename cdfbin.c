@@ -717,7 +717,7 @@ uint8_t getMinorVersion(const char *filename)
 
 void usage(char *name)
 {
-    fprintf(stdout, "usage: %s <directory> <satelliteLetter> <parameterName> <qualityFlagName> <statistic> <qdlatmin> <qdlatmax> <deltaqdlat> <mltmin> <mltmax> <deltamlt> [--first-date=yyyymmdd] [--last-date=yyyymmdd] [--equal-area-bins] [--flip-when-descending] [--quality-flag-mask=mask] [--quality-flag-mask-type=type] [--tct-data] [--no-file-progress] [--help] [--about]\n", name);
+    fprintf(stdout, "usage: %s <directory> <satelliteLetter> <parameterName> <qualityFlagName> <statistic> <qdlatmin> <qdlatmax> <deltaqdlat> <mltmin> <mltmax> <deltamlt> [--first-date=yyyymmdd] [--last-date=yyyymmdd] [--equal-area-bins] [--flip-when-descending] [--quality-flag-mask=mask] [--quality-flag-mask-type=type] [--quality-flag-zero-is-good] [--tct-data] [--no-file-progress] [--help] [--about]\n", name);
     fprintf(stdout, "Options:\n");
     fprintf(stdout, "\t--help or -h\t\tprints this message.\n");
     fprintf(stdout, "\t--about \t\tdescribes the program, declares license.\n");
