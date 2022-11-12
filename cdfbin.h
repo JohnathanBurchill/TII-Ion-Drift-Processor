@@ -49,6 +49,21 @@ CDFstatus loadCdfData(const char *filename, uint8_t **dataBuffers, long *numberO
 #define PARAMETERVEC3Y() (MEAS(4, 1, 3))
 #define PARAMETERVEC3Z() (MEAS(4, 2, 3))
 
+#define ADDR8(n, m, d) (((double*)dataBuffers[(n)]+(d*timeIndex + m)))
+#define MEAS8(n, m, d) ((*(ADDR8(n, m, d))))
+#define MLT8() (MEAS8(1, 0, 1))
+#define QDLAT8() (MEAS8(2, 0, 1))
+
+#define PARAMETER8() (MEAS8(4, 0, 1))
+
+#define PARAMETERVEC2X8() (MEAS8(4, 0, 2))
+#define PARAMETERVEC2Y8() (MEAS8(4, 1, 2))
+
+#define PARAMETERVEC3X8() (MEAS8(4, 0, 3))
+#define PARAMETERVEC3Y8() (MEAS8(4, 1, 3))
+#define PARAMETERVEC3Z8() (MEAS8(4, 2, 3))
+
+
 
 uint8_t getMinorVersion(const char *filename);
 

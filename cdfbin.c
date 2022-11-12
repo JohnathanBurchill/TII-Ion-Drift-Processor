@@ -80,8 +80,8 @@ int main(int argc, char* argv[])
     sprintf(lastDate, "%4d%02d%02d", timeParts->tm_year + 1900, timeParts->tm_mon + 1, timeParts->tm_mday);
 
     bool useEqualArea = false;
-    
     bool tctData = false;
+    bool doublePrecision = false;
 
     for (int i = 1; i < argc; i++)
     {
@@ -191,6 +191,11 @@ int main(int argc, char* argv[])
         {
             nOptions++;
             tctData = true;
+        }
+        else if (strcmp(argv[i], "--double-precision-values") == 0)
+        {
+            nOptions++;
+            doublePrecision = true;
         }
         else if (strncmp(argv[i], "--", 2) == 0)
         {
@@ -364,12 +369,15 @@ int main(int argc, char* argv[])
     long processedFiles = 0;
     float percentDone = 0.0;
     int percentCheck = (int) ceil(0.01 * (float)nFiles);
+    float mlt = 0.0;
+    float qdlat = 0.0;
     float value = 0.0;
     bool includeValue = false;
     uint32_t maskedValue = 0;
     uint32_t flag;
 
     size_t index = 0;
+
     while ((entry = readdir(dir)) != NULL)
     {
         filename = entry->d_name;
@@ -409,12 +417,14 @@ int main(int argc, char* argv[])
             double epoch0 = TIME()/1000.0;
 
             timeIndex = 0;
-            float lastQDLat = QDLAT();
+            qdlat =  doublePrecision ? (float)QDLAT8() : QDLAT();
+            float lastQDLat = qdlat;
             float dir = 0.0;
             if (nRecs > 2)
             {
                 timeIndex = 1;
-                dir = QDLAT() - lastQDLat;
+                qdlat =  doublePrecision ? (float)QDLAT8() : QDLAT();
+                dir = qdlat - lastQDLat;
             }
             for (timeIndex = 0; timeIndex < nRecs; timeIndex++)
             {
@@ -473,16 +483,20 @@ int main(int argc, char* argv[])
                 if (qualityFlagMask < 0)
                     includeValue = !includeValue;
 
-                dir = QDLAT() - lastQDLat;
-                lastQDLat = QDLAT();
+                qdlat =  doublePrecision ? (float)QDLAT8() : QDLAT();
+                dir = qdlat - lastQDLat;
+                lastQDLat = qdlat;
                 // Access bins as bins[cumulativeMltsVsLatitude[qdlatIndex] + mltIndex];
-                if (isfinite(PARAMETER()))
+                // TODO handle vector parameters
+                value = doublePrecision ? (float)PARAMETER8() : PARAMETER();
+                if (isfinite(value))
                 {
-                    qdlatIndex = (int) floor((QDLAT() - qdlatmin) / deltaqdlat);
+                    qdlatIndex = (int) floor((qdlat - qdlatmin) / deltaqdlat);
                     if (qdlatIndex < 0 || qdlatIndex >= nQDLats)
                         continue;
                     deltamlt = (mltmax - mltmin) / (float)nMltsVsLatitude[qdlatIndex];
-                    mltIndex = (int) floor((MLT() - mltmin) / deltamlt);
+                    mlt = doublePrecision ? (float)MLT8() : MLT();
+                    mltIndex = (int) floor((mlt - mltmin) / deltamlt);
                     if (mltIndex >= 0 && mltIndex < nMltsVsLatitude[qdlatIndex])
                     {
                         index = cumulativeMltsVsLatitude[qdlatIndex] + mltIndex;
@@ -492,8 +506,6 @@ int main(int argc, char* argv[])
 
                         if (includeValue)
                         {
-                            // TODO handle vector parameters
-                            value = PARAMETER();
                             // Flip sign of parameter when moving southward, i.e. to make Viy eastward and Vixh or Vixv northward
 
                             if (flipParamWhenDescending && dir < 0.0)
@@ -721,12 +733,13 @@ void usage(char *name)
     fprintf(stdout, "\t--first-date=yyyymmdd\tFirst date to include in statistics.\n");
     fprintf(stdout, "\t--last-date=yyyymmdd\tLast date to include in statistics.\n");
     fprintf(stdout, "\t--flip-when-descending\tflips sign of Viy for descending part of the orbit so that positive ion drift is always eastward.\n");
-    fprintf(stdout, "\t--quality-flag-mask=value\tselects (mask > 0) or rejects (mask < 0) measurements with quality flag bitwise-and-matching abs(mask) according to the mask type given by --quality-flag-mask-type, e.g., --quality-flag-mask=0b0110 or --quality-flag-mask=-15\n");
-    fprintf(stdout, "\t--quality-flag-mask-type={AND|OR}\tinterpret --qualityflagmask values as bitwise AND or OR\n");
-    fprintf(stdout, "\t--quality-flag-zero-is-good\tnon-zero quality flag value signifies an issue\n");
-    fprintf(stdout, "\t--no-file-progress\tdo not print progress of files being processed\n");
+    fprintf(stdout, "\t--quality-flag-mask=value\tselects (mask > 0) or rejects (mask < 0) measurements with quality flag bitwise-and-matching abs(mask) according to the mask type given by --quality-flag-mask-type, e.g., --quality-flag-mask=0b0110 or --quality-flag-mask=-15.\n");
+    fprintf(stdout, "\t--quality-flag-mask-type={AND|OR}\tinterpret --qualityflagmask values as bitwise AND or OR.\n");
+    fprintf(stdout, "\t--quality-flag-zero-is-good\tnon-zero quality flag value signifies an issue.\n");
+    fprintf(stdout, "\t--no-file-progress\tdo not print progress of files being processed.\n");
     fprintf(stdout, "\t--equal-area-bins\tgenerate an equal-area grid centered on the magnetic pole. In this case deltaMlt determines the number of MLTs in a polar cap with half-angle deltaqdlat spanning mltmin to mltmax.\n");
     fprintf(stdout, "\t--tct-data\tTII cross-track ion drift data: print extra flag information.\n");
+    fprintf(stdout, "\t--double-precision-values\tParameters are stored as CDF_REAL8. Default is to assume CDF_REAL4 for values, except epochs which are CDF_EPOCH (double precision). Binning is always performed with single precision.\n");
     
     return;    
 }
