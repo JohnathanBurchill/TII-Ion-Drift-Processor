@@ -532,7 +532,7 @@ int main(int argc, char* argv[])
             {
                 percentDone = (float)processedFiles / (float)nFiles * 100.0;
                 if (processedFiles % percentCheck == 0)
-                    fprintf(stderr, "\rProcessed %ld of %ld files (%3.0f%%)", processedFiles, nFiles, percentDone);
+                    fprintf(stderr, "\rcdfbin (Swarm %s):\t%ld of %ld files processed (%3.0f%%)", satelliteLetter, processedFiles, nFiles, percentDone);
             }
         }
     }
