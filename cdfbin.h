@@ -31,8 +31,13 @@
 #define SOFTWARE_VERSION_STRING "tiictbin 2022-09-10"
 
 #define NUM_DATA_VARIABLES 5
+#define TIME_INDEX 0
+#define QDLAT_INDEX 1
+#define MLT_INDEX 2
+#define FLAG_INDEX 3
+#define PARAMETER_INDEX 4
 
-CDFstatus loadCdfData(const char *filename, uint8_t **dataBuffers, long *numberOfRecords, const char *parameterName, const char *flagVarName, long *flagType);
+CDFstatus loadCdfData(const char *filename, uint8_t **dataBuffers, long *numberOfRecords, const char *parameterName, const char *flagVarName, long *variableTypes);
 
 #define ADDR(n, m, d) (((float*)dataBuffers[(n)]+(d*timeIndex + m)))
 #define MEAS(n, m, d) ((float)(*(ADDR(n, m, d))))

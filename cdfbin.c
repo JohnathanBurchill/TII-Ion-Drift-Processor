@@ -81,7 +81,6 @@ int main(int argc, char* argv[])
 
     bool useEqualArea = false;
     bool tctData = false;
-    bool doublePrecision = false;
 
     for (int i = 1; i < argc; i++)
     {
@@ -191,11 +190,6 @@ int main(int argc, char* argv[])
         {
             nOptions++;
             tctData = true;
-        }
-        else if (strcmp(argv[i], "--double-precision-values") == 0)
-        {
-            nOptions++;
-            doublePrecision = true;
         }
         else if (strncmp(argv[i], "--", 2) == 0)
         {
@@ -404,9 +398,9 @@ int main(int argc, char* argv[])
             }
             long nRecs = 0;
             char fullPath[CDF_PATHNAME_LEN];
-            long flagType = 0;
+            long variableTypes[NUM_DATA_VARIABLES] = {0};
             sprintf(fullPath, "%s/%s", directory, filename);
-            status = loadCdfData(fullPath, dataBuffers, &nRecs, parameterName, flagName, &flagType);
+            status = loadCdfData(fullPath, dataBuffers, &nRecs, parameterName, flagName, variableTypes);
             if (status != CDF_OK)
                 continue;
 
@@ -417,20 +411,20 @@ int main(int argc, char* argv[])
             double epoch0 = TIME()/1000.0;
 
             timeIndex = 0;
-            qdlat =  doublePrecision ? (float)QDLAT8() : QDLAT();
+            qdlat =  variableTypes[QDLAT_INDEX] == CDF_REAL8 ? (float)QDLAT8() : QDLAT();
             float lastQDLat = qdlat;
             float dir = 0.0;
             if (nRecs > 2)
             {
                 timeIndex = 1;
-                qdlat =  doublePrecision ? (float)QDLAT8() : QDLAT();
+                qdlat =  variableTypes[QDLAT_INDEX] == CDF_REAL8 ? (float)QDLAT8() : QDLAT();
                 dir = qdlat - lastQDLat;
             }
             for (timeIndex = 0; timeIndex < nRecs; timeIndex++)
             {
                 nValsRead++;
 
-                switch(flagType)
+                switch(variableTypes[FLAG_INDEX])
                 {
                     case CDF_UINT1:
                     case CDF_BYTE:
@@ -483,19 +477,19 @@ int main(int argc, char* argv[])
                 if (qualityFlagMask < 0)
                     includeValue = !includeValue;
 
-                qdlat =  doublePrecision ? (float)QDLAT8() : QDLAT();
+                qdlat =  variableTypes[QDLAT_INDEX] == CDF_REAL8 ? (float)QDLAT8() : QDLAT();
                 dir = qdlat - lastQDLat;
                 lastQDLat = qdlat;
                 // Access bins as bins[cumulativeMltsVsLatitude[qdlatIndex] + mltIndex];
                 // TODO handle vector parameters
-                value = doublePrecision ? (float)PARAMETER8() : PARAMETER();
+                value = variableTypes[PARAMETER_INDEX] == CDF_REAL8 ? (float)PARAMETER8() : PARAMETER();
                 if (isfinite(value))
                 {
                     qdlatIndex = (int) floor((qdlat - qdlatmin) / deltaqdlat);
                     if (qdlatIndex < 0 || qdlatIndex >= nQDLats)
                         continue;
                     deltamlt = (mltmax - mltmin) / (float)nMltsVsLatitude[qdlatIndex];
-                    mlt = doublePrecision ? (float)MLT8() : MLT();
+                    mlt = variableTypes[MLT_INDEX] == CDF_REAL8 ? (float)MLT8() : MLT();
                     mltIndex = (int) floor((mlt - mltmin) / deltamlt);
                     if (mltIndex >= 0 && mltIndex < nMltsVsLatitude[qdlatIndex])
                     {
@@ -591,7 +585,7 @@ int main(int argc, char* argv[])
 
 }
 
-CDFstatus loadCdfData(const char *filename, uint8_t **dataBuffers, long *numberOfRecords, const char *parameterName, const char *flagVarName, long *flagType)
+CDFstatus loadCdfData(const char *filename, uint8_t **dataBuffers, long *numberOfRecords, const char *parameterName, const char *flagVarName, long *variableTypes)
 {
     CDFstatus status = CDF_OK;
     char validationFileName[CDF_PATHNAME_LEN];
@@ -683,11 +677,9 @@ CDFstatus loadCdfData(const char *filename, uint8_t **dataBuffers, long *numberO
         status = CDFgetzVarNumDims(calCdfId, varNum, &numDims);
         status = CDFgetzVarDimSizes(calCdfId, varNum, dimSizes);
         status = CDFgetzVarDataType(calCdfId, varNum, &dataType);
-        if (strcmp(variables[i], flagVarName) == 0)
-        {
-            if (flagType != NULL)
-                *flagType = dataType;           
-        }
+        if (variableTypes != 0)
+            variableTypes[i] = dataType;
+
         // Calculate new size of memory to allocate
         status = CDFgetDataTypeSize(dataType, &numVarBytes);
 
@@ -739,8 +731,7 @@ void usage(char *name)
     fprintf(stdout, "\t--no-file-progress\tdo not print progress of files being processed.\n");
     fprintf(stdout, "\t--equal-area-bins\tgenerate an equal-area grid centered on the magnetic pole. In this case deltaMlt determines the number of MLTs in a polar cap with half-angle deltaqdlat spanning mltmin to mltmax.\n");
     fprintf(stdout, "\t--tct-data\tTII cross-track ion drift data: print extra flag information.\n");
-    fprintf(stdout, "\t--double-precision-values\tParameters are stored as CDF_REAL8. Default is to assume CDF_REAL4 for values, except epochs which are CDF_EPOCH (double precision). Binning is always performed with single precision.\n");
-    
+   
     return;    
 }
 
