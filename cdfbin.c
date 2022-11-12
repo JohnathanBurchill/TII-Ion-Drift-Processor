@@ -66,6 +66,7 @@ int main(int argc, char* argv[])
     bool flipParamWhenDescending = false;
     int32_t qualityFlagMask = 0;
     bool qualityMaskIsAnd = true;
+    bool goodFlagIsOne = true;
 
     int nOptions = 0;
 
@@ -181,7 +182,12 @@ int main(int argc, char* argv[])
             else
                 qualityMaskIsAnd = true;
         }
-        else if (strncmp(argv[i], "--tct-data", 10) == 0)
+        else if (strcmp(argv[i], "--quality-flag-zero-is-good") == 0)
+        {
+            nOptions++;
+            goodFlagIsOne = false;
+        }
+        else if (strcmp(argv[i], "--tct-data") == 0)
         {
             nOptions++;
             tctData = true;
@@ -449,9 +455,19 @@ int main(int argc, char* argv[])
                 if (positiveQualityFlagMask == 0)
                     includeValue = true;
                 else if (qualityMaskIsAnd)
-                    includeValue = (maskedValue == positiveQualityFlagMask);
+                {
+                    if (goodFlagIsOne)
+                        includeValue = (maskedValue == positiveQualityFlagMask);
+                    else
+                        includeValue = (maskedValue == 0);
+                }
                 else
-                    includeValue = (maskedValue > 0);
+                {
+                    if (goodFlagIsOne)
+                        includeValue = (maskedValue > 0);
+                    else
+                        includeValue = (maskedValue < positiveQualityFlagMask);
+                }
                 
                 // Exclude this match?
                 if (qualityFlagMask < 0)
@@ -707,10 +723,11 @@ void usage(char *name)
     fprintf(stdout, "\t--flip-when-descending\tflips sign of Viy for descending part of the orbit so that positive ion drift is always eastward.\n");
     fprintf(stdout, "\t--quality-flag-mask=value\tselects (mask > 0) or rejects (mask < 0) measurements with quality flag bitwise-and-matching abs(mask) according to the mask type given by --quality-flag-mask-type, e.g., --quality-flag-mask=0b0110 or --quality-flag-mask=-15\n");
     fprintf(stdout, "\t--quality-flag-mask-type={AND|OR}\tinterpret --qualityflagmask values as bitwise AND or OR\n");
+    fprintf(stdout, "\t--quality-flag-zero-is-good\tnon-zero quality flag value signifies an issue\n");
     fprintf(stdout, "\t--no-file-progress\tdo not print progress of files being processed\n");
     fprintf(stdout, "\t--equal-area-bins\tgenerate an equal-area grid centered on the magnetic pole. In this case deltaMlt determines the number of MLTs in a polar cap with half-angle deltaqdlat spanning mltmin to mltmax.\n");
     fprintf(stdout, "\t--tct-data\tTII cross-track ion drift data: print extra flag information.\n");
-
+    
     return;    
 }
 
