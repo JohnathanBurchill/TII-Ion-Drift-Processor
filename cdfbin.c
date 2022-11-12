@@ -82,6 +82,12 @@ int main(int argc, char* argv[])
     bool useEqualArea = false;
     bool tctData = false;
 
+    if (argc == 2 && strcmp(argv[1]+strlen(argv[1])-4, ".cdf") == 0)
+    {
+        listParameters(argv[1]);
+        exit(EXIT_SUCCESS);
+    }
+
     for (int i = 1; i < argc; i++)
     {
         if (strcmp(argv[i], "--about") == 0)
@@ -717,7 +723,11 @@ uint8_t getMinorVersion(const char *filename)
 
 void usage(char *name)
 {
-    fprintf(stdout, "usage: %s <directory> <satelliteLetter> <parameterName> <qualityFlagName> <statistic> <qdlatmin> <qdlatmax> <deltaqdlat> <mltmin> <mltmax> <deltamlt> [--first-date=yyyymmdd] [--last-date=yyyymmdd] [--equal-area-bins] [--flip-when-descending] [--quality-flag-mask=mask] [--quality-flag-mask-type=type] [--quality-flag-zero-is-good] [--tct-data] [--no-file-progress] [--help] [--about]\n", name);
+    fprintf(stdout, "usage:\n");
+    fprintf(stdout, "1st form: %s <directory> <satelliteLetter> <parameterName> <qualityFlagName> <statistic> <qdlatmin> <qdlatmax> <deltaqdlat> <mltmin> <mltmax> <deltamlt> [--first-date=yyyymmdd] [--last-date=yyyymmdd] [--equal-area-bins] [--flip-when-descending] [--quality-flag-mask=mask] [--quality-flag-mask-type=type] [--quality-flag-zero-is-good] [--tct-data] [--no-file-progress] [--help] [--about]\n", name);
+    fprintf(stdout, "\tprint statistics of selected parameter for all CDF files in directory.\n");
+    fprintf(stdout, "2nd form: %s <cdfFile>\n", name);
+    fprintf(stdout, "\tList parameters in <cdffile>.\n");
     fprintf(stdout, "Options:\n");
     fprintf(stdout, "\t--help or -h\t\tprints this message.\n");
     fprintf(stdout, "\t--about \t\tdescribes the program, declares license.\n");
@@ -735,4 +745,43 @@ void usage(char *name)
     return;    
 }
 
+void listParameters(char *cdfFilename)
+{
+    if (cdfFilename == NULL)
+        return;
 
+    CDFid cdf = NULL;
+    CDFstatus status = CDFopen(cdfFilename, &cdf);
+    if (status != CDF_OK)
+    {
+        fprintf(stderr, "Unable to open CDF file.\n");
+        return;
+    }
+
+    long nVariables = 0;
+    // Not handling rVariables.
+    status = CDFgetNumzVars(cdf, &nVariables);
+    if (status != CDF_OK || nVariables <= 0)
+    {
+        fprintf(stderr, "No variables found.\n");
+        return;
+    }
+
+    char varName[CDF_VAR_NAME_LEN+1];
+    fprintf(stdout, "Variable name\n");
+    fprintf(stdout, "-------------\n");
+    for (long i = 0; i < nVariables; i++)
+    {
+        status = CDFgetzVarName(cdf, i, varName);
+        if (status != CDF_OK)
+        {
+            fprintf(stderr, "Unable to read name of variable number %ld of %ld\n", i, nVariables);
+            continue;
+        }
+        fprintf(stdout, "%s\n", varName);
+    }
+
+    CDFclose(cdf);
+
+    return;
+}

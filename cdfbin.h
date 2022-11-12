@@ -74,4 +74,6 @@ uint8_t getMinorVersion(const char *filename);
 
 void usage(char *name);
 
+void listParameters(char *cdfFilename);
+
 #endif // _CDFBIN_H
