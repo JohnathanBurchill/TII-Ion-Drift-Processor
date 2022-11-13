@@ -82,6 +82,10 @@ int main(int argc, char* argv[])
     bool useEqualArea = false;
     bool tctData = false;
 
+    char *timestampName = "Timestamp";
+    char *binDimension1Name = "MLT";
+    char *binDimension2Name = "QDLatitude";
+
     if (argc == 2 && strcmp(argv[1]+strlen(argv[1])-4, ".cdf") == 0)
     {
         listParameters(argv[1]);
@@ -197,6 +201,36 @@ int main(int argc, char* argv[])
             nOptions++;
             tctData = true;
         }
+        else if (strncmp(argv[i], "--timestamp-variable=", 21) == 0)
+        {
+            nOptions++;
+            if (strlen(argv[i]+21) == 0)
+            {
+                fprintf(stderr, "Could not parse %s\n", argv[i]);
+                exit(EXIT_FAILURE);
+            }
+            timestampName = argv[i]+21;
+        }
+        else if (strncmp(argv[i], "--first-bin-dimension-variable=", 31) == 0)
+        {
+            nOptions++;
+            if (strlen(argv[i]+31) == 0)
+            {
+                fprintf(stderr, "Could not parse %s\n", argv[i]);
+                exit(EXIT_FAILURE);
+            }
+            binDimension1Name = argv[i]+31;
+        }
+        else if (strncmp(argv[i], "--second-bin-dimension-variable=", 32) == 0)
+        {
+            nOptions++;
+            if (strlen(argv[i]+32) == 0)
+            {
+                fprintf(stderr, "Could not parse %s\n", argv[i]);
+                exit(EXIT_FAILURE);
+            }
+            binDimension2Name = argv[i]+32;
+        }
         else if (strncmp(argv[i], "--", 2) == 0)
         {
             fprintf(stderr, "Unknown or incomplete option %s\n", argv[i]);
@@ -235,12 +269,12 @@ int main(int argc, char* argv[])
     int nMLTs = (int)floor((mltmax - mltmin) / deltamlt);
     if (nQDLats <= 0)
     {
-        fprintf(stderr, "%s: invalid QD latitude bin specification.\n", argv[0]);
+        fprintf(stderr, "%s: invalid second bin dimension specification.\n", argv[0]);
         exit(EXIT_FAILURE);
     }
     if (nMLTs <= 0 && !useEqualArea)
     {
-        fprintf(stderr, "%s: invalid MLT bin specification.\n", argv[0]);
+        fprintf(stderr, "%s: invalid first bin dimension specification.\n", argv[0]);
         exit(EXIT_FAILURE);
     }
 
@@ -406,7 +440,7 @@ int main(int argc, char* argv[])
             char fullPath[CDF_PATHNAME_LEN];
             long variableTypes[NUM_DATA_VARIABLES] = {0};
             sprintf(fullPath, "%s/%s", directory, filename);
-            status = loadCdfData(fullPath, dataBuffers, &nRecs, parameterName, flagName, variableTypes);
+            status = loadCdfData(fullPath, dataBuffers, &nRecs, timestampName, binDimension1Name, binDimension2Name, parameterName, flagName, variableTypes);
             if (status != CDF_OK)
                 continue;
 
@@ -554,7 +588,7 @@ int main(int argc, char* argv[])
 
     fprintf(stdout, "Time range is inclusive. Bin specification for remaining quantities x and bin boundaries x1 and x2: x1 <= x < x2\n");
     fprintf(stdout, "Row legend:\n");
-    fprintf(stdout, "firstDate lastDate MLT1 MLT2 QDLat1 QDLat2 %s(%s) binCount validRegionFraction totalReadFraction\n", statistic, parameterName);
+    fprintf(stdout, "firstDate lastDate %s1 %s2 %s1 %s2 %s(%s) binCount validRegionFraction totalReadFraction\n", binDimension1Name, binDimension1Name, binDimension2Name, binDimension2Name, statistic, parameterName);
 
     float denomBinValidSizes = 0.0;
     float denomNValsRead = nValsRead > 0 ? (float) nValsRead : 1.0;
@@ -591,7 +625,7 @@ int main(int argc, char* argv[])
 
 }
 
-CDFstatus loadCdfData(const char *filename, uint8_t **dataBuffers, long *numberOfRecords, const char *parameterName, const char *flagVarName, long *variableTypes)
+CDFstatus loadCdfData(const char *filename, uint8_t **dataBuffers, long *numberOfRecords, const char *timestampName, const char *binDimension1Name, const char *binDimension2Name, const char *parameterName, const char *flagVarName, long *variableTypes)
 {
     CDFstatus status = CDF_OK;
     char validationFileName[CDF_PATHNAME_LEN];
@@ -636,7 +670,7 @@ CDFstatus loadCdfData(const char *filename, uint8_t **dataBuffers, long *numberO
         return status;
     }
     long nRecs, memorySize = 0;
-    status = CDFgetzVarAllocRecords(calCdfId, CDFgetVarNum(calCdfId, "Timestamp"), &nRecs);
+    status = CDFgetzVarAllocRecords(calCdfId, CDFgetVarNum(calCdfId, (char *)timestampName), &nRecs);
     if (status != CDF_OK)
     {
         printErrorMessage(status);
@@ -648,9 +682,9 @@ CDFstatus loadCdfData(const char *filename, uint8_t **dataBuffers, long *numberO
     // Variables
     uint8_t nVars = NUM_DATA_VARIABLES;
     const char* variables[NUM_DATA_VARIABLES] = {
-        "Timestamp",
-        "MLT",
-        "QDLatitude",
+        timestampName,
+        binDimension1Name,
+        binDimension2Name,
         flagVarName,
         parameterName
     };
@@ -724,7 +758,7 @@ uint8_t getMinorVersion(const char *filename)
 void usage(char *name)
 {
     fprintf(stdout, "usage:\n");
-    fprintf(stdout, "1st form: %s <directory> <satelliteLetter> <parameterName> <qualityFlagName> <statistic> <qdlatmin> <qdlatmax> <deltaqdlat> <mltmin> <mltmax> <deltamlt> [--first-date=yyyymmdd] [--last-date=yyyymmdd] [--equal-area-bins] [--flip-when-descending] [--quality-flag-mask=mask] [--quality-flag-mask-type=type] [--quality-flag-zero-is-good] [--tct-data] [--no-file-progress] [--help] [--about]\n", name);
+    fprintf(stdout, "1st form: %s <directory> <satelliteLetter> <parameterName> <qualityFlagName> <statistic> <qdlatmin> <qdlatmax> <deltaqdlat> <mltmin> <mltmax> <deltamlt> [--first-date=yyyymmdd] [--last-date=yyyymmdd] [--timestamp-variable=var] [--first-bin-dimension-variable=var] [--second-bin-dimension-variable=var] [--equal-area-bins] [--flip-when-descending] [--quality-flag-mask=mask] [--quality-flag-mask-type=type] [--quality-flag-zero-is-good] [--tct-data] [--no-file-progress] [--help] [--about]\n", name);
     fprintf(stdout, "\tprint statistics of selected parameter for all CDF files in directory.\n");
     fprintf(stdout, "2nd form: %s <cdfFile>\n", name);
     fprintf(stdout, "\tList parameters in <cdffile>.\n");
@@ -734,6 +768,9 @@ void usage(char *name)
     fprintf(stdout, "\t--available-statistics\tprints a list of statistics to calculate. Pass one statistic per call.\n");
     fprintf(stdout, "\t--first-date=yyyymmdd\tFirst date to include in statistics.\n");
     fprintf(stdout, "\t--last-date=yyyymmdd\tLast date to include in statistics.\n");
+    fprintf(stdout, "\t--timestamp-variable=var\tuse var as timestamp variable. Default: Timestamp\n");
+    fprintf(stdout, "\t--first-bin-dimension-variable=var\tuse var as first bin dimension. Default: MLT\n");
+    fprintf(stdout, "\t--second-bin-dimension-variable=var\tuse var as second bin dimension. Default: QDLatitude\n");
     fprintf(stdout, "\t--flip-when-descending\tflips sign of Viy for descending part of the orbit so that positive ion drift is always eastward.\n");
     fprintf(stdout, "\t--quality-flag-mask=value\tselects (mask > 0) or rejects (mask < 0) measurements with quality flag bitwise-and-matching abs(mask) according to the mask type given by --quality-flag-mask-type, e.g., --quality-flag-mask=0b0110 or --quality-flag-mask=-15.\n");
     fprintf(stdout, "\t--quality-flag-mask-type={AND|OR}\tinterpret --qualityflagmask values as bitwise AND or OR.\n");

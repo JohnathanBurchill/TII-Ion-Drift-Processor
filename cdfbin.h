@@ -37,7 +37,7 @@
 #define FLAG_INDEX 3
 #define PARAMETER_INDEX 4
 
-CDFstatus loadCdfData(const char *filename, uint8_t **dataBuffers, long *numberOfRecords, const char *parameterName, const char *flagVarName, long *variableTypes);
+CDFstatus loadCdfData(const char *filename, uint8_t **dataBuffers, long *numberOfRecords, const char *timestampName, const char *binDimension1Name, const char *binDimension2Name, const char *parameterName, const char *flagVarName, long *variableTypes);
 
 #define ADDR(n, m, d) (((float*)dataBuffers[(n)]+(d*timeIndex + m)))
 #define MEAS(n, m, d) ((float)(*(ADDR(n, m, d))))
