@@ -120,8 +120,8 @@ int main(int argc, char *argv[])
 
 	char *calVersion = CALIBRATION_FILE_VERSION;
 	char *exportVersion = EXPORT_VERSION;
-	char *calDir = "/efirepo/EfiCalCdfs";
-	char *exportDir = "/databases/TCT";
+	char *calDir = "/storage/EfiCalCdfs";
+	char *exportDir = "/storage/TCT";
 
 	char *date = strdup(startDate);
 	char *d1 = strdup(startDate);
