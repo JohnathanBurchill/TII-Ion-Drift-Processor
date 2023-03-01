@@ -20,4 +20,9 @@ build
 /**/*.nb
 /**/*.code-workspace
 examples/fitstats
+examples/0302
+examples/0401
+examples/LP_HM
+examples/TRACIS
+/**/gmon.out
 
