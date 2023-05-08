@@ -18,21 +18,9 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "tiict.h"
-
 #include "processing.h"
-#include "loadData.h"
-#include "export.h"
-#include "errors.h"
 
-#include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <time.h>
-
-#include <gsl/gsl_errno.h>
-
-extern char infoHeader[50];
 
 int main(int argc, char* argv[])
 {
