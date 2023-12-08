@@ -93,6 +93,8 @@ int calibrateFlows(ProcessorState *state)
     //  2) bias voltage to nearest of -100 V, -62 V or left alone if too different from those values
     //  3) apply Level 1 calibration with bias dependence
     float value, innerDomeBias;
+    float vMcpH = -2000.0;
+    float vMcpV = -2000.0;
 
     // Adjust times for sample lag
     for (long timeIndex = 0; timeIndex < state->nRecs; timeIndex++)
@@ -210,8 +212,8 @@ int calibrateFlows(ProcessorState *state)
             // Add in the satellite potential
             // Then remove offsets from this
             // Then convert to flow velocity, adding ram energy of O+ before taking sqare root. 
-            *ADDR(1, 0, 2) = eofr(MXH() - xch, innerDomeBias, 0.0) + state->potentials[timeIndex];
-            *ADDR(2, 0, 2) = eofr(MXV() - xcv, innerDomeBias, 0.0) + state->potentials[timeIndex];
+            *ADDR(1, 0, 2) = eofr(MXH() - xch, innerDomeBias, vMcpH) + state->potentials[timeIndex];
+            *ADDR(2, 0, 2) = eofr(MXV() - xcv, innerDomeBias, vMcpV) + state->potentials[timeIndex];
 
         }
         else
