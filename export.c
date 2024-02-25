@@ -2,7 +2,7 @@
 
     TII Cross-Track Ion Drift Processor: export.c
 
-    Copyright (C) 2022  Johnathan K Burchill
+    Copyright (C) 2024  Johnathan K Burchill
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -492,12 +492,13 @@ void addAttributes(CDFid id, const char *dataset, const char *satellite, const c
         {"Vicrz", "CDF_FLOAT", "m/s", "Ion drift corotation signal z component in satellite-track coorinates. This has been removed from ion drift and electric field.", -1000., 1000.},
         {"U_SC", "CDF_FLOAT", "V", "Satellite floating potential estimate from EXTD LP_HM dataset.", -50., 5.},
         {"Quality_flags", "CDF_UINT2", "*", "Bitwise flag for each velocity component, where a value of 1 for a particular component signifies that calibration was successful, and that the baseline 1-sigma noise level is less than or equal to 100 m/s at 2 Hz. Electric field quality can be assessed from these flags according to -vxB. Bit0 (least significant) = Vixh, bit1 = Vixv, bit2 = Viy, bit3 = Viz. Refer to the release notes for details.", 0, 65535},
-        {"Calibration_flags", "CDF_UINT4", "*", "Information about the calibration process. Refer to the release notes for details.", 0, 4294967295}
+        {"Calibration_flags", "CDF_UINT4", "*", "Information about the calibration process. Refer to the release notes for details.", 0, 4294967295},
+        {"GeoPotential", "CDF_FLOAT", "V", "Geoelectric potential estimate from EXTD LP_HM dataset.", -1000000., 1000000.},
     };
 
     for (uint8_t i = 0; i < NUM_EXPORT_VARIABLES; i++)
     {
-        if (strcmp(variableAttrs[i].name, "U_SC") != 0 || strcmp(version, "0401") >= 0)
+        if ((strcmp(variableAttrs[i].name, "U_SC") != 0 && strcmp(variableAttrs[i].name, "GeoPotential") != 0) || strcmp(version, "0401") >= 0)
             addVariableAttributes(id, variableAttrs[i]);
     }
 
@@ -572,6 +573,7 @@ int exportTCT16Cdfs(ProcessorState *state, double startTime, double stopTime, lo
     
         createVarFrom1DVar(exportCdfId, "Quality_flags", CDF_UINT2, startIndex, stopIndex, state->flags);
         createVarFrom1DVar(exportCdfId, "Calibration_flags", CDF_UINT4, startIndex, stopIndex, state->fitInfo);
+        createVarFrom1DVar(exportCdfId, "GeoPotential", CDF_REAL4, startIndex, stopIndex, state->geoPotential);
 
         // add attributes
         addAttributes(exportCdfId, "TCT16", state->args.satellite, state->args.exportVersion, startTime, stopTime);
@@ -697,6 +699,7 @@ int exportTCT02Cdfs(ProcessorState *state, double startTime, double stopTime, lo
 
         createVarFrom1DVar(exportCdfId, "Quality_flags", CDF_UINT2, startIndex, stopIndex, state->flags);
         createVarFrom1DVar(exportCdfId, "Calibration_flags", CDF_UINT4, startIndex, stopIndex, state->fitInfo);
+        createVarFrom1DVar(exportCdfId, "GeoPotential", CDF_REAL4, startIndex, stopIndex, state->geoPotential);
 
         // add attributes
         // update start and stop times to the averaged ones

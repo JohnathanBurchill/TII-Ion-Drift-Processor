@@ -611,6 +611,7 @@ int initFields(ProcessorState *state)
     state->ectFieldH = (float*) malloc((size_t) (state->nRecs * sizeof(float) * 3));
     state->ectFieldV = (float*) malloc((size_t) (state->nRecs * sizeof(float) * 3));
     state->bctField = (float*) malloc((size_t) (state->nRecs * sizeof(float) * 3));
+    state->geoPotential = (float*) malloc((size_t) (state->nRecs * sizeof(float)));
 
     if (state->xhat == NULL || state->yhat == NULL || state->zhat == NULL || state->ectFieldH == NULL || state->ectFieldV == NULL || state->bctField == NULL)
         return TIICT_MEMORY;
@@ -920,9 +921,29 @@ int initProcessor(int argc, char *argv[], ProcessorState *state)
 int parseArguments(int argc, char **argv, ProcessorState *state)
 {
     Arguments *args = &state->args;
+    state->usePotentials = true;
+    state->geoPotentialFromEx = true;
+    state->geoPotentialFromEy = false;
+    state->geoPotentialFromEz = false;
+    state->nOptions = 0;
     for (int i = 1; i < argc; i++)
     {
-        if (strcmp(argv[i], "--about") == 0)
+        if (strcmp("--do-not-use-satellite-potential", argv[i]) == 0)
+        {
+            state->nOptions++;
+            state->usePotentials = false;
+        }
+        else if (strcmp("--geopotential-from-ey", argv[i]) == 0)
+        {
+            state->nOptions++;
+            state->geoPotentialFromEy = true;
+        }
+        else if (strcmp("--geopotential-from-ez", argv[i]) == 0)
+        {
+            state->nOptions++;
+            state->geoPotentialFromEz = true;
+        }
+        else if (strcmp(argv[i], "--about") == 0)
         {
             fprintf(stdout, "tiict - TII Cross-track ion drift processor, version %s.\n", SOFTWARE_VERSION);
             fprintf(stdout, "Copyright (C) 2022  Johnathan K Burchill\n");
@@ -933,7 +954,7 @@ int parseArguments(int argc, char **argv, ProcessorState *state)
         }
     }
 
-    if (argc != 10)
+    if (argc - state->nOptions != 10)
     {
         fprintf(stdout, "usage: %s satLetter year month day calversionString exportVersionString calDir lpDir exportDir\n", argv[0]);
         return TIICT_ARGS_BAD;

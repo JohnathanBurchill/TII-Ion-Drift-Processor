@@ -2,7 +2,7 @@
 
     TII Cross-Track Ion Drift Processor: settings.h
 
-    Copyright (C) 2022  Johnathan K Burchill
+    Copyright (C) 2024  Johnathan K Burchill
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -21,8 +21,8 @@
 #ifndef SETTINGS_H
 #define SETTINGS_H
 
-#define SOFTWARE_VERSION "1.1"
-#define SOFTWARE_VERSION_STRING "TIICT 2022-09-28"
+#define SOFTWARE_VERSION "1.2"
+#define SOFTWARE_VERSION_STRING "TIICT 2024-02-24"
 #define SECONDS_OF_DATA_REQUIRED_FOR_PROCESSING 300 // 5 minutes
 #define SECONDS_OF_DATA_REQUIRED_FOR_EXPORTING 60 // 1 minutes
 #define SECONDS_OF_BOUNDARY_DATA_REQUIRED_FOR_PROCESSING 1500 // 25 minutes to ensure coverage of each fit region
@@ -31,7 +31,7 @@
 #define DEFAULT_VI_ERROR -42.0
 #define MAX_ALLOWED_CDF_GAP_SECONDS 600.0 // CDF export split into separate files at gaps exceeding 10 minutes
 #define NUM_CAL_VARIABLES 15
-#define NUM_EXPORT_VARIABLES 32
+#define NUM_EXPORT_VARIABLES 33
 #define NUM_BUFFER_VARIABLES 31
 
 #define MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT 8

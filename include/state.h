@@ -2,7 +2,7 @@
 
     TII Cross-Track Ion Drift Processor: state.h
 
-    Copyright (C) 2022  Johnathan K Burchill
+    Copyright (C) 2024  Johnathan K Burchill
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -53,6 +53,7 @@ typedef struct ProcessorState {
     int returnStatus;
 
     Arguments args;
+    int nOptions;
     offset_model_fit_arguments fitargs[4];
     char fitLogFilename[FILENAME_MAX];
     FILE *fitFile;
@@ -85,6 +86,12 @@ typedef struct ProcessorState {
     float *ectFieldH;
     float *ectFieldV;
     float *bctField;
+
+    float *geoPotential;
+    bool geoPotentialFromEx;
+    bool geoPotentialFromEy;
+    bool geoPotentialFromEz;
+    
 
 } ProcessorState;
 
