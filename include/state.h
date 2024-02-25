@@ -87,10 +87,8 @@ typedef struct ProcessorState {
     float *ectFieldV;
     float *bctField;
 
-    float *geoPotential;
-    bool geoPotentialFromEx;
-    bool geoPotentialFromEy;
-    bool geoPotentialFromEz;
+    float *geoPotentialH;
+    float *geoPotentialV;
     
 
 } ProcessorState;

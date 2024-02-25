@@ -2,7 +2,7 @@
 
     TII Cross-Track Ion Drift Processor: processing.c
 
-    Copyright (C) 2022  Johnathan K Burchill
+    Copyright (C) 2024  Johnathan K Burchill
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -611,9 +611,10 @@ int initFields(ProcessorState *state)
     state->ectFieldH = (float*) malloc((size_t) (state->nRecs * sizeof(float) * 3));
     state->ectFieldV = (float*) malloc((size_t) (state->nRecs * sizeof(float) * 3));
     state->bctField = (float*) malloc((size_t) (state->nRecs * sizeof(float) * 3));
-    state->geoPotential = (float*) malloc((size_t) (state->nRecs * sizeof(float)));
+    state->geoPotentialH = (float*) malloc((size_t) (state->nRecs * sizeof(float)));
+    state->geoPotentialV = (float*) malloc((size_t) (state->nRecs * sizeof(float)));
 
-    if (state->xhat == NULL || state->yhat == NULL || state->zhat == NULL || state->ectFieldH == NULL || state->ectFieldV == NULL || state->bctField == NULL)
+    if (state->xhat == NULL || state->yhat == NULL || state->zhat == NULL || state->ectFieldH == NULL || state->ectFieldV == NULL || state->bctField == NULL || state->geoPotentialH == NULL || state->geoPotentialV == NULL)
         return TIICT_MEMORY;
 
     return TIICT_OK;
@@ -636,8 +637,24 @@ int calculateFields(ProcessorState *state)
     float *ectFieldV = state->ectFieldV;
     float *bctField = state->bctField;
 
-    for (long timeIndex = 0; timeIndex < state->nRecs; timeIndex++)
+    float *geoPotentialH = state->geoPotentialH;
+    float *geoPotentialV = state->geoPotentialV;
+    long timeIndex = 0;
+    double previousTime = TIME();
+    double currentTime = TIME();
+    double deltaTime = 0.0;
+    geoPotentialH[0] = 0.0;
+    geoPotentialV[0] = 0.0;
+    float previousExH = 0.0;
+    float previousExV = 0.0;
+
+    for (timeIndex = 0; timeIndex < state->nRecs; timeIndex++)
     {
+        // For geoelectric potential estimation
+        currentTime = TIME();
+        deltaTime = currentTime - previousTime;
+        previousTime = currentTime;
+
         // Calculate xhat, yhat, zhat
         // xhat parallel to satellite velocity 
         float magVsat = sqrtf(VSATN()*VSATN() + VSATE()*VSATE() + VSATC() * VSATC());
@@ -677,6 +694,15 @@ int calculateFields(ProcessorState *state)
         ectFieldV[ind + 1] = -1.0 * (-1.0 * MXV() * bctField[ind + 2] + MYV() * bctField[ind + 0]) / 1000000000.0 * 1000.0; 
         ectFieldV[ind + 2] = -1.0 * (MXV() * bctField[ind + 1] - MYH() * bctField[ind + 0]) / 1000000000.0 * 1000.0; 
 
+        if (timeIndex > 0)
+        {
+            geoPotentialH[timeIndex] = geoPotentialH[timeIndex-1];
+            geoPotentialV[timeIndex] = geoPotentialV[timeIndex-1];
+            previousExH = ectFieldH[ind + 0] / 1e3;
+            previousExV = ectFieldV[ind + 0] / 1e3;
+        }
+        geoPotentialH[timeIndex] += previousExH * magVsat * deltaTime;
+        geoPotentialV[timeIndex] += previousExV * magVsat * deltaTime;
     }
 
     fprintf(state->processingLogFile, "%sCalculated fields.\n", infoHeader);
@@ -921,10 +947,9 @@ int initProcessor(int argc, char *argv[], ProcessorState *state)
 int parseArguments(int argc, char **argv, ProcessorState *state)
 {
     Arguments *args = &state->args;
+    // LP estimates of satellite potential
     state->usePotentials = true;
-    state->geoPotentialFromEx = true;
-    state->geoPotentialFromEy = false;
-    state->geoPotentialFromEz = false;
+
     state->nOptions = 0;
     for (int i = 1; i < argc; i++)
     {
@@ -932,16 +957,6 @@ int parseArguments(int argc, char **argv, ProcessorState *state)
         {
             state->nOptions++;
             state->usePotentials = false;
-        }
-        else if (strcmp("--geopotential-from-ey", argv[i]) == 0)
-        {
-            state->nOptions++;
-            state->geoPotentialFromEy = true;
-        }
-        else if (strcmp("--geopotential-from-ez", argv[i]) == 0)
-        {
-            state->nOptions++;
-            state->geoPotentialFromEz = true;
         }
         else if (strcmp(argv[i], "--about") == 0)
         {
