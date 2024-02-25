@@ -18,26 +18,22 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "processing.h"
-#include "utilities.h"
 
 #include <stdio.h>
 
 #include <string.h>
-#include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <unistd.h>
 
 #include <pthread.h>
-#include <signal.h>
 #include <sys/wait.h>
 
 #include <time.h>
 #include <curses.h>
 
 
-#define SOFTWARE_VERSION "1.1"
+#define SOFTWARE_VERSION "1.2"
 
 #define THREAD_MANAGER_WAIT 100000 // uSeconds
 
