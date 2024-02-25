@@ -26,6 +26,7 @@
 #include "errors.h"
 #include "loadData.h"
 #include "export.h"
+#include "utilities.h"
 
 #include <tii/detector.h>
 #include <tii/isp.h>
@@ -403,6 +404,8 @@ int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, void (*doInterest
                 fprintf(state->fitFile, "%d %d %lld %lld %f %f %f %f", fitargs->regionNumber, numFits, state->bgws.numModel1Points, state->bgws.numModel2Points, state->bgws.tregion11, state->bgws.tregion12, state->bgws.tregion21, state->bgws.tregion22);
                 // Allocate fit buffers
                 state->bgws.modelTimesMatrix = gsl_matrix_alloc(state->bgws.numModelPoints, state->bgws.fitDegree);
+                state->bgws.modelTimes1Matrix = gsl_matrix_alloc(state->bgws.numModel1Points, state->bgws.fitDegree);
+                state->bgws.modelTimes2Matrix = gsl_matrix_alloc(state->bgws.numModel2Points, state->bgws.fitDegree);
                 state->bgws.model1Values = gsl_vector_alloc(state->bgws.numModel1Points);
                 state->bgws.model2Values = gsl_vector_alloc(state->bgws.numModel2Points);
                 state->bgws.work1 = gsl_vector_alloc(state->bgws.numModel1Points);
@@ -416,18 +419,25 @@ int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, void (*doInterest
                 {
                     fitTime = (TIME() - state->bgws.epoch0)/1000.;
                     gsl_matrix_set(state->bgws.modelTimesMatrix, state->bgws.modelDataIndex, 0, 1.0);
-                    gsl_matrix_set(state->bgws.modelTimesMatrix, state->bgws.modelDataIndex++, 1, fitTime); // seconds from start of file
+                    gsl_matrix_set(state->bgws.modelTimes1Matrix, state->bgws.modelDataIndex, 0, 1.0);
+                    gsl_matrix_set(state->bgws.modelTimesMatrix, state->bgws.modelDataIndex, 1, fitTime); // seconds from start of file
+                    gsl_matrix_set(state->bgws.modelTimes1Matrix, state->bgws.modelDataIndex++, 1, fitTime); // seconds from start of file
                 }
+                state->bgws.modelDataMidPoint = state->bgws.modelDataIndex;
                 for (timeIndex = state->bgws.endIndex0; timeIndex < state->bgws.endIndex1; timeIndex++)
                 {
                     fitTime = (TIME() - state->bgws.epoch0)/1000.;
+                    gsl_matrix_set(state->bgws.modelTimes2Matrix, state->bgws.modelDataIndex - state->bgws.modelDataMidPoint, 0, 1.0); 
                     gsl_matrix_set(state->bgws.modelTimesMatrix, state->bgws.modelDataIndex, 0, 1.0);
+                    gsl_matrix_set(state->bgws.modelTimes2Matrix, state->bgws.modelDataIndex - state->bgws.modelDataMidPoint, 1, fitTime); 
                     gsl_matrix_set(state->bgws.modelTimesMatrix, state->bgws.modelDataIndex++, 1, fitTime); // seconds from start of file
                 }
                 // Perform background subtraction
                 doInterestingStuff(state);
                 fprintf(state->fitFile, "\n");
 
+                gsl_matrix_free(state->bgws.modelTimes1Matrix);
+                gsl_matrix_free(state->bgws.modelTimes2Matrix);
                 gsl_matrix_free(state->bgws.modelTimesMatrix);
                 gsl_vector_free(state->bgws.model1Values);
                 gsl_vector_free(state->bgws.model2Values);
@@ -514,8 +524,10 @@ int initFields(ProcessorState *state)
     state->bctField = (float*) malloc((size_t) (state->nRecs * sizeof(float) * 3));
     state->geoPotentialH = (float*) malloc((size_t) (state->nRecs * sizeof(float)));
     state->geoPotentialV = (float*) malloc((size_t) (state->nRecs * sizeof(float)));
+    state->maxAbsGeopotentialSlopeH= (float*) malloc((size_t) (state->nRecs * sizeof(float)));
+    state->maxAbsGeopotentialSlopeV= (float*) malloc((size_t) (state->nRecs * sizeof(float)));
 
-    if (state->xhat == NULL || state->yhat == NULL || state->zhat == NULL || state->ectFieldH == NULL || state->ectFieldV == NULL || state->bctField == NULL || state->geoPotentialH == NULL || state->geoPotentialV == NULL)
+    if (state->xhat == NULL || state->yhat == NULL || state->zhat == NULL || state->ectFieldH == NULL || state->ectFieldV == NULL || state->bctField == NULL || state->geoPotentialH == NULL || state->geoPotentialV == NULL || state->maxAbsGeopotentialSlopeH == NULL || state->maxAbsGeopotentialSlopeV == NULL)
         return TIICT_MEMORY;
 
     return TIICT_OK;
@@ -664,7 +676,7 @@ void interpolate(double *times, double *values, size_t nVals, double *requestedT
 }
 
 
-bool downSampleHalfSecond(long *index, long storageIndex, double t0, long maxIndex, uint8_t **dataBuffers, float *ectFieldH, float *ectFieldV, float *geoPotentialH, float *geoPotentialV, float *bctField, float *viErrors, float *potentials, uint16_t *flags, uint32_t *fitInfo, bool usePotentials)
+bool downSampleHalfSecond(long *index, long storageIndex, double t0, long maxIndex, uint8_t **dataBuffers, float *ectFieldH, float *ectFieldV, float *geoPotentialH, float *geoPotentialV, float *maxAbsGeopotentialSlopeH, float *maxAbsGeopotentialSlopeV, float *bctField, float *viErrors, float *potentials, uint16_t *flags, uint32_t *fitInfo, bool usePotentials)
 {
     long timeIndex = *index;
     uint8_t nSamples = 0;
@@ -724,6 +736,11 @@ bool downSampleHalfSecond(long *index, long storageIndex, double t0, long maxInd
             floatBuf[30] += potentials[timeIndex];
         floatBuf[31] += geoPotentialH[timeIndex];
         floatBuf[32] += geoPotentialV[timeIndex];
+        // Take the largest of each 8-sample interval
+        if (floatBuf[33] < maxAbsGeopotentialSlopeH[timeIndex])
+            floatBuf[33] = maxAbsGeopotentialSlopeH[timeIndex];
+        if (floatBuf[34] < maxAbsGeopotentialSlopeV[timeIndex])
+            floatBuf[34] = maxAbsGeopotentialSlopeV[timeIndex];
         flagBuf &= flags[timeIndex];
         fitInfoBuf |= fitInfo[timeIndex];
         nSamples++;
@@ -771,6 +788,8 @@ bool downSampleHalfSecond(long *index, long storageIndex, double t0, long maxInd
             potentials[storageIndex] = floatBuf[30] / 8.0; // Floating potential U_SC
         geoPotentialH[storageIndex] = floatBuf[31] / 8.0; // Geoelectric potential H sensor
         geoPotentialV[storageIndex] = floatBuf[32] / 8.0; // Geoelectric potential V sensor 
+        maxAbsGeopotentialSlopeH[storageIndex] = floatBuf[33]; // Take the maximum value                                                        
+        maxAbsGeopotentialSlopeV[storageIndex] = floatBuf[34]; // Take the maximum value                                                        
         // Flags set to 0 at 16 Hz based on magnitude of flow,
         // are not reset at 2 Hz, to ensure integrity of 2 Hz measurements
         // One can review 16 Hz measurements to examine details of flow where even a
@@ -1153,43 +1172,70 @@ void geoelectricPotentialBackgroundRemoval(ProcessorState *state)
     // Buffers for mid-latitude linear fit data
     const gsl_multifit_robust_type * fitType = gsl_multifit_robust_bisquare;
     gsl_multifit_robust_workspace * gslFitWorkspace;
+    gsl_multifit_robust_workspace * gslFitWorkspace1;
+    gsl_multifit_robust_workspace * gslFitWorkspace2;
     gsl_multifit_robust_stats stats;
     BackgroundRemovalWorkspace_t *ws = &state->bgws;
     gsl_matrix *cov = gsl_matrix_alloc(ws->fitDegree, ws->fitDegree);
     double c0, c1, cov00, cov01, cov11, sumsq;
+    double slope1 = 0.0;
+    double slope2 = 0.0;
     float geopotentialValue = 0.0;
 
     offset_model_fit_arguments *fitargs = &state->fitargs[state->interval];
 
     float *geoPotential = NULL;
+    float *geoPotentialSlope = NULL;
+    float vmag1 = 0.0;
+    float vmag2 = 0.0;
+
     // Load values into model data buffer once each for HX, HY, VX, VY
-    for (uint8_t k = 0; k < 4; k++)
+    for (uint8_t k = 0; k < 2; k++)
     {
         uint8_t flagIndex = k; // Defined flags as bit 0 -> HX, bit 1 -> VX, bit 2-> HY and bit 3-> VY. Data are stored in memory differently.
         if (k == 0)
+        {
             geoPotential = state->geoPotentialH;
+            geoPotentialSlope= state->maxAbsGeopotentialSlopeH;
+        }
         else
+        {
             geoPotential = state->geoPotentialV;
+            geoPotentialSlope= state->maxAbsGeopotentialSlopeV;
+        }
 
         ws->modelDataIndex = 0;
+        vmag1 = 0.0;
+        vmag2 = 0.0;
         for (timeIndex = ws->beginIndex0; timeIndex < ws->beginIndex1; timeIndex++)
         {
             gsl_vector_set(ws->model1Values, ws->modelDataIndex, geoPotential[timeIndex]); 
             gsl_vector_set(ws->modelValues, ws->modelDataIndex++, geoPotential[timeIndex]); 
+            vmag1 += sqrtf(VSATN()*VSATN() + VSATE()*VSATE() + VSATC() * VSATC());
         }
+        if (ws->numModel1Points > 0)
+            vmag1 /= (float)ws->numModel1Points;
+        else
+            vmag1 = 0.0;
         ws->modelDataMidPoint = ws->modelDataIndex;
         for (timeIndex = ws->endIndex0; timeIndex < ws->endIndex1; timeIndex++)
         {
             gsl_vector_set(ws->model2Values, ws->modelDataIndex - ws->modelDataMidPoint, geoPotential[timeIndex]); 
             gsl_vector_set(ws->modelValues, ws->modelDataIndex++, geoPotential[timeIndex]); 
+            vmag2 += sqrtf(VSATN()*VSATN() + VSATE()*VSATE() + VSATC() * VSATC());
         }
+        if (ws->numModel2Points > 0)
+            vmag2 /= (float)ws->numModel2Points;
+        else
+            vmag2 = 0.0;
+
         // Robust linear model fit and removal
         gslFitWorkspace = gsl_multifit_robust_alloc(fitType, ws->numModelPoints, ws->fitDegree);
+        gslFitWorkspace1 = gsl_multifit_robust_alloc(fitType, ws->numModel1Points, ws->fitDegree);
+        gslFitWorkspace2 = gsl_multifit_robust_alloc(fitType, ws->numModel2Points, ws->fitDegree);
         gslStatus = gsl_multifit_robust_maxiter(GSL_FIT_MAXIMUM_ITERATIONS, gslFitWorkspace);
-        if (gslStatus)
-        {
-            fprintf(state->processingLogFile, "%sCould not set maximum GSL iterations.\n", infoHeader);
-        }
+        gslStatus = gsl_multifit_robust_maxiter(GSL_FIT_MAXIMUM_ITERATIONS, gslFitWorkspace1);
+        gslStatus = gsl_multifit_robust_maxiter(GSL_FIT_MAXIMUM_ITERATIONS, gslFitWorkspace2);
         gslStatus = gsl_multifit_robust(ws->modelTimesMatrix, ws->modelValues, ws->fitCoefficients, cov, gslFitWorkspace);
         if (gslStatus)
         {
@@ -1213,7 +1259,6 @@ void geoelectricPotentialBackgroundRemoval(ProcessorState *state)
             c0 = gsl_vector_get(ws->fitCoefficients, 0);
             c1 = gsl_vector_get(ws->fitCoefficients, 1);
             stats = gsl_multifit_robust_statistics(gslFitWorkspace);
-            gsl_multifit_robust_free(gslFitWorkspace);
             // check median absolute deviation and median of signal
             // Note that median calculation sorts the array, so do this last
             double mad = stats.sigma_mad; // For full data fitted
@@ -1221,30 +1266,28 @@ void geoelectricPotentialBackgroundRemoval(ProcessorState *state)
             double mad2 = gsl_stats_mad(ws->model2Values->data, 1, ws->numModel2Points, ws->work2->data); // For last segment
             double median1 = gsl_stats_median(ws->model1Values->data, 1, ws->numModel1Points);
             double median2 = gsl_stats_median(ws->model2Values->data, 1, ws->numModel2Points);
-            fprintf(state->fitFile, " %f %f %f %f %f %f %f %f %f", c0, c1, stats.adj_Rsq, stats.rmse, median1, median2, mad, mad1, mad2);
-            // Remove the offsets and assign flags for this region
+            gslStatus = gsl_multifit_robust(ws->modelTimes1Matrix, ws->model1Values, ws->fitCoefficients, cov, gslFitWorkspace1);
+            if (gslStatus == GSL_SUCCESS && vmag1 > 0)
+                slope1 = fabs(gsl_vector_get(ws->fitCoefficients, 1))/vmag1;
+            else
+                slope1 = 999999999.0;
+            gslStatus = gsl_multifit_robust(ws->modelTimes2Matrix, ws->model2Values, ws->fitCoefficients, cov, gslFitWorkspace2);
+            if (gslStatus == GSL_SUCCESS && vmag2 > 0)
+                slope2 = fabs(gsl_vector_get(ws->fitCoefficients, 1))/vmag2;
+            else
+                slope2 = 999999999.0;
+            // Remove the offsets and estimate max abs mean ex at mid-latitude 
             for (timeIndex = ws->beginIndex0; timeIndex < ws->endIndex1; timeIndex++)
             {
                 // remove offset
                 geoPotential[timeIndex] -= (((TIME() - ws->epoch0)/1000.0) * c1 + c0);
-                geopotentialValue = geoPotential[timeIndex];
-                // Assign error estimate
-                // TODO: use interpolated MADs derived start and end of pass?
-                state->viErrors[4*timeIndex + k] = mad;
-                // Set offset-removed flag (most significant bit), and complete region found
-                // Having a complete region can be determined from offset removed and gsl error flags, but
-                // the extra bit will make it logically straightforward to find incomplete regions.
-                // Toggle off the "offset not removed" and "incomplete region" flag bits
-
-                // TODO implement geopotential flagging
-//                if (state->setFlags)
-//                {
-//                    state->fitInfo[timeIndex] &= ~((FITINFO_OFFSET_NOT_REMOVED | FITINFO_INCOMPLETE_REGION) << (flagIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
-//                    // Update quality and calibration flags based on thresholds
-//                    updateDataQualityFlags(state->args.satellite, flagIndex, fitargs->regionNumber, driftValue, mad, timeIndex, state->flags, state->fitInfo);
-//                }
+                geoPotentialSlope[timeIndex] = slope1 > slope2 ? slope1 : slope2;
+                // TODO convert to V / m?
             }
         }
+        gsl_multifit_robust_free(gslFitWorkspace);
+        gsl_multifit_robust_free(gslFitWorkspace1);
+        gsl_multifit_robust_free(gslFitWorkspace2);
     }
     gsl_matrix_free(cov);
 

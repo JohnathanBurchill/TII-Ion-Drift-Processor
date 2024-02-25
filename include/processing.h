@@ -50,7 +50,7 @@ int calculateFields(ProcessorState *state);
 void interpolate(double *times, double *values, size_t nVals, double *requestedTimes, long nRequestedValues, float *newValues);
 
 // Returns true if a full 8 samples were downsampled to 1 sample, false otherwise
-bool downSampleHalfSecond(long *index, long storageIndex, double t0, long maxIndex, uint8_t **dataBuffers, float *ectFieldH, float *ectFieldV, float *geoPotentialH, float *geoPotentialV, float *bctField, float *viErrors, float *potentials, uint16_t *flags, uint32_t *fitInfo, bool usePotentials);
+bool downSampleHalfSecond(long *index, long storageIndex, double t0, long maxIndex, uint8_t **dataBuffers, float *ectFieldH, float *ectFieldV, float *geoPotentialH, float *geoPotentialV, float *maxAbsGeopotentialSlopeH, float *maxAbsGeopotentialSlopeV, float *bctField, float *viErrors, float *potentials, uint16_t *flags, uint32_t *fitInfo, bool usePotentials);
 
 int runProcessor(int argc, char *argv[]);
 int initProcessor(int argc, char **argv, ProcessorState *state);

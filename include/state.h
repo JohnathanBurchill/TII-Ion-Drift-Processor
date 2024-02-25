@@ -67,6 +67,8 @@ typedef struct BackgroundRemovalWorkspace
     gsl_vector *work1;
     gsl_vector *work2;
     gsl_matrix *modelTimesMatrix;
+    gsl_matrix *modelTimes1Matrix;
+    gsl_matrix *modelTimes2Matrix;
     double epoch0;
     double tregion11;
     double tregion12;
@@ -119,6 +121,8 @@ typedef struct ProcessorState {
 
     float *geoPotentialH;
     float *geoPotentialV;
+    float *maxAbsGeopotentialSlopeH;
+    float *maxAbsGeopotentialSlopeV;
     
     // Offset removal options
     uint8_t interval;

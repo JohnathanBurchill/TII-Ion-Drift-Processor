@@ -496,13 +496,16 @@ void addAttributes(CDFid id, const char *dataset, const char *satellite, const c
         {"Calibration_flags", "CDF_UINT4", "*", "Information about the calibration process. Refer to the release notes for details.", 0, 4294967295},
         {"GeoPotentialH", "CDF_FLOAT", "V", "Geoelectric potential estimate from Ehx.", -1000000., 1000000.},
         {"GeoPotentialV", "CDF_FLOAT", "V", "Geoelectric potential estimate from Evx.", -1000000., 1000000.},
+        {"MaxAbsGeoPotentialBaselineSlopeH", "CDF_FLOAT", "V/m", "Maximum absolute slope of the H sensor mid-latitude geoelectric potential estimates.", -1000000., 1000000.},
+        {"MaxAbsGeoPotentialBaselineSlopeV", "CDF_FLOAT", "V/m", "Maximum absolute slope of the V sensor mid-latitude geoelectric potential estimates.", -1000000., 1000000.},
     };
 
     for (uint8_t i = 0; i < NUM_EXPORT_VARIABLES; i++)
     {
-        if ((strcmp(variableAttrs[i].name, "U_SC") != 0 && strncmp(variableAttrs[i].name, "GeoPotential", 12) != 0) || strcmp(version, "0401") >= 0)
             addVariableAttributes(id, variableAttrs[i]);
     }
+
+    return;
 
 }
 
@@ -577,6 +580,8 @@ int exportTCT16Cdfs(ProcessorState *state, double startTime, double stopTime, lo
         createVarFrom1DVar(exportCdfId, "Calibration_flags", CDF_UINT4, startIndex, stopIndex, state->fitInfo);
         createVarFrom1DVar(exportCdfId, "GeoPotentialH", CDF_REAL4, startIndex, stopIndex, state->geoPotentialH);
         createVarFrom1DVar(exportCdfId, "GeoPotentialV", CDF_REAL4, startIndex, stopIndex, state->geoPotentialV);
+        createVarFrom1DVar(exportCdfId, "MaxAbsGeoPotentialBaselineSlopeH", CDF_REAL4, startIndex, stopIndex, state->maxAbsGeopotentialSlopeH);
+        createVarFrom1DVar(exportCdfId, "MaxAbsGeoPotentialBaselineSlopeV", CDF_REAL4, startIndex, stopIndex, state->maxAbsGeopotentialSlopeV);
 
         // add attributes
         addAttributes(exportCdfId, "TCT16", state->args.satellite, state->args.exportVersion, startTime, stopTime);
@@ -625,7 +630,7 @@ int exportTCT02Cdfs(ProcessorState *state, double startTime, double stopTime, lo
         t0 = floor(TIME()/1000.0); // UT second reference
         for (uint8_t halfSecond = 0; halfSecond < 2; halfSecond ++)
         {
-            downSampled = downSampleHalfSecond(&timeIndex, storageIndex, t0 + 0.5 * halfSecond, stopIndex, dataBuffers, state->ectFieldH, state->ectFieldV, state->geoPotentialH, state->geoPotentialV, state->bctField, state->viErrors, state->potentials, state->flags, state->fitInfo, state->usePotentials);
+            downSampled = downSampleHalfSecond(&timeIndex, storageIndex, t0 + 0.5 * halfSecond, stopIndex, dataBuffers, state->ectFieldH, state->ectFieldV, state->geoPotentialH, state->geoPotentialV, state->maxAbsGeopotentialSlopeH, state->maxAbsGeopotentialSlopeV, state->bctField, state->viErrors, state->potentials, state->flags, state->fitInfo, state->usePotentials);
             if (downSampled)
             {
                 storageIndex++;
@@ -704,6 +709,8 @@ int exportTCT02Cdfs(ProcessorState *state, double startTime, double stopTime, lo
         createVarFrom1DVar(exportCdfId, "Calibration_flags", CDF_UINT4, startIndex, stopIndex, state->fitInfo);
         createVarFrom1DVar(exportCdfId, "GeoPotentialH", CDF_REAL4, startIndex, stopIndex, state->geoPotentialH);
         createVarFrom1DVar(exportCdfId, "GeoPotentialV", CDF_REAL4, startIndex, stopIndex, state->geoPotentialV);
+        createVarFrom1DVar(exportCdfId, "MaxAbsGeoPotentialBaselineSlopeH", CDF_REAL4, startIndex, stopIndex, state->maxAbsGeopotentialSlopeH);
+        createVarFrom1DVar(exportCdfId, "MaxAbsGeoPotentialBaselineSlopeV", CDF_REAL4, startIndex, stopIndex, state->maxAbsGeopotentialSlopeV);
 
         // add attributes
         // update start and stop times to the averaged ones
