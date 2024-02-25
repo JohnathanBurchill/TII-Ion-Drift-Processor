@@ -61,5 +61,6 @@ int checkResult(int status, ProcessorState *state);
 int shutdown(int status, ProcessorState *state);
 
 void velocityBackgroundRemoval(ProcessorState *state);
+void geoelectricPotentialBackgroundRemoval(ProcessorState *state);
 
 #endif // PROCESSING_H

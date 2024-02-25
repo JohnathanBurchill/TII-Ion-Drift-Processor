@@ -606,6 +606,14 @@ int calculateFields(ProcessorState *state)
         geoPotentialV[timeIndex] += previousExV * magVsat * deltaTime;
     }
 
+    // Remove offsets and set calibration flags
+    state->setFlags = true;
+    // Linear offset model
+    state->bgws.fitDegree = 2;
+    status = removeOffsetsAndSetFlags(state, geoelectricPotentialBackgroundRemoval);
+    if (status != TIICT_OK)
+        return status;
+
     fprintf(state->processingLogFile, "%sCalculated fields.\n", infoHeader);
     fflush(state->processingLogFile);
 
@@ -1126,6 +1134,115 @@ void velocityBackgroundRemoval(ProcessorState *state)
                     // Update quality and calibration flags based on thresholds
                     updateDataQualityFlags(state->args.satellite, flagIndex, fitargs->regionNumber, driftValue, mad, timeIndex, state->flags, state->fitInfo);
                 }
+            }
+        }
+    }
+    gsl_matrix_free(cov);
+
+    return;
+
+}
+
+void geoelectricPotentialBackgroundRemoval(ProcessorState *state)
+{
+    long long timeIndex = 0;
+    uint8_t **dataBuffers = state->dataBuffers;
+
+    int gslStatus = GSL_SUCCESS;
+
+    // Buffers for mid-latitude linear fit data
+    const gsl_multifit_robust_type * fitType = gsl_multifit_robust_bisquare;
+    gsl_multifit_robust_workspace * gslFitWorkspace;
+    gsl_multifit_robust_stats stats;
+    BackgroundRemovalWorkspace_t *ws = &state->bgws;
+    gsl_matrix *cov = gsl_matrix_alloc(ws->fitDegree, ws->fitDegree);
+    double c0, c1, cov00, cov01, cov11, sumsq;
+    float geopotentialValue = 0.0;
+
+    offset_model_fit_arguments *fitargs = &state->fitargs[state->interval];
+
+    float *geoPotential = NULL;
+    // Load values into model data buffer once each for HX, HY, VX, VY
+    for (uint8_t k = 0; k < 4; k++)
+    {
+        uint8_t flagIndex = k; // Defined flags as bit 0 -> HX, bit 1 -> VX, bit 2-> HY and bit 3-> VY. Data are stored in memory differently.
+        if (k == 0)
+            geoPotential = state->geoPotentialH;
+        else
+            geoPotential = state->geoPotentialV;
+
+        ws->modelDataIndex = 0;
+        for (timeIndex = ws->beginIndex0; timeIndex < ws->beginIndex1; timeIndex++)
+        {
+            gsl_vector_set(ws->model1Values, ws->modelDataIndex, geoPotential[timeIndex]); 
+            gsl_vector_set(ws->modelValues, ws->modelDataIndex++, geoPotential[timeIndex]); 
+        }
+        ws->modelDataMidPoint = ws->modelDataIndex;
+        for (timeIndex = ws->endIndex0; timeIndex < ws->endIndex1; timeIndex++)
+        {
+            gsl_vector_set(ws->model2Values, ws->modelDataIndex - ws->modelDataMidPoint, geoPotential[timeIndex]); 
+            gsl_vector_set(ws->modelValues, ws->modelDataIndex++, geoPotential[timeIndex]); 
+        }
+        // Robust linear model fit and removal
+        gslFitWorkspace = gsl_multifit_robust_alloc(fitType, ws->numModelPoints, ws->fitDegree);
+        gslStatus = gsl_multifit_robust_maxiter(GSL_FIT_MAXIMUM_ITERATIONS, gslFitWorkspace);
+        if (gslStatus)
+        {
+            fprintf(state->processingLogFile, "%sCould not set maximum GSL iterations.\n", infoHeader);
+        }
+        gslStatus = gsl_multifit_robust(ws->modelTimesMatrix, ws->modelValues, ws->fitCoefficients, cov, gslFitWorkspace);
+        if (gslStatus)
+        {
+            toEncodeEPOCH(ws->tregion11, 0, ws->startString);
+            toEncodeEPOCH(ws->tregion22, 0, ws->stopString);
+            fprintf(state->processingLogFile, "%s<GSL Fit Error: %s> for fit region from %s to %s spanning latitudes %.0f to %.0f.\n", infoHeader, gsl_strerror(gslStatus), ws->startString, ws->stopString, fitargs->lat1, fitargs->lat4);
+            // Print "-9999999999.GSLERRORNUMBER" for each of the nine fit parameters
+            fprintf(state->fitFile, " -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d", gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus);
+            if (state->setFlags)
+            {
+                for (timeIndex = ws->beginIndex0; timeIndex < ws->endIndex1; timeIndex++)
+                {
+                    // Got a complete region, but had a fit error
+                    state->fitInfo[timeIndex] &= ~(FITINFO_INCOMPLETE_REGION << (flagIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
+                    state->fitInfo[timeIndex] |= (FITINFO_GSL_FIT_ERROR << (flagIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
+                }
+            }
+        }
+        else
+        {
+            c0 = gsl_vector_get(ws->fitCoefficients, 0);
+            c1 = gsl_vector_get(ws->fitCoefficients, 1);
+            stats = gsl_multifit_robust_statistics(gslFitWorkspace);
+            gsl_multifit_robust_free(gslFitWorkspace);
+            // check median absolute deviation and median of signal
+            // Note that median calculation sorts the array, so do this last
+            double mad = stats.sigma_mad; // For full data fitted
+            double mad1 = gsl_stats_mad(ws->model1Values->data, 1, ws->numModel1Points, ws->work1->data); // For first segment
+            double mad2 = gsl_stats_mad(ws->model2Values->data, 1, ws->numModel2Points, ws->work2->data); // For last segment
+            double median1 = gsl_stats_median(ws->model1Values->data, 1, ws->numModel1Points);
+            double median2 = gsl_stats_median(ws->model2Values->data, 1, ws->numModel2Points);
+            fprintf(state->fitFile, " %f %f %f %f %f %f %f %f %f", c0, c1, stats.adj_Rsq, stats.rmse, median1, median2, mad, mad1, mad2);
+            // Remove the offsets and assign flags for this region
+            for (timeIndex = ws->beginIndex0; timeIndex < ws->endIndex1; timeIndex++)
+            {
+                // remove offset
+                geoPotential[timeIndex] -= (((TIME() - ws->epoch0)/1000.0) * c1 + c0);
+                geopotentialValue = geoPotential[timeIndex];
+                // Assign error estimate
+                // TODO: use interpolated MADs derived start and end of pass?
+                state->viErrors[4*timeIndex + k] = mad;
+                // Set offset-removed flag (most significant bit), and complete region found
+                // Having a complete region can be determined from offset removed and gsl error flags, but
+                // the extra bit will make it logically straightforward to find incomplete regions.
+                // Toggle off the "offset not removed" and "incomplete region" flag bits
+
+                // TODO implement geopotential flagging
+//                if (state->setFlags)
+//                {
+//                    state->fitInfo[timeIndex] &= ~((FITINFO_OFFSET_NOT_REMOVED | FITINFO_INCOMPLETE_REGION) << (flagIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
+//                    // Update quality and calibration flags based on thresholds
+//                    updateDataQualityFlags(state->args.satellite, flagIndex, fitargs->regionNumber, driftValue, mad, timeIndex, state->flags, state->fitInfo);
+//                }
             }
         }
     }
