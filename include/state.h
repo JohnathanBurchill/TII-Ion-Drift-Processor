@@ -26,6 +26,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <cdf.h>
+#include <gsl/gsl_multifit.h>
 
 typedef struct offset_model_fit_arguments {
     const uint8_t regionNumber;
@@ -47,6 +48,35 @@ typedef struct Arguments {
     const char* lpDir;
     const char* exportDir;
 } Arguments;
+
+typedef struct BackgroundRemovalWorkspace
+{
+    long long beginIndex0;
+    long long beginIndex1;
+    long long endIndex0;
+    long long endIndex1;
+    long long modelDataIndex;
+    long long modelDataMidPoint;
+    gsl_vector *modelValues;
+    gsl_vector *model1Values;
+    gsl_vector *model2Values;
+    long long numModelPoints; // data for fit, and for median calculations at each end
+    long long numModel1Points;
+    long long numModel2Points;
+    gsl_vector *fitCoefficients;
+    gsl_vector *work1;
+    gsl_vector *work2;
+    gsl_matrix *modelTimesMatrix;
+    double epoch0;
+    double tregion11;
+    double tregion12;
+    double tregion21;
+    double tregion22;
+    char startString[EPOCH_STRING_LEN+1];
+    char stopString[EPOCH_STRING_LEN+1];
+    size_t fitDegree; // fit degree (e.g., linear is 2) 
+
+} BackgroundRemovalWorkspace_t;
 
 typedef struct ProcessorState {
 
@@ -90,6 +120,10 @@ typedef struct ProcessorState {
     float *geoPotentialH;
     float *geoPotentialV;
     
+    // Offset removal options
+    uint8_t interval;
+    bool setFlags;
+    BackgroundRemovalWorkspace_t bgws;
 
 } ProcessorState;
 

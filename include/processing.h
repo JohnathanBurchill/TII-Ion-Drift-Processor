@@ -23,7 +23,6 @@
 
 #include "state.h"
 
-#include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
 
@@ -38,8 +37,8 @@ enum FITINFO_BIT_MASKS {
 int initQualityData(ProcessorState *state);
 int calibrateFlows(ProcessorState *state);
 
-int removeOffsetsAndSetFlags(ProcessorState *state, bool setFlags);
-int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, uint8_t interval, bool setFlags);
+int removeOffsetsAndSetFlags(ProcessorState *state, void (*doInterestingStuff)(ProcessorState*));
+int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, void (*doInterestingStuff)(ProcessorState*));
 
 void updateDataQualityFlags(const char *satellite, uint8_t sensorIndex, uint8_t regionNumber, float driftValue, float mad, long timeIndex, uint16_t *flags, uint32_t *fitInfo);
 
@@ -60,5 +59,7 @@ void initHeader(ProcessorState *state);
 
 int checkResult(int status, ProcessorState *state);
 int shutdown(int status, ProcessorState *state);
+
+void velocityBackgroundRemoval(ProcessorState *state);
 
 #endif // PROCESSING_H

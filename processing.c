@@ -83,9 +83,6 @@ int calibrateFlows(ProcessorState *state)
     double *pEpoch = (double*) dataBuffers[0];
     long long timeIndex = 0;
 
-    // The macros TIME(), QDLAT(), etc. give the value at index timeIndex.
-    double epoch0 = TIME();
-
     // Strategy is to perform calculations in place in memory without allocating space unecessarily.
     // Update 
     //  0) Adjust times by + 1./32 - 0.0875 s
@@ -230,7 +227,10 @@ int calibrateFlows(ProcessorState *state)
     fflush(state->processingLogFile);
 
     // Remove offsets and set calibration flags
-    status = removeOffsetsAndSetFlags(state, true);
+    state->setFlags = true;
+    // Linear offset model
+    state->bgws.fitDegree = 2;
+    status = removeOffsetsAndSetFlags(state, velocityBackgroundRemoval);
     if (status != TIICT_OK)
         return status;
 
@@ -260,7 +260,7 @@ int calibrateFlows(ProcessorState *state)
 
 }
 
-int removeOffsetsAndSetFlags(ProcessorState *state, bool setFlags)
+int removeOffsetsAndSetFlags(ProcessorState *state, void (*doInterestingStuff)(ProcessorState *))
 {
     int status = TIICT_OK;
 
@@ -273,7 +273,8 @@ int removeOffsetsAndSetFlags(ProcessorState *state, bool setFlags)
     for (uint8_t ind = 0; ind < 4; ind++)
     {
         // Remove offsets again and set flags
-        status = removeOffsetsAndSetFlagsForInterval(state, ind, setFlags);
+        state->interval = ind;
+        status = removeOffsetsAndSetFlagsForInterval(state, doInterestingStuff);
         if (status != TIICT_OK)
             return status;
     }
@@ -286,30 +287,23 @@ int removeOffsetsAndSetFlags(ProcessorState *state, bool setFlags)
 
 }
 
-int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, uint8_t interval, bool setFlags)
+int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, void (*doInterestingStuff)(ProcessorState *))
 {
     // Robust linear least squares from GSL: https://www.gnu.org/software/gsl/doc/html/lls.html#examples
     long long timeIndex = 0;
     uint8_t **dataBuffers = state->dataBuffers;
-    double epoch0 = TIME();
     uint16_t minDataPointsNeeded = 80;
     float previousQDLat = QDLAT();
-    float driftValue;
     bool regionBegin = false;
-    long long beginIndex0 = 0, beginIndex1 = 0, endIndex0 = 0, endIndex1 = 0, modelDataIndex = 0, modelDataMidPoint = 0;
-
-    double c0, c1, cov00, cov01, cov11, sumsq;
+    state->bgws.epoch0 = TIME();
     double seconds, fitTime;
     int gslStatus;
-    long long numModelPoints, numModel1Points, numModel2Points; // data for fit, and for median calculations at each end
     bool gotFirstModelData = false;
     bool gotStartOfSecondModelData = false;
     bool gotSecondModelData = false;
     uint16_t numFits = 0;
 
-    char startString[EPOCH_STRING_LEN+1], stopString[EPOCH_STRING_LEN+1];
-
-    offset_model_fit_arguments *fitargs = &state->fitargs[interval];
+    offset_model_fit_arguments *fitargs = &state->fitargs[state->interval];
 
     float dlatfirst = fitargs->lat2 - fitargs->lat1;
     float dlatsecond = fitargs->lat4 - fitargs->lat3;
@@ -335,21 +329,9 @@ int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, uint8_t interval,
     else
         region = 0; // Equator
 
-    // Buffers for mid-latitude linear fit data
-    const gsl_multifit_robust_type * fitType = gsl_multifit_robust_bisquare;
-    gsl_matrix *modelTimesMatrix, *cov;
-    gsl_vector *modelValues, *model1Values, *model2Values, *fitCoefficients, *work1, *work2;
-    gsl_multifit_robust_workspace * gslFitWorkspace;
-    gsl_multifit_robust_stats stats;
-    const size_t p = 2; // linear fit
-
-    double tregion11, tregion12, tregion21, tregion22;
-
     for (timeIndex = 0; timeIndex < state->nRecs; timeIndex++)
     {
-        c0 = 0.0;
-        c1 = 0.0;
-        seconds = (TIME() - epoch0) / 1000.;
+        seconds = (TIME() - state->bgws.epoch0) / 1000.;
         if ((firstDirection == 1 && QDLAT() >= fitargs->lat1 && previousQDLat < fitargs->lat1) || (firstDirection == -1 && QDLAT() <= fitargs->lat1 && previousQDLat > fitargs->lat1))
         {
             // Start a new region search
@@ -357,17 +339,17 @@ int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, uint8_t interval,
             gotFirstModelData = false;
             gotStartOfSecondModelData = false;
             gotSecondModelData = false;
-            beginIndex0 = timeIndex;
-            tregion11 = TIME();
+            state->bgws.beginIndex0 = timeIndex;
+            state->bgws.tregion11 = TIME();
 
         }
         else if (regionBegin && ((firstDirection == 1 && QDLAT() >= fitargs->lat2 && previousQDLat < fitargs->lat2) || (firstDirection == -1 && QDLAT() <= fitargs->lat2 && previousQDLat > fitargs->lat2)))
         {
-            if ((TIME() - tregion11)/1000. < (5400. / 2.)) // Should be within 1/2 an orbit of start of segment
+            if ((TIME() - state->bgws.tregion11)/1000. < (5400. / 2.)) // Should be within 1/2 an orbit of start of segment
             {
                 gotFirstModelData = true;
-                beginIndex1 = timeIndex;
-                tregion12 = TIME();
+                state->bgws.beginIndex1 = timeIndex;
+                state->bgws.tregion12 = TIME();
             }
             else
             {
@@ -380,11 +362,11 @@ int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, uint8_t interval,
         }
         else if (gotFirstModelData && ((secondDirection == -1 && QDLAT() <= fitargs->lat3 && previousQDLat > fitargs->lat3) || (secondDirection == 1 && QDLAT() >= fitargs->lat3 && previousQDLat < fitargs->lat3)))
         {
-            if ((TIME() - tregion12)/1000. < (5400. / 2.)) // Should be within 1/2 an orbit of start of segment
+            if ((TIME() - state->bgws.tregion12)/1000. < (5400. / 2.)) // Should be within 1/2 an orbit of start of segment
             {
                 gotStartOfSecondModelData = true;
-                endIndex0 = timeIndex;
-                tregion21 = TIME();
+                state->bgws.endIndex0 = timeIndex;
+                state->bgws.tregion21 = TIME();
             }
             else
             {
@@ -397,11 +379,11 @@ int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, uint8_t interval,
         }
         else if (gotStartOfSecondModelData && ((secondDirection == -1 && QDLAT() <= fitargs->lat4 && previousQDLat > fitargs->lat4) || (secondDirection == 1 && QDLAT() >= fitargs->lat4 && previousQDLat < fitargs->lat4)))
         {
-            if ((TIME() - tregion21)/1000. < (5400. / 2.)) // Should be within 1/2 an orbit of start of segment
+            if ((TIME() - state->bgws.tregion21)/1000. < (5400. / 2.)) // Should be within 1/2 an orbit of start of segment
             {
                 // We have a complete region - remove linear offset model
-                endIndex1 = timeIndex;
-                tregion22 = TIME();
+                state->bgws.endIndex1 = timeIndex;
+                state->bgws.tregion22 = TIME();
                 gotSecondModelData = true;
             }
             else
@@ -415,129 +397,48 @@ int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, uint8_t interval,
             if (gotFirstModelData && gotSecondModelData)
             {
                 numFits++;
-                numModel1Points = beginIndex1 - beginIndex0;
-                numModel2Points = endIndex1 - endIndex0;
-                numModelPoints = numModel1Points + numModel2Points;
-                fprintf(state->fitFile, "%d %d %lld %lld %f %f %f %f", fitargs->regionNumber, numFits, numModel1Points, numModel2Points, tregion11, tregion12, tregion21, tregion22);
+                state->bgws.numModel1Points = state->bgws.beginIndex1 - state->bgws.beginIndex0;
+                state->bgws.numModel2Points = state->bgws.endIndex1 - state->bgws.endIndex0;
+                state->bgws.numModelPoints = state->bgws.numModel1Points + state->bgws.numModel2Points;
+                fprintf(state->fitFile, "%d %d %lld %lld %f %f %f %f", fitargs->regionNumber, numFits, state->bgws.numModel1Points, state->bgws.numModel2Points, state->bgws.tregion11, state->bgws.tregion12, state->bgws.tregion21, state->bgws.tregion22);
                 // Allocate fit buffers
-                modelTimesMatrix = gsl_matrix_alloc(numModelPoints, p);
-                model1Values = gsl_vector_alloc(numModel1Points);
-                model2Values = gsl_vector_alloc(numModel2Points);
-                work1 = gsl_vector_alloc(numModel1Points);
-                work2 = gsl_vector_alloc(numModel2Points);
-                modelValues = gsl_vector_alloc(numModelPoints);
-                fitCoefficients = gsl_vector_alloc(p);
-                cov = gsl_matrix_alloc(p, p);
+                state->bgws.modelTimesMatrix = gsl_matrix_alloc(state->bgws.numModelPoints, state->bgws.fitDegree);
+                state->bgws.model1Values = gsl_vector_alloc(state->bgws.numModel1Points);
+                state->bgws.model2Values = gsl_vector_alloc(state->bgws.numModel2Points);
+                state->bgws.work1 = gsl_vector_alloc(state->bgws.numModel1Points);
+                state->bgws.work2 = gsl_vector_alloc(state->bgws.numModel2Points);
+                state->bgws.modelValues = gsl_vector_alloc(state->bgws.numModelPoints);
+                state->bgws.fitCoefficients = gsl_vector_alloc(state->bgws.fitDegree);
 
                 // Load times into the model data buffer
-                modelDataIndex = 0;
-                for (timeIndex = beginIndex0; timeIndex < beginIndex1; timeIndex++)
+                state->bgws.modelDataIndex = 0;
+                for (timeIndex = state->bgws.beginIndex0; timeIndex < state->bgws.beginIndex1; timeIndex++)
                 {
-                    fitTime = (TIME() - epoch0)/1000.;
-                    gsl_matrix_set(modelTimesMatrix, modelDataIndex, 0, 1.0);
-                    gsl_matrix_set(modelTimesMatrix, modelDataIndex++, 1, fitTime); // seconds from start of file
+                    fitTime = (TIME() - state->bgws.epoch0)/1000.;
+                    gsl_matrix_set(state->bgws.modelTimesMatrix, state->bgws.modelDataIndex, 0, 1.0);
+                    gsl_matrix_set(state->bgws.modelTimesMatrix, state->bgws.modelDataIndex++, 1, fitTime); // seconds from start of file
                 }
-                for (timeIndex = endIndex0; timeIndex < endIndex1; timeIndex++)
+                for (timeIndex = state->bgws.endIndex0; timeIndex < state->bgws.endIndex1; timeIndex++)
                 {
-                    fitTime = (TIME() - epoch0)/1000.;
-                    gsl_matrix_set(modelTimesMatrix, modelDataIndex, 0, 1.0);
-                    gsl_matrix_set(modelTimesMatrix, modelDataIndex++, 1, fitTime); // seconds from start of file
+                    fitTime = (TIME() - state->bgws.epoch0)/1000.;
+                    gsl_matrix_set(state->bgws.modelTimesMatrix, state->bgws.modelDataIndex, 0, 1.0);
+                    gsl_matrix_set(state->bgws.modelTimesMatrix, state->bgws.modelDataIndex++, 1, fitTime); // seconds from start of file
                 }
-                // Load values into model data buffer once each for HX, HY, VX, VY
-                for (uint8_t k = 0; k < 4; k++)
-                {
-                    uint8_t flagIndex = k; // Defined flags as bit 0 -> HX, bit 1 -> VX, bit 2-> HY and bit 3-> VY. Data are stored in memory differently.
-                    if (flagIndex == 1)
-                        flagIndex = 2;
-                    else if (flagIndex == 2)
-                        flagIndex = 1;
-
-                    modelDataIndex = 0;
-                    for (timeIndex = beginIndex0; timeIndex < beginIndex1; timeIndex++)
-                    {
-                        gsl_vector_set(model1Values, modelDataIndex, *ADDR(1 + k / 2, k % 2, 2)); 
-                        gsl_vector_set(modelValues, modelDataIndex++, *ADDR(1 + k / 2, k % 2, 2)); 
-                    }
-                    modelDataMidPoint = modelDataIndex;
-                    for (timeIndex = endIndex0; timeIndex < endIndex1; timeIndex++)
-                    {
-                        gsl_vector_set(model2Values, modelDataIndex - modelDataMidPoint, *ADDR(1 + k / 2, k % 2, 2)); 
-                        gsl_vector_set(modelValues, modelDataIndex++, *ADDR(1 + k / 2, k % 2, 2)); 
-                    }
-                    // Robust linear model fit and removal
-                    gslFitWorkspace = gsl_multifit_robust_alloc(fitType, numModelPoints, p);
-                    gslStatus = gsl_multifit_robust_maxiter(GSL_FIT_MAXIMUM_ITERATIONS, gslFitWorkspace);
-                    if (gslStatus)
-                    {
-                        fprintf(state->processingLogFile, "%sCould not set maximum GSL iterations.\n", infoHeader);
-                    }
-                    gslStatus = gsl_multifit_robust(modelTimesMatrix, modelValues, fitCoefficients, cov, gslFitWorkspace);
-                    if (gslStatus)
-                    {
-                        toEncodeEPOCH(tregion11, 0, startString);
-                        toEncodeEPOCH(tregion22, 0, stopString);
-                        fprintf(state->processingLogFile, "%s<GSL Fit Error: %s> for fit region from %s to %s spanning latitudes %.0f to %.0f.\n", infoHeader, gsl_strerror(gslStatus), startString, stopString, fitargs->lat1, fitargs->lat4);
-                        // Print "-9999999999.GSLERRORNUMBER" for each of the nine fit parameters
-                        fprintf(state->fitFile, " -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d", gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus);
-                        if (setFlags)
-                        {
-                            for (timeIndex = beginIndex0; timeIndex < endIndex1; timeIndex++)
-                            {
-                                // Got a complete region, but had a fit error
-                                state->fitInfo[timeIndex] &= ~(FITINFO_INCOMPLETE_REGION << (flagIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
-                                state->fitInfo[timeIndex] |= (FITINFO_GSL_FIT_ERROR << (flagIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
-                            }
-                        }
-                    }
-                    else
-                    {
-                        c0 = gsl_vector_get(fitCoefficients, 0);
-                        c1 = gsl_vector_get(fitCoefficients, 1);
-                        stats = gsl_multifit_robust_statistics(gslFitWorkspace);
-                        gsl_multifit_robust_free(gslFitWorkspace);
-                        // check median absolute deviation and median of signal
-                        // Note that median calculation sorts the array, so do this last
-                        double mad = stats.sigma_mad; // For full data fitted
-                        double mad1 = gsl_stats_mad(model1Values->data, 1, numModel1Points, work1->data); // For first segment
-                        double mad2 = gsl_stats_mad(model2Values->data, 1, numModel2Points, work2->data); // For last segment
-                        double median1 = gsl_stats_median(model1Values->data, 1, numModel1Points);
-                        double median2 = gsl_stats_median(model2Values->data, 1, numModel2Points);
-                        fprintf(state->fitFile, " %f %f %f %f %f %f %f %f %f", c0, c1, stats.adj_Rsq, stats.rmse, median1, median2, mad, mad1, mad2);
-                        // Remove the offsets and assign flags for this region
-                        for (timeIndex = beginIndex0; timeIndex < endIndex1; timeIndex++)
-                        {
-                            // remove offset
-                            *ADDR(1 + k / 2, k % 2, 2) -= (((TIME() - epoch0)/1000.0) * c1 + c0);
-                            driftValue = *ADDR(1 + k / 2, k % 2, 2);
-                            // Assign error estimate
-                            // TODO: use interpolated MADs derived start and end of pass?
-                            state->viErrors[4*timeIndex + k] = mad;
-                            // Set offset-removed flag (most significant bit), and complete region found
-                            // Having a complete region can be determined from offset removed and gsl error flags, but
-                            // the extra bit will make it logically straightforward to find incomplete regions.
-                            // Toggle off the "offset not removed" and "incomplete region" flag bits
-                            if (setFlags)
-                            {
-                                state->fitInfo[timeIndex] &= ~((FITINFO_OFFSET_NOT_REMOVED | FITINFO_INCOMPLETE_REGION) << (flagIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
-                                // Update quality and calibration flags based on thresholds
-                                updateDataQualityFlags(state->args.satellite, flagIndex, fitargs->regionNumber, driftValue, mad, timeIndex, state->flags, state->fitInfo);
-                            }
-                        }
-                    }
-                }
+                // Perform background subtraction
+                doInterestingStuff(state);
                 fprintf(state->fitFile, "\n");
-                gsl_matrix_free(modelTimesMatrix);
-                gsl_vector_free(model1Values);
-                gsl_vector_free(model2Values);
-                gsl_vector_free(modelValues);
-                gsl_vector_free(work1);
-                gsl_vector_free(work2);
-                gsl_vector_free(fitCoefficients);
-                gsl_matrix_free(cov);
+
+                gsl_matrix_free(state->bgws.modelTimesMatrix);
+                gsl_vector_free(state->bgws.model1Values);
+                gsl_vector_free(state->bgws.model2Values);
+                gsl_vector_free(state->bgws.modelValues);
+                gsl_vector_free(state->bgws.work1);
+                gsl_vector_free(state->bgws.work2);
+                gsl_vector_free(state->bgws.fitCoefficients);
             }
             else
             {
-                fprintf(state->processingLogFile, "%s Fit error: did not get both endpoints of region defined for CDF_EPOCHS %f, %f, %f, %f: not fitting and not removing offsets.\n", infoHeader, tregion11, tregion12, tregion21, tregion22);
+                fprintf(state->processingLogFile, "%s Fit error: did not get both endpoints of region defined for CDF_EPOCHS %f, %f, %f, %f: not fitting and not removing offsets.\n", infoHeader, state->bgws.tregion11, state->bgws.tregion12, state->bgws.tregion21, state->bgws.tregion22);
                 // Fit region flag for incomplete region is already accounted for as complete_region bit is 0
             }
             
@@ -1127,3 +1028,110 @@ int shutdown(int status, ProcessorState *state)
 
     return status;
 }
+
+void velocityBackgroundRemoval(ProcessorState *state)
+{
+    long long timeIndex = 0;
+    uint8_t **dataBuffers = state->dataBuffers;
+
+    int gslStatus = GSL_SUCCESS;
+
+    // Buffers for mid-latitude linear fit data
+    const gsl_multifit_robust_type * fitType = gsl_multifit_robust_bisquare;
+    gsl_multifit_robust_workspace * gslFitWorkspace;
+    gsl_multifit_robust_stats stats;
+    BackgroundRemovalWorkspace_t *ws = &state->bgws;
+    gsl_matrix *cov = gsl_matrix_alloc(ws->fitDegree, ws->fitDegree);
+    double c0, c1, cov00, cov01, cov11, sumsq;
+    float driftValue = 0.0;
+
+    offset_model_fit_arguments *fitargs = &state->fitargs[state->interval];
+
+    // Load values into model data buffer once each for HX, HY, VX, VY
+    for (uint8_t k = 0; k < 4; k++)
+    {
+        uint8_t flagIndex = k; // Defined flags as bit 0 -> HX, bit 1 -> VX, bit 2-> HY and bit 3-> VY. Data are stored in memory differently.
+        if (flagIndex == 1)
+            flagIndex = 2;
+        else if (flagIndex == 2)
+            flagIndex = 1;
+
+        ws->modelDataIndex = 0;
+        for (timeIndex = ws->beginIndex0; timeIndex < ws->beginIndex1; timeIndex++)
+        {
+            gsl_vector_set(ws->model1Values, ws->modelDataIndex, *ADDR(1 + k / 2, k % 2, 2)); 
+            gsl_vector_set(ws->modelValues, ws->modelDataIndex++, *ADDR(1 + k / 2, k % 2, 2)); 
+        }
+        ws->modelDataMidPoint = ws->modelDataIndex;
+        for (timeIndex = ws->endIndex0; timeIndex < ws->endIndex1; timeIndex++)
+        {
+            gsl_vector_set(ws->model2Values, ws->modelDataIndex - ws->modelDataMidPoint, *ADDR(1 + k / 2, k % 2, 2)); 
+            gsl_vector_set(ws->modelValues, ws->modelDataIndex++, *ADDR(1 + k / 2, k % 2, 2)); 
+        }
+        // Robust linear model fit and removal
+        gslFitWorkspace = gsl_multifit_robust_alloc(fitType, ws->numModelPoints, ws->fitDegree);
+        gslStatus = gsl_multifit_robust_maxiter(GSL_FIT_MAXIMUM_ITERATIONS, gslFitWorkspace);
+        if (gslStatus)
+        {
+            fprintf(state->processingLogFile, "%sCould not set maximum GSL iterations.\n", infoHeader);
+        }
+        gslStatus = gsl_multifit_robust(ws->modelTimesMatrix, ws->modelValues, ws->fitCoefficients, cov, gslFitWorkspace);
+        if (gslStatus)
+        {
+            toEncodeEPOCH(ws->tregion11, 0, ws->startString);
+            toEncodeEPOCH(ws->tregion22, 0, ws->stopString);
+            fprintf(state->processingLogFile, "%s<GSL Fit Error: %s> for fit region from %s to %s spanning latitudes %.0f to %.0f.\n", infoHeader, gsl_strerror(gslStatus), ws->startString, ws->stopString, fitargs->lat1, fitargs->lat4);
+            // Print "-9999999999.GSLERRORNUMBER" for each of the nine fit parameters
+            fprintf(state->fitFile, " -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d", gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus);
+            if (state->setFlags)
+            {
+                for (timeIndex = ws->beginIndex0; timeIndex < ws->endIndex1; timeIndex++)
+                {
+                    // Got a complete region, but had a fit error
+                    state->fitInfo[timeIndex] &= ~(FITINFO_INCOMPLETE_REGION << (flagIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
+                    state->fitInfo[timeIndex] |= (FITINFO_GSL_FIT_ERROR << (flagIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
+                }
+            }
+        }
+        else
+        {
+            c0 = gsl_vector_get(ws->fitCoefficients, 0);
+            c1 = gsl_vector_get(ws->fitCoefficients, 1);
+            stats = gsl_multifit_robust_statistics(gslFitWorkspace);
+            gsl_multifit_robust_free(gslFitWorkspace);
+            // check median absolute deviation and median of signal
+            // Note that median calculation sorts the array, so do this last
+            double mad = stats.sigma_mad; // For full data fitted
+            double mad1 = gsl_stats_mad(ws->model1Values->data, 1, ws->numModel1Points, ws->work1->data); // For first segment
+            double mad2 = gsl_stats_mad(ws->model2Values->data, 1, ws->numModel2Points, ws->work2->data); // For last segment
+            double median1 = gsl_stats_median(ws->model1Values->data, 1, ws->numModel1Points);
+            double median2 = gsl_stats_median(ws->model2Values->data, 1, ws->numModel2Points);
+            fprintf(state->fitFile, " %f %f %f %f %f %f %f %f %f", c0, c1, stats.adj_Rsq, stats.rmse, median1, median2, mad, mad1, mad2);
+            // Remove the offsets and assign flags for this region
+            for (timeIndex = ws->beginIndex0; timeIndex < ws->endIndex1; timeIndex++)
+            {
+                // remove offset
+                *ADDR(1 + k / 2, k % 2, 2) -= (((TIME() - ws->epoch0)/1000.0) * c1 + c0);
+                driftValue = *ADDR(1 + k / 2, k % 2, 2);
+                // Assign error estimate
+                // TODO: use interpolated MADs derived start and end of pass?
+                state->viErrors[4*timeIndex + k] = mad;
+                // Set offset-removed flag (most significant bit), and complete region found
+                // Having a complete region can be determined from offset removed and gsl error flags, but
+                // the extra bit will make it logically straightforward to find incomplete regions.
+                // Toggle off the "offset not removed" and "incomplete region" flag bits
+                if (state->setFlags)
+                {
+                    state->fitInfo[timeIndex] &= ~((FITINFO_OFFSET_NOT_REMOVED | FITINFO_INCOMPLETE_REGION) << (flagIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
+                    // Update quality and calibration flags based on thresholds
+                    updateDataQualityFlags(state->args.satellite, flagIndex, fitargs->regionNumber, driftValue, mad, timeIndex, state->flags, state->fitInfo);
+                }
+            }
+        }
+    }
+    gsl_matrix_free(cov);
+
+    return;
+
+}
+
