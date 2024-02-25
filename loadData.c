@@ -327,6 +327,8 @@ int loadTiiCalData(ProcessorState *state)
     // Get data for prior, requested, and following days
     for (int8_t i = -1; i < 2; i++)
     {
+        state->args.year = year;
+        state->args.month= month;
         state->args.day = day + i;
         fprintf(state->processingLogFile, "%sLoading calibration data for %04d%02d%02d\n", infoHeader, state->args.year, state->args.month, state->args.day);
 
@@ -350,7 +352,7 @@ int loadTiiCalData(ProcessorState *state)
 void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state)
 {
     // c time manipulation: see  https://fresh2refresh.com/c-programming/c-time-related-functions/
-    struct tm timestructure;
+    struct tm timestructure = {0};
     time_t date;
 
     // day or month can be outside nominal ranges due to date arithmetic, so make them canonical
