@@ -522,12 +522,10 @@ int initFields(ProcessorState *state)
     state->ectFieldH = (float*) malloc((size_t) (state->nRecs * sizeof(float) * 3));
     state->ectFieldV = (float*) malloc((size_t) (state->nRecs * sizeof(float) * 3));
     state->bctField = (float*) malloc((size_t) (state->nRecs * sizeof(float) * 3));
-    state->geoPotentialH = (float*) malloc((size_t) (state->nRecs * sizeof(float)));
-    state->geoPotentialV = (float*) malloc((size_t) (state->nRecs * sizeof(float)));
-    state->maxAbsGeopotentialSlopeH= (float*) malloc((size_t) (state->nRecs * sizeof(float)));
-    state->maxAbsGeopotentialSlopeV= (float*) malloc((size_t) (state->nRecs * sizeof(float)));
+    state->geoPotential = (float*) malloc((size_t) (state->nRecs * sizeof(float)));
+    state->maxAbsGeopotentialSlope= (float*) malloc((size_t) (state->nRecs * sizeof(float)));
 
-    if (state->xhat == NULL || state->yhat == NULL || state->zhat == NULL || state->ectFieldH == NULL || state->ectFieldV == NULL || state->bctField == NULL || state->geoPotentialH == NULL || state->geoPotentialV == NULL || state->maxAbsGeopotentialSlopeH == NULL || state->maxAbsGeopotentialSlopeV == NULL)
+    if (state->xhat == NULL || state->yhat == NULL || state->zhat == NULL || state->ectFieldH == NULL || state->ectFieldV == NULL || state->bctField == NULL || state->geoPotential == NULL || state->maxAbsGeopotentialSlope == NULL)
         return TIICT_MEMORY;
 
     return TIICT_OK;
@@ -550,16 +548,12 @@ int calculateFields(ProcessorState *state)
     float *ectFieldV = state->ectFieldV;
     float *bctField = state->bctField;
 
-    float *geoPotentialH = state->geoPotentialH;
-    float *geoPotentialV = state->geoPotentialV;
     long timeIndex = 0;
     double previousTime = TIME();
     double currentTime = TIME();
     double deltaTime = 0.0;
-    geoPotentialH[0] = 0.0;
-    geoPotentialV[0] = 0.0;
+    state->geoPotential[0] = 0.0;
     float previousExH = 0.0;
-    float previousExV = 0.0;
 
     for (timeIndex = 0; timeIndex < state->nRecs; timeIndex++)
     {
@@ -609,13 +603,10 @@ int calculateFields(ProcessorState *state)
 
         if (timeIndex > 0)
         {
-            geoPotentialH[timeIndex] = geoPotentialH[timeIndex-1];
-            geoPotentialV[timeIndex] = geoPotentialV[timeIndex-1];
+            state->geoPotential[timeIndex] = state->geoPotential[timeIndex-1];
             previousExH = ectFieldH[ind + 0] / 1e3;
-            previousExV = ectFieldV[ind + 0] / 1e3;
         }
-        geoPotentialH[timeIndex] += previousExH * magVsat * deltaTime;
-        geoPotentialV[timeIndex] += previousExV * magVsat * deltaTime;
+        state->geoPotential[timeIndex] += previousExH * magVsat * deltaTime;
     }
 
     // Remove offsets and set calibration flags
@@ -676,7 +667,7 @@ void interpolate(double *times, double *values, size_t nVals, double *requestedT
 }
 
 
-bool downSampleHalfSecond(long *index, long storageIndex, double t0, long maxIndex, uint8_t **dataBuffers, float *ectFieldH, float *ectFieldV, float *geoPotentialH, float *geoPotentialV, float *maxAbsGeopotentialSlopeH, float *maxAbsGeopotentialSlopeV, float *bctField, float *viErrors, float *potentials, uint16_t *flags, uint32_t *fitInfo, bool usePotentials)
+bool downSampleHalfSecond(long *index, long storageIndex, double t0, long maxIndex, uint8_t **dataBuffers, float *ectFieldH, float *ectFieldV, float *geoPotential, float *maxAbsGeopotentialSlope, float *bctField, float *viErrors, float *potentials, uint16_t *flags, uint32_t *fitInfo, bool usePotentials)
 {
     long timeIndex = *index;
     uint8_t nSamples = 0;
@@ -734,13 +725,10 @@ bool downSampleHalfSecond(long *index, long storageIndex, double t0, long maxInd
         floatBuf[29] += VCORZ();
         if (usePotentials)
             floatBuf[30] += potentials[timeIndex];
-        floatBuf[31] += geoPotentialH[timeIndex];
-        floatBuf[32] += geoPotentialV[timeIndex];
+        floatBuf[31] += geoPotential[timeIndex];
         // Take the largest of each 8-sample interval
-        if (floatBuf[33] < maxAbsGeopotentialSlopeH[timeIndex])
-            floatBuf[33] = maxAbsGeopotentialSlopeH[timeIndex];
-        if (floatBuf[34] < maxAbsGeopotentialSlopeV[timeIndex])
-            floatBuf[34] = maxAbsGeopotentialSlopeV[timeIndex];
+        if (floatBuf[32] < maxAbsGeopotentialSlope[timeIndex])
+            floatBuf[32] = maxAbsGeopotentialSlope[timeIndex];
         flagBuf &= flags[timeIndex];
         fitInfoBuf |= fitInfo[timeIndex];
         nSamples++;
@@ -786,10 +774,8 @@ bool downSampleHalfSecond(long *index, long storageIndex, double t0, long maxInd
         *((float*)dataBuffers[10] + (3*storageIndex) + 2) = floatBuf[29] / 8.0;
         if (usePotentials)
             potentials[storageIndex] = floatBuf[30] / 8.0; // Floating potential U_SC
-        geoPotentialH[storageIndex] = floatBuf[31] / 8.0; // Geoelectric potential H sensor
-        geoPotentialV[storageIndex] = floatBuf[32] / 8.0; // Geoelectric potential V sensor 
-        maxAbsGeopotentialSlopeH[storageIndex] = floatBuf[33]; // Take the maximum value                                                        
-        maxAbsGeopotentialSlopeV[storageIndex] = floatBuf[34]; // Take the maximum value                                                        
+        geoPotential[storageIndex] = floatBuf[31] / 8.0; // Geoelectric potential H sensor
+        maxAbsGeopotentialSlope[storageIndex] = floatBuf[32]; // Take the maximum value                                                        
         // Flags set to 0 at 16 Hz based on magnitude of flow,
         // are not reset at 2 Hz, to ensure integrity of 2 Hz measurements
         // One can review 16 Hz measurements to examine details of flow where even a
@@ -1180,115 +1166,88 @@ void geoelectricPotentialBackgroundRemoval(ProcessorState *state)
     double c0, c1, cov00, cov01, cov11, sumsq;
     double slope1 = 0.0;
     double slope2 = 0.0;
-    float geopotentialValue = 0.0;
 
     offset_model_fit_arguments *fitargs = &state->fitargs[state->interval];
 
-    float *geoPotential = NULL;
-    float *geoPotentialSlope = NULL;
     float vmag1 = 0.0;
     float vmag2 = 0.0;
 
     // Load values into model data buffer once each for HX, HY, VX, VY
-    for (uint8_t k = 0; k < 2; k++)
+    ws->modelDataIndex = 0;
+    vmag1 = 0.0;
+    vmag2 = 0.0;
+    for (timeIndex = ws->beginIndex0; timeIndex < ws->beginIndex1; timeIndex++)
     {
-        uint8_t flagIndex = k; // Defined flags as bit 0 -> HX, bit 1 -> VX, bit 2-> HY and bit 3-> VY. Data are stored in memory differently.
-        if (k == 0)
-        {
-            geoPotential = state->geoPotentialH;
-            geoPotentialSlope= state->maxAbsGeopotentialSlopeH;
-        }
-        else
-        {
-            geoPotential = state->geoPotentialV;
-            geoPotentialSlope= state->maxAbsGeopotentialSlopeV;
-        }
-
-        ws->modelDataIndex = 0;
-        vmag1 = 0.0;
-        vmag2 = 0.0;
-        for (timeIndex = ws->beginIndex0; timeIndex < ws->beginIndex1; timeIndex++)
-        {
-            gsl_vector_set(ws->model1Values, ws->modelDataIndex, geoPotential[timeIndex]); 
-            gsl_vector_set(ws->modelValues, ws->modelDataIndex++, geoPotential[timeIndex]); 
-            vmag1 += sqrtf(VSATN()*VSATN() + VSATE()*VSATE() + VSATC() * VSATC());
-        }
-        if (ws->numModel1Points > 0)
-            vmag1 /= (float)ws->numModel1Points;
-        else
-            vmag1 = 0.0;
-        ws->modelDataMidPoint = ws->modelDataIndex;
-        for (timeIndex = ws->endIndex0; timeIndex < ws->endIndex1; timeIndex++)
-        {
-            gsl_vector_set(ws->model2Values, ws->modelDataIndex - ws->modelDataMidPoint, geoPotential[timeIndex]); 
-            gsl_vector_set(ws->modelValues, ws->modelDataIndex++, geoPotential[timeIndex]); 
-            vmag2 += sqrtf(VSATN()*VSATN() + VSATE()*VSATE() + VSATC() * VSATC());
-        }
-        if (ws->numModel2Points > 0)
-            vmag2 /= (float)ws->numModel2Points;
-        else
-            vmag2 = 0.0;
-
-        // Robust linear model fit and removal
-        gslFitWorkspace = gsl_multifit_robust_alloc(fitType, ws->numModelPoints, ws->fitDegree);
-        gslFitWorkspace1 = gsl_multifit_robust_alloc(fitType, ws->numModel1Points, ws->fitDegree);
-        gslFitWorkspace2 = gsl_multifit_robust_alloc(fitType, ws->numModel2Points, ws->fitDegree);
-        gslStatus = gsl_multifit_robust_maxiter(GSL_FIT_MAXIMUM_ITERATIONS, gslFitWorkspace);
-        gslStatus = gsl_multifit_robust_maxiter(GSL_FIT_MAXIMUM_ITERATIONS, gslFitWorkspace1);
-        gslStatus = gsl_multifit_robust_maxiter(GSL_FIT_MAXIMUM_ITERATIONS, gslFitWorkspace2);
-        gslStatus = gsl_multifit_robust(ws->modelTimesMatrix, ws->modelValues, ws->fitCoefficients, cov, gslFitWorkspace);
-        if (gslStatus)
-        {
-            toEncodeEPOCH(ws->tregion11, 0, ws->startString);
-            toEncodeEPOCH(ws->tregion22, 0, ws->stopString);
-            fprintf(state->processingLogFile, "%s<GSL Fit Error: %s> for fit region from %s to %s spanning latitudes %.0f to %.0f.\n", infoHeader, gsl_strerror(gslStatus), ws->startString, ws->stopString, fitargs->lat1, fitargs->lat4);
-            // Print "-9999999999.GSLERRORNUMBER" for each of the nine fit parameters
-            fprintf(state->fitFile, " -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d", gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus);
-            if (state->setFlags)
-            {
-                for (timeIndex = ws->beginIndex0; timeIndex < ws->endIndex1; timeIndex++)
-                {
-                    // Got a complete region, but had a fit error
-                    state->fitInfo[timeIndex] &= ~(FITINFO_INCOMPLETE_REGION << (flagIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
-                    state->fitInfo[timeIndex] |= (FITINFO_GSL_FIT_ERROR << (flagIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
-                }
-            }
-        }
-        else
-        {
-            c0 = gsl_vector_get(ws->fitCoefficients, 0);
-            c1 = gsl_vector_get(ws->fitCoefficients, 1);
-            stats = gsl_multifit_robust_statistics(gslFitWorkspace);
-            // check median absolute deviation and median of signal
-            // Note that median calculation sorts the array, so do this last
-            double mad = stats.sigma_mad; // For full data fitted
-            double mad1 = gsl_stats_mad(ws->model1Values->data, 1, ws->numModel1Points, ws->work1->data); // For first segment
-            double mad2 = gsl_stats_mad(ws->model2Values->data, 1, ws->numModel2Points, ws->work2->data); // For last segment
-            double median1 = gsl_stats_median(ws->model1Values->data, 1, ws->numModel1Points);
-            double median2 = gsl_stats_median(ws->model2Values->data, 1, ws->numModel2Points);
-            gslStatus = gsl_multifit_robust(ws->modelTimes1Matrix, ws->model1Values, ws->fitCoefficients, cov, gslFitWorkspace1);
-            if (gslStatus == GSL_SUCCESS && vmag1 > 0)
-                slope1 = fabs(gsl_vector_get(ws->fitCoefficients, 1))/vmag1;
-            else
-                slope1 = 999999999.0;
-            gslStatus = gsl_multifit_robust(ws->modelTimes2Matrix, ws->model2Values, ws->fitCoefficients, cov, gslFitWorkspace2);
-            if (gslStatus == GSL_SUCCESS && vmag2 > 0)
-                slope2 = fabs(gsl_vector_get(ws->fitCoefficients, 1))/vmag2;
-            else
-                slope2 = 999999999.0;
-            // Remove the offsets and estimate max abs mean ex at mid-latitude 
-            for (timeIndex = ws->beginIndex0; timeIndex < ws->endIndex1; timeIndex++)
-            {
-                // remove offset
-                geoPotential[timeIndex] -= (((TIME() - ws->epoch0)/1000.0) * c1 + c0);
-                geoPotentialSlope[timeIndex] = slope1 > slope2 ? slope1 : slope2;
-                // TODO convert to V / m?
-            }
-        }
-        gsl_multifit_robust_free(gslFitWorkspace);
-        gsl_multifit_robust_free(gslFitWorkspace1);
-        gsl_multifit_robust_free(gslFitWorkspace2);
+        gsl_vector_set(ws->model1Values, ws->modelDataIndex, state->geoPotential[timeIndex]); 
+        gsl_vector_set(ws->modelValues, ws->modelDataIndex++, state->geoPotential[timeIndex]); 
+        vmag1 += sqrtf(VSATN()*VSATN() + VSATE()*VSATE() + VSATC() * VSATC());
     }
+    if (ws->numModel1Points > 0)
+        vmag1 /= (float)ws->numModel1Points;
+    else
+        vmag1 = 0.0;
+    ws->modelDataMidPoint = ws->modelDataIndex;
+    for (timeIndex = ws->endIndex0; timeIndex < ws->endIndex1; timeIndex++)
+    {
+        gsl_vector_set(ws->model2Values, ws->modelDataIndex - ws->modelDataMidPoint, state->geoPotential[timeIndex]); 
+        gsl_vector_set(ws->modelValues, ws->modelDataIndex++, state->geoPotential[timeIndex]); 
+        vmag2 += sqrtf(VSATN()*VSATN() + VSATE()*VSATE() + VSATC() * VSATC());
+    }
+    if (ws->numModel2Points > 0)
+        vmag2 /= (float)ws->numModel2Points;
+    else
+        vmag2 = 0.0;
+
+    // Robust linear model fit and removal
+    gslFitWorkspace = gsl_multifit_robust_alloc(fitType, ws->numModelPoints, ws->fitDegree);
+    gslFitWorkspace1 = gsl_multifit_robust_alloc(fitType, ws->numModel1Points, ws->fitDegree);
+    gslFitWorkspace2 = gsl_multifit_robust_alloc(fitType, ws->numModel2Points, ws->fitDegree);
+    gslStatus = gsl_multifit_robust_maxiter(GSL_FIT_MAXIMUM_ITERATIONS, gslFitWorkspace);
+    gslStatus = gsl_multifit_robust_maxiter(GSL_FIT_MAXIMUM_ITERATIONS, gslFitWorkspace1);
+    gslStatus = gsl_multifit_robust_maxiter(GSL_FIT_MAXIMUM_ITERATIONS, gslFitWorkspace2);
+    gslStatus = gsl_multifit_robust(ws->modelTimesMatrix, ws->modelValues, ws->fitCoefficients, cov, gslFitWorkspace);
+    if (gslStatus)
+    {
+        toEncodeEPOCH(ws->tregion11, 0, ws->startString);
+        toEncodeEPOCH(ws->tregion22, 0, ws->stopString);
+        fprintf(state->processingLogFile, "%s<GSL Fit Error: %s> for fit region from %s to %s spanning latitudes %.0f to %.0f.\n", infoHeader, gsl_strerror(gslStatus), ws->startString, ws->stopString, fitargs->lat1, fitargs->lat4);
+        // Print "-9999999999.GSLERRORNUMBER" for each of the nine fit parameters
+        fprintf(state->fitFile, " -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d", gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus);
+    }
+    else
+    {
+        c0 = gsl_vector_get(ws->fitCoefficients, 0);
+        c1 = gsl_vector_get(ws->fitCoefficients, 1);
+        stats = gsl_multifit_robust_statistics(gslFitWorkspace);
+        // check median absolute deviation and median of signal
+        // Note that median calculation sorts the array, so do this last
+        double mad = stats.sigma_mad; // For full data fitted
+        double mad1 = gsl_stats_mad(ws->model1Values->data, 1, ws->numModel1Points, ws->work1->data); // For first segment
+        double mad2 = gsl_stats_mad(ws->model2Values->data, 1, ws->numModel2Points, ws->work2->data); // For last segment
+        double median1 = gsl_stats_median(ws->model1Values->data, 1, ws->numModel1Points);
+        double median2 = gsl_stats_median(ws->model2Values->data, 1, ws->numModel2Points);
+        gslStatus = gsl_multifit_robust(ws->modelTimes1Matrix, ws->model1Values, ws->fitCoefficients, cov, gslFitWorkspace1);
+        if (gslStatus == GSL_SUCCESS && vmag1 > 0)
+            slope1 = fabs(gsl_vector_get(ws->fitCoefficients, 1))/vmag1 * 1000.0; // mV / m
+        else
+            slope1 = 999999999.0;
+        gslStatus = gsl_multifit_robust(ws->modelTimes2Matrix, ws->model2Values, ws->fitCoefficients, cov, gslFitWorkspace2);
+        if (gslStatus == GSL_SUCCESS && vmag2 > 0)
+            slope2 = fabs(gsl_vector_get(ws->fitCoefficients, 1))/vmag2 * 1000.0; // mV / m
+        else
+            slope2 = 999999999.0;
+        // Remove the offsets and estimate max abs mean ex at mid-latitude 
+        for (timeIndex = ws->beginIndex0; timeIndex < ws->endIndex1; timeIndex++)
+        {
+            // remove offset
+            state->geoPotential[timeIndex] -= (((TIME() - ws->epoch0)/1000.0) * c1 + c0);
+            state->maxAbsGeopotentialSlope[timeIndex] = slope1 > slope2 ? slope1 : slope2;
+            // TODO convert to V / m?
+        }
+    }
+    gsl_multifit_robust_free(gslFitWorkspace);
+    gsl_multifit_robust_free(gslFitWorkspace1);
+    gsl_multifit_robust_free(gslFitWorkspace2);
     gsl_matrix_free(cov);
 
     return;
