@@ -25,6 +25,7 @@
 #include "indexing.h"
 #include "utilities.h"
 
+#include <cdf.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
@@ -494,7 +495,7 @@ void addAttributes(CDFid id, const char *dataset, const char *satellite, const c
         {"Quality_flags", "CDF_UINT2", "*", "Bitwise flag for each velocity component, where a value of 1 for a particular component signifies that calibration was successful, and that the baseline 1-sigma noise level is less than or equal to 100 m/s at 2 Hz. Electric field quality can be assessed from these flags according to -vxB. Bit0 (least significant) = Vixh, bit1 = Vixv, bit2 = Viy, bit3 = Viz. Refer to the release notes for details.", 0, 65535},
         {"Calibration_flags", "CDF_UINT4", "*", "Information about the calibration process. Refer to the release notes for details.", 0, 4294967295},
         {"GeoPotentialH", "CDF_FLOAT", "V", "Geoelectric potential estimate from Ehx.", -1000000., 1000000.},
-        {"GeoPotentialV", "CDF_FLOAT", "V", "Geoelectric potential estimate from Ehx.", -1000000., 1000000.},
+        {"GeoPotentialV", "CDF_FLOAT", "V", "Geoelectric potential estimate from Evx.", -1000000., 1000000.},
     };
 
     for (uint8_t i = 0; i < NUM_EXPORT_VARIABLES; i++)
@@ -624,7 +625,7 @@ int exportTCT02Cdfs(ProcessorState *state, double startTime, double stopTime, lo
         t0 = floor(TIME()/1000.0); // UT second reference
         for (uint8_t halfSecond = 0; halfSecond < 2; halfSecond ++)
         {
-            downSampled = downSampleHalfSecond(&timeIndex, storageIndex, t0 + 0.5 * halfSecond, stopIndex, dataBuffers, state->ectFieldH, state->ectFieldV, state->bctField, state->viErrors, state->potentials, state->flags, state->fitInfo, state->usePotentials);
+            downSampled = downSampleHalfSecond(&timeIndex, storageIndex, t0 + 0.5 * halfSecond, stopIndex, dataBuffers, state->ectFieldH, state->ectFieldV, state->geoPotentialH, state->geoPotentialV, state->bctField, state->viErrors, state->potentials, state->flags, state->fitInfo, state->usePotentials);
             if (downSampled)
             {
                 storageIndex++;
