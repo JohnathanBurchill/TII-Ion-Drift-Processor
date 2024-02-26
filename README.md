@@ -10,9 +10,9 @@ Lomidze et al. (2019) Validity Study of the Swarm Horizontal Cross-Track Ion Dri
 
 Details on the processing method and output file format are available from the [TIICT Release Notes at ESA's Swarm Data Access page](https://swarm-diss.eo.esa.int/?do=download&file=swarm%2FAdvanced%2FPlasma_Data%2F2Hz_TII_Cross-track_Dataset%2FSW-RN-UoC-GS-004_TIICT_ReleaseNotes.ZIP).
 
-Copyright (C) 2022   Johnathan K Burchill
+Copyright (C) 2024   Johnathan K Burchill
 
-Developed at the University of Calgary (2020-2022) with support of the Canadian Space Agency. 
+Developed at the University of Calgary (2020-2024) with support of the Canadian Space Agency. 
 Alexei Kouznetsov and David Knudsen contributed to the development of the processing methology.
 
 This program is free software: you can redistribute it and/or modify

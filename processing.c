@@ -26,7 +26,6 @@
 #include "errors.h"
 #include "loadData.h"
 #include "export.h"
-#include "utilities.h"
 
 #include <tii/detector.h>
 #include <tii/isp.h>

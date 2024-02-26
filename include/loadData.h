@@ -2,7 +2,7 @@
 
     TII Cross-Track Ion Drift Processor: loadData.h
 
-    Copyright (C) 2022  Johnathan K Burchill
+    Copyright (C) 2024  Johnathan K Burchill
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -23,9 +23,6 @@
 
 #include "state.h"
 
-#include <stdint.h>
-#include <stddef.h>
-
 typedef enum DayType {
     PREVIOUS_DAY = -1,
     REQUESTED_DAY = 0,
@@ -35,7 +32,7 @@ typedef enum DayType {
 int getLpInputFilename(const char satelliteLetter, long year, long month, long day, const char *path, char *filename);
 int loadLpCalData(ProcessorState *state);
 int getLpData(ProcessorState *state);
-int loadLpInputs(const char *cdfFile, double **lpTime, double **lpPhiScHighGain, double **lpPhiScLowGain, double **lpPhiSc, long *numberOfRecords);
+int loadLpInputs(const char *cdfFile, double **lpTime, double **lpPhiScHighGain, double **lpPhiScLowGain, double **lpPhiSc, size_t *numberOfRecords);
 
 int loadTiiCalData(ProcessorState *state);
 void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state);

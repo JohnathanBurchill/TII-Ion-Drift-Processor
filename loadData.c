@@ -2,7 +2,7 @@
 
     TII Cross-Track Ion Drift Processor: loadData.c
 
-    Copyright (C) 2022  Johnathan K Burchill
+    Copyright (C) 2024  Johnathan K Burchill
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -20,7 +20,6 @@
 
 #include "loadData.h"
 #include "errors.h"
-#include "indexing.h"
 #include "utilities.h"
 #include "processing.h"
 
@@ -203,7 +202,7 @@ int getLpData(ProcessorState *state)
 }
 
 // Adapted from SLIDEM
-int loadLpInputs(const char *cdfFile, double **lpTime, double **lpPhiScHighGain, double **lpPhiScLowGain, double **lpPhiSc, long *numberOfRecords)
+int loadLpInputs(const char *cdfFile, double **lpTime, double **lpPhiScHighGain, double **lpPhiScLowGain, double **lpPhiSc, size_t *numberOfRecords)
 {
     // Open the CDF file with validation
     CDFsetValidate(VALIDATEFILEoff);
