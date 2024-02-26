@@ -2,7 +2,7 @@
 
     TII Cross-Track Ion Drift Processor: tiictbin.c
 
-    Copyright (C) 2022  Johnathan K Burchill
+    Copyright (C) 2024  Johnathan K Burchill
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -58,7 +58,7 @@ int main(int argc, char* argv[])
         if (strcmp(argv[i], "--about") == 0)
         {
             fprintf(stdout, "tiictbin - Calculates and prints requested statistics of specified parameter per QD latitude and MLT bin. Version %s.\n", SOFTWARE_VERSION);
-            fprintf(stdout, "Copyright (C) 2022  Johnathan K Burchill\n");
+            fprintf(stdout, "Copyright (C) 2024  Johnathan K Burchill\n");
             fprintf(stdout, "This program comes with ABSOLUTELY NO WARRANTY.\n");
             fprintf(stdout, "This is free software, and you are welcome to redistribute it\n");
             fprintf(stdout, "under the terms of the GNU General Public License.\n");

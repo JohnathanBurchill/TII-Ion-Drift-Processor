@@ -92,8 +92,8 @@ int main(int argc, char *argv[])
     {
         if (strcmp(argv[i], "--about") == 0)
         {
-            fprintf(stdout, "tiictParallel version %s.\n", SOFTWARE_VERSION);
-            fprintf(stdout, "Copyright (C) 2022  Johnathan K Burchill\n");
+            fprintf(stdout, "tiictParallel0401 version %s.\n", SOFTWARE_VERSION);
+            fprintf(stdout, "Copyright (C) 2024  Johnathan K Burchill\n");
             fprintf(stdout, "This program comes with ABSOLUTELY NO WARRANTY.\n");
             fprintf(stdout, "This is free software, and you are welcome to redistribute it\n");
             fprintf(stdout, "under the terms of the GNU General Public License.\n");
@@ -291,7 +291,7 @@ exit:
 
 	if (quit == true)
 	{
-		printf("--> Processes may still be running. Use\n\t'for i in `pidof tiict`;do kill -9 $i;done'\nto kill them. There may be zip processes running as well.\n");
+		printf("--> Processes may still be running. Use\n\t'for i in `pidof tiict0401`;do kill -9 $i;done'\nto kill them. There may be zip processes running as well.\n");
 	}
 	return 0;
 
@@ -394,7 +394,7 @@ void *runThread(void *a)
 	// run tiict command as a system() call because CDF library is not thread safe
 	int status = 0;
 	char command[3*FILENAME_MAX+256] = {0};
-	sprintf(command, "tiict %s %d %d %d %s %s %s %s %s > /dev/null 2>&1 ", args->satLetter, args->year, args->month, args->day, args->calVersion, args->exportVersion, args->calDir, args->lpDir, args->exportDir);
+	sprintf(command, "tiict0401 %s %d %d %d %s %s %s %s %s > /dev/null 2>&1 ", args->satLetter, args->year, args->month, args->day, args->calVersion, args->exportVersion, args->calDir, args->lpDir, args->exportDir);
 	status = system(command);
 	args->returnValue = status;
 	args->threadRunning = false;

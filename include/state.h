@@ -111,6 +111,7 @@ typedef struct ProcessorState {
     float *viErrors;
     uint16_t *flags;
     uint32_t *fitInfo;
+    uint8_t *region;
 
     float *xhat;
     float *yhat;

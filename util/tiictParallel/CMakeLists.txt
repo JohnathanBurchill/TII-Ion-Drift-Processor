@@ -1,6 +1,6 @@
 # TIICT Processor: util/tiictParallel/CMakeLists.txt
 
-# Copyright (C) 2022  Johnathan K Burchill
+# Copyright (C) 2024  Johnathan K Burchill
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -22,7 +22,7 @@ CMAKE_MINIMUM_REQUIRED(VERSION 3.1)
 SET(THREADS_PREFER_PTHREAD_FLAG ON)
 FIND_PACKAGE(Threads REQUIRED)
 FIND_LIBRARY(CURSES ncurses)
-ADD_EXECUTABLE(tiictParallel main.c)
-TARGET_LINK_LIBRARIES(tiictParallel PRIVATE Processor -lcdf Threads::Threads ${CURSES})
+ADD_EXECUTABLE(tiictParallel0401 main.c)
+TARGET_LINK_LIBRARIES(tiictParallel0401 PRIVATE Processor -lcdf Threads::Threads ${CURSES})
 
-install(TARGETS tiictParallel DESTINATION $ENV{HOME}/bin)
+install(TARGETS tiictParallel0401 DESTINATION $ENV{HOME}/bin)

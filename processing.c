@@ -45,10 +45,11 @@ char infoHeader[50] = {0};
 int initQualityData(ProcessorState *state)
 {
     // Quality flag and fitInfo flag initialized to zero
-    state->flags = (uint16_t*) malloc((size_t) (state->nRecs * sizeof(uint16_t)));
-    state->fitInfo = (uint32_t*) malloc((size_t) (state->nRecs * sizeof(uint32_t)));
+    state->flags = malloc(state->nRecs * sizeof state->flags);
+    state->fitInfo = malloc(state->nRecs * sizeof state->fitInfo);
+    state->region = malloc(state->nRecs * sizeof state->region);
     // Error estimates from Mean Absolute Deviation (MAD): default is -42. :)
-    state->viErrors = (float*) malloc((size_t) (state->nRecs * sizeof(float) * 4));
+    state->viErrors = malloc(state->nRecs * sizeof state->viErrors * 4);
     if (state->flags == NULL || state->fitInfo == NULL || state->viErrors == NULL)
     {
         return TIICT_MEMORY;
@@ -321,13 +322,13 @@ int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, void (*doInterest
         secondDirection = -1;
 
     float location = (fitargs->lat2 + fitargs->lat3) / 2.;
-    int8_t region; // For flagging
+    int8_t currentregion; // For flagging
     if (location >= 44. )
-        region = 1; // North
+        currentregion = 1; // North
     else if (location <= -44.)
-        region = -1; // South
+        currentregion = -1; // South
     else
-        region = 0; // Equator
+        currentregion = 0; // Equator
 
     for (timeIndex = 0; timeIndex < state->nRecs; timeIndex++)
     {
@@ -515,14 +516,14 @@ float madThreshold(char satellite, int sensorIndex)
 int initFields(ProcessorState *state)
 {
     // Set up new memory
-    state->xhat = (float*) malloc((size_t) (state->nRecs * sizeof(float) * 3));
-    state->yhat = (float*) malloc((size_t) (state->nRecs * sizeof(float) * 3));
-    state->zhat = (float*) malloc((size_t) (state->nRecs * sizeof(float) * 3));
-    state->ectFieldH = (float*) malloc((size_t) (state->nRecs * sizeof(float) * 3));
-    state->ectFieldV = (float*) malloc((size_t) (state->nRecs * sizeof(float) * 3));
-    state->bctField = (float*) malloc((size_t) (state->nRecs * sizeof(float) * 3));
-    state->geoPotential = (float*) malloc((size_t) (state->nRecs * sizeof(float)));
-    state->maxAbsGeopotentialSlope= (float*) malloc((size_t) (state->nRecs * sizeof(float)));
+    state->xhat = malloc(state->nRecs * sizeof state->xhat * 3);
+    state->yhat = malloc(state->nRecs * sizeof state->yhat * 3);
+    state->zhat = malloc(state->nRecs * sizeof state->zhat * 3);
+    state->ectFieldH = malloc(state->nRecs * sizeof state->ectFieldH* 3);
+    state->ectFieldV = malloc(state->nRecs * sizeof state->ectFieldV * 3);
+    state->bctField = malloc(state->nRecs * sizeof state->bctField * 3);
+    state->geoPotential = malloc(state->nRecs * sizeof state->geoPotential);
+    state->maxAbsGeopotentialSlope= malloc(state->nRecs * sizeof state->maxAbsGeopotentialSlope);
 
     if (state->xhat == NULL || state->yhat == NULL || state->zhat == NULL || state->ectFieldH == NULL || state->ectFieldV == NULL || state->bctField == NULL || state->geoPotential == NULL || state->maxAbsGeopotentialSlope == NULL)
         return TIICT_MEMORY;
@@ -666,7 +667,7 @@ void interpolate(double *times, double *values, size_t nVals, double *requestedT
 }
 
 
-bool downSampleHalfSecond(long *index, long storageIndex, double t0, long maxIndex, uint8_t **dataBuffers, float *ectFieldH, float *ectFieldV, float *geoPotential, float *maxAbsGeopotentialSlope, float *bctField, float *viErrors, float *potentials, uint16_t *flags, uint32_t *fitInfo, bool usePotentials)
+bool downSampleHalfSecond(long *index, long storageIndex, double t0, long maxIndex, uint8_t **dataBuffers, float *ectFieldH, float *ectFieldV, float *geoPotential, float *maxAbsGeopotentialSlope, float *bctField, float *viErrors, float *potentials, uint16_t *flags, uint32_t *fitInfo, uint8_t *region, bool usePotentials)
 {
     long timeIndex = *index;
     uint8_t nSamples = 0;
@@ -728,6 +729,8 @@ bool downSampleHalfSecond(long *index, long storageIndex, double t0, long maxInd
         // Take the largest of each 8-sample interval
         if (floatBuf[32] < maxAbsGeopotentialSlope[timeIndex])
             floatBuf[32] = maxAbsGeopotentialSlope[timeIndex];
+        // Take latest region in the half-second interval
+        floatBuf[33] = region[timeIndex];
         flagBuf &= flags[timeIndex];
         fitInfoBuf |= fitInfo[timeIndex];
         nSamples++;
@@ -775,6 +778,7 @@ bool downSampleHalfSecond(long *index, long storageIndex, double t0, long maxInd
             potentials[storageIndex] = floatBuf[30] / 8.0; // Floating potential U_SC
         geoPotential[storageIndex] = floatBuf[31] / 8.0; // Geoelectric potential H sensor
         maxAbsGeopotentialSlope[storageIndex] = floatBuf[32]; // Take the maximum value                                                        
+        region[storageIndex] = floatBuf[33]; // Latest region in the sample                                                            
         // Flags set to 0 at 16 Hz based on magnitude of flow,
         // are not reset at 2 Hz, to ensure integrity of 2 Hz measurements
         // One can review 16 Hz measurements to examine details of flow where even a
@@ -878,7 +882,7 @@ int parseArguments(int argc, char **argv, ProcessorState *state)
         else if (strcmp(argv[i], "--about") == 0)
         {
             fprintf(stdout, "tiict - TII Cross-track ion drift processor, version %s.\n", SOFTWARE_VERSION);
-            fprintf(stdout, "Copyright (C) 2022  Johnathan K Burchill\n");
+            fprintf(stdout, "Copyright (C) 2024  Johnathan K Burchill\n");
             fprintf(stdout, "This program comes with ABSOLUTELY NO WARRANTY.\n");
             fprintf(stdout, "This is free software, and you are welcome to redistribute it\n");
             fprintf(stdout, "under the terms of the GNU General Public License.\n");
@@ -1022,6 +1026,16 @@ int shutdown(int status, ProcessorState *state)
         free(state->bctField);
         state->bctField = NULL;
     }
+    if (state->geoPotential != NULL)
+    {
+        free(state->geoPotential);
+        state->geoPotential = NULL;
+    }
+    if (state->maxAbsGeopotentialSlope != NULL)
+    {
+        free(state->maxAbsGeopotentialSlope);
+        state->maxAbsGeopotentialSlope = NULL;
+    }
     if (state->viErrors != NULL)
     {
         free(state->viErrors);
@@ -1036,6 +1050,11 @@ int shutdown(int status, ProcessorState *state)
     {
         free(state->fitInfo);
         state->fitInfo = NULL;
+    }
+    if (state->region != NULL)
+    {
+        free(state->region);
+        state->region = NULL;
     }
 
     return status;
@@ -1170,6 +1189,14 @@ void geoelectricPotentialBackgroundRemoval(ProcessorState *state)
 
     float vmag1 = 0.0;
     float vmag2 = 0.0;
+
+    // Set the region number
+    // 0 northern ascending, 1 equatorial descending
+    // 2 southern descending, 3 equatorial ascending
+    for (timeIndex = ws->beginIndex0; timeIndex < ws->endIndex1; timeIndex++)
+    {
+        state->region[timeIndex] = fitargs->regionNumber; 
+    }
 
     // Load values into model data buffer once each for HX, HY, VX, VY
     ws->modelDataIndex = 0;
