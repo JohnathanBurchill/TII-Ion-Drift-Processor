@@ -606,7 +606,8 @@ int calculateFields(ProcessorState *state)
             state->geoPotential[timeIndex] = state->geoPotential[timeIndex-1];
             previousExH = ectFieldH[ind + 0] / 1e3;
         }
-        state->geoPotential[timeIndex] += previousExH * magVsat * deltaTime;
+        // phi = - integral E-dot-dl along the path
+        state->geoPotential[timeIndex] -= previousExH * magVsat * deltaTime;
     }
 
     // Remove offsets and set calibration flags
