@@ -523,7 +523,10 @@ int initFields(ProcessorState *state)
     state->ectFieldV = malloc(state->nRecs * sizeof state->ectFieldV * 3);
     state->bctField = malloc(state->nRecs * sizeof state->bctField * 3);
     state->geoPotential = malloc(state->nRecs * sizeof state->geoPotential);
+    state->geoPotentialDifference = malloc(state->nRecs * sizeof state->geoPotentialDifference);
     state->maxAbsGeopotentialSlope= malloc(state->nRecs * sizeof state->maxAbsGeopotentialSlope);
+    state->geoPotentialDetrended = malloc(state->nRecs * sizeof state->geoPotentialDetrended);
+    state->maxAbsGeopotentialDetrendedSlope= malloc(state->nRecs * sizeof state->maxAbsGeopotentialDetrendedSlope);
 
     if (state->xhat == NULL || state->yhat == NULL || state->zhat == NULL || state->ectFieldH == NULL || state->ectFieldV == NULL || state->bctField == NULL || state->geoPotential == NULL || state->maxAbsGeopotentialSlope == NULL)
         return TIICT_MEMORY;
@@ -554,6 +557,8 @@ int calculateFields(ProcessorState *state)
     double deltaTime = 0.0;
     state->geoPotential[0] = 0.0;
     float previousExH = 0.0;
+    float magVsat = sqrtf(VSATN()*VSATN() + VSATE()*VSATE() + VSATC() * VSATC());
+    float previousMagVsat = magVsat;
 
     for (timeIndex = 0; timeIndex < state->nRecs; timeIndex++)
     {
@@ -564,7 +569,7 @@ int calculateFields(ProcessorState *state)
 
         // Calculate xhat, yhat, zhat
         // xhat parallel to satellite velocity 
-        float magVsat = sqrtf(VSATN()*VSATN() + VSATE()*VSATE() + VSATC() * VSATC());
+        magVsat = sqrtf(VSATN()*VSATN() + VSATE()*VSATE() + VSATC() * VSATC());
         ind = 3*timeIndex;
         xhat[ind + 0] = VSATN() / magVsat;
         xhat[ind + 1] = VSATE() / magVsat;
@@ -603,11 +608,11 @@ int calculateFields(ProcessorState *state)
 
         if (timeIndex > 0)
         {
-            state->geoPotential[timeIndex] = state->geoPotential[timeIndex-1];
-            previousExH = ectFieldH[ind + 0] / 1e3;
+            previousExH = ectFieldH[3*(timeIndex-1)] / 1000.0;
+            // phi = - integral E-dot-dl along the path
+            state->geoPotential[timeIndex] = state->geoPotential[timeIndex-1] - previousExH * previousMagVsat * deltaTime;
+            previousMagVsat = magVsat;
         }
-        // phi = - integral E-dot-dl along the path
-        state->geoPotential[timeIndex] -= previousExH * magVsat * deltaTime;
     }
 
     // Remove offsets and set calibration flags
@@ -668,9 +673,10 @@ void interpolate(double *times, double *values, size_t nVals, double *requestedT
 }
 
 
-bool downSampleHalfSecond(long *index, long storageIndex, double t0, long maxIndex, uint8_t **dataBuffers, float *ectFieldH, float *ectFieldV, float *geoPotential, float *maxAbsGeopotentialSlope, float *bctField, float *viErrors, float *potentials, uint16_t *flags, uint32_t *fitInfo, uint8_t *region, bool usePotentials)
+bool downSampleHalfSecond(ProcessorState *state, long *index, long storageIndex, double t0, long maxIndex)
 {
     long timeIndex = *index;
+    uint8_t **dataBuffers = state->dataBuffers;
     uint8_t nSamples = 0;
     double timeBuf = 0.0;
     uint16_t flagBuf = 65535;
@@ -679,10 +685,25 @@ bool downSampleHalfSecond(long *index, long storageIndex, double t0, long maxInd
     float theta, phi, x, y, z;
     bool downSampled = false;
 
+    float *viErrors = state->viErrors;
+    float *ectFieldH = state->ectFieldH;
+    float *ectFieldV = state->ectFieldV;
+    float *bctField = state->bctField;
+    float *potentials = state->potentials;
+    float *geoPotential = state->geoPotential;
+    float *geoPotentialDifference = state->geoPotentialDifference;
+    float *maxAbsGeopotentialSlope = state->maxAbsGeopotentialSlope;
+    float *geoPotentialDetrended = state->geoPotentialDetrended;
+    float *maxAbsGeopotentialDetrendedSlope = state->maxAbsGeopotentialDetrendedSlope;
+    uint8_t *region = state->region;
+    uint16_t *flags = state->flags;
+    uint32_t *fitInfo = state->fitInfo;
+
     for (uint8_t b = 0; b < NUM_BUFFER_VARIABLES; b++)
     {
         floatBuf[b] = 0.0;
     }
+
 
     while (((TIME()/1000. - t0) < 0.5) && (timeIndex <= maxIndex))
     {
@@ -724,14 +745,21 @@ bool downSampleHalfSecond(long *index, long storageIndex, double t0, long maxInd
         floatBuf[27] += VCORX();
         floatBuf[28] += VCORY();
         floatBuf[29] += VCORZ();
-        if (usePotentials)
+        if (state->usePotentials)
             floatBuf[30] += potentials[timeIndex];
+
         floatBuf[31] += geoPotential[timeIndex];
         // Take the largest of each 8-sample interval
         if (floatBuf[32] < maxAbsGeopotentialSlope[timeIndex])
             floatBuf[32] = maxAbsGeopotentialSlope[timeIndex];
+        floatBuf[33] += geoPotentialDetrended[timeIndex];
+        // Take the largest of each 8-sample interval
+        if (floatBuf[34] < maxAbsGeopotentialDetrendedSlope[timeIndex])
+            floatBuf[34] = maxAbsGeopotentialDetrendedSlope[timeIndex];
         // Take latest region in the half-second interval
-        floatBuf[33] = region[timeIndex];
+        floatBuf[35] = region[timeIndex];
+        floatBuf[36] = geoPotentialDifference[timeIndex];
+
         flagBuf &= flags[timeIndex];
         fitInfoBuf |= fitInfo[timeIndex];
         nSamples++;
@@ -775,11 +803,14 @@ bool downSampleHalfSecond(long *index, long storageIndex, double t0, long maxInd
         *((float*)dataBuffers[10] + (3*storageIndex) + 0) = floatBuf[27] / 8.0; // Vicrxyz
         *((float*)dataBuffers[10] + (3*storageIndex) + 1) = floatBuf[28] / 8.0;
         *((float*)dataBuffers[10] + (3*storageIndex) + 2) = floatBuf[29] / 8.0;
-        if (usePotentials)
+        if (state->usePotentials)
             potentials[storageIndex] = floatBuf[30] / 8.0; // Floating potential U_SC
         geoPotential[storageIndex] = floatBuf[31] / 8.0; // Geoelectric potential H sensor
         maxAbsGeopotentialSlope[storageIndex] = floatBuf[32]; // Take the maximum value                                                        
-        region[storageIndex] = floatBuf[33]; // Latest region in the sample                                                            
+        geoPotentialDetrended[storageIndex] = floatBuf[33] / 8.0; // Geoelectric potential H sensor
+        maxAbsGeopotentialDetrendedSlope[storageIndex] = floatBuf[34]; // Take the maximum value                                                        
+        region[storageIndex] = floatBuf[35]; // Latest region in the sample                                                            
+        geoPotentialDifference[storageIndex] = floatBuf[36]; // Latest region in the sample                                                            
         // Flags set to 0 at 16 Hz based on magnitude of flow,
         // are not reset at 2 Hz, to ensure integrity of 2 Hz measurements
         // One can review 16 Hz measurements to examine details of flow where even a
@@ -1032,10 +1063,25 @@ int shutdown(int status, ProcessorState *state)
         free(state->geoPotential);
         state->geoPotential = NULL;
     }
+    if (state->geoPotentialDifference != NULL)
+    {
+        free(state->geoPotentialDifference);
+        state->geoPotentialDifference = NULL;
+    }
     if (state->maxAbsGeopotentialSlope != NULL)
     {
         free(state->maxAbsGeopotentialSlope);
         state->maxAbsGeopotentialSlope = NULL;
+    }
+    if (state->geoPotentialDetrended != NULL)
+    {
+        free(state->geoPotentialDetrended);
+        state->geoPotentialDetrended = NULL;
+    }
+    if (state->maxAbsGeopotentialDetrendedSlope != NULL)
+    {
+        free(state->maxAbsGeopotentialDetrendedSlope);
+        state->maxAbsGeopotentialDetrendedSlope = NULL;
     }
     if (state->viErrors != NULL)
     {
@@ -1266,10 +1312,38 @@ void geoelectricPotentialBackgroundRemoval(ProcessorState *state)
         // Remove the offsets and estimate max abs mean ex at mid-latitude 
         for (timeIndex = ws->beginIndex0; timeIndex < ws->endIndex1; timeIndex++)
         {
-            // remove offset
-            state->geoPotential[timeIndex] -= (((TIME() - ws->epoch0)/1000.0) * c1 + c0);
+            // Define median1 of first region as zero potential
             state->maxAbsGeopotentialSlope[timeIndex] = slope1 > slope2 ? slope1 : slope2;
-            // TODO convert to V / m?
+            // linear detrend 
+            state->geoPotentialDetrended[timeIndex] = state->geoPotential[timeIndex] - (((TIME() - ws->epoch0)/1000.0) * c1 + c0);
+            state->geoPotential[timeIndex] -= median1;
+            // Remove median of start region
+            state->geoPotentialDifference[timeIndex] = median2 - median1; 
+        }
+
+        // Now estimate detrended slopes
+        for (int i = ws->beginIndex0; i < ws->endIndex0; i++)
+        {
+            gsl_vector_set(ws->model1Values, i-ws->beginIndex0, state->geoPotentialDetrended[i]);
+        }
+        for (int i = ws->beginIndex1; i < ws->endIndex1; i++)
+        {
+            gsl_vector_set(ws->model2Values, i-ws->beginIndex1, state->geoPotentialDetrended[i]);
+        }
+        gslStatus = gsl_multifit_robust(ws->modelTimes1Matrix, ws->model1Values, ws->fitCoefficients, cov, gslFitWorkspace1);
+        if (gslStatus == GSL_SUCCESS && vmag1 > 0)
+            slope1 = fabs(gsl_vector_get(ws->fitCoefficients, 1))/vmag1 * 1000.0; // mV / m
+        else
+            slope1 = 999999999.0;
+        gslStatus = gsl_multifit_robust(ws->modelTimes2Matrix, ws->model2Values, ws->fitCoefficients, cov, gslFitWorkspace2);
+        if (gslStatus == GSL_SUCCESS && vmag2 > 0)
+            slope2 = fabs(gsl_vector_get(ws->fitCoefficients, 1))/vmag2 * 1000.0; // mV / m
+        else
+            slope2 = 999999999.0;
+        // Remove the offsets and estimate max abs mean ex at mid-latitude 
+        for (timeIndex = ws->beginIndex0; timeIndex < ws->endIndex1; timeIndex++)
+        {
+            state->maxAbsGeopotentialDetrendedSlope[timeIndex] = slope1 > slope2 ? slope1 : slope2;
         }
     }
     gsl_multifit_robust_free(gslFitWorkspace);

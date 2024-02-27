@@ -529,7 +529,10 @@ void addAttributes(CDFid id, const char *dataset, const char *satellite, const c
         {"Quality_flags", "CDF_UINT2", "*", "Bitwise flag for each velocity component, where a value of 1 for a particular component signifies that calibration was successful, and that the baseline 1-sigma noise level is less than or equal to 100 m/s at 2 Hz. Electric field quality can be assessed from these flags according to -vxB. Bit0 (least significant) = Vixh, bit1 = Vixv, bit2 = Viy, bit3 = Viz. Refer to the release notes for details.", 0, 65535},
         {"Calibration_flags", "CDF_UINT4", "*", "Information about the calibration process. Refer to the release notes for details.", 0, 4294967295},
         {"GeoelectricPotential", "CDF_FLOAT", "V", "Geoelectric potential estimate from Ehx.", -1000000., 1000000.},
+        {"GeoelectricPotentialDifference", "CDF_FLOAT", "V", "Geoelectric potential at end of orbit region minus geoelectric potential at beginning of orbit region.", -1000000., 1000000.},
         {"MaxAbsGeoelectricPotentialBaselineSlope", "CDF_FLOAT", "mV/m", "Maximum absolute slope of the mid-latitude geoelectric potential estimates.", -1000000., 1000000.},
+        {"GeoelectricPotentialDetrended", "CDF_FLOAT", "V", "Geoelectric potential linearly detrended within each orbit region.", -1000000., 1000000.},
+        {"MaxAbsGeoelectricPotentialDetrendedBaselineSlope", "CDF_FLOAT", "mV/m", "Maximum absolute slope of the mid-latitude detrended geoelectric potential estimates.", -1000000., 1000000.},
         {"OrbitRegion", "CDF_UINT1", "*", "Orbit region poleward or equatorward of plus-or-minus 44.0 degrees quasi-dipole latitude. 0: northern polar ascending; 1: equatorial descending; 2: southern polar descending; 3: equatorial ascending.", 0, 3},
     };
 
@@ -613,6 +616,9 @@ int exportTCT16Cdfs(ProcessorState *state, double startTime, double stopTime, lo
         createVarFrom1DVar(exportCdfId, "Calibration_flags", CDF_UINT4, startIndex, stopIndex, state->fitInfo);
         createVarFrom1DVar(exportCdfId, "GeoelectricPotential", CDF_REAL4, startIndex, stopIndex, state->geoPotential);
         createVarFrom1DVar(exportCdfId, "MaxAbsGeoelectricPotentialBaselineSlope", CDF_REAL4, startIndex, stopIndex, state->maxAbsGeopotentialSlope);
+        createVarFrom1DVar(exportCdfId, "GeoelectricPotentialDifference", CDF_REAL4, startIndex, stopIndex, state->geoPotentialDifference);
+        createVarFrom1DVar(exportCdfId, "GeoelectricPotentialDetrended", CDF_REAL4, startIndex, stopIndex, state->geoPotentialDetrended);
+        createVarFrom1DVar(exportCdfId, "MaxAbsGeoelectricPotentialDetrendedBaselineSlope", CDF_REAL4, startIndex, stopIndex, state->maxAbsGeopotentialDetrendedSlope);
         createVarFrom1DVar(exportCdfId, "OrbitRegion", CDF_UINT1, startIndex, stopIndex, state->region);
 
         // add attributes
@@ -662,7 +668,7 @@ int exportTCT02Cdfs(ProcessorState *state, double startTime, double stopTime, lo
         t0 = floor(TIME()/1000.0); // UT second reference
         for (uint8_t halfSecond = 0; halfSecond < 2; halfSecond ++)
         {
-            downSampled = downSampleHalfSecond(&timeIndex, storageIndex, t0 + 0.5 * halfSecond, stopIndex, dataBuffers, state->ectFieldH, state->ectFieldV, state->geoPotential, state->maxAbsGeopotentialSlope, state->bctField, state->viErrors, state->potentials, state->flags, state->fitInfo, state->region, state->usePotentials);
+            downSampled = downSampleHalfSecond(state, &timeIndex, storageIndex, t0 + 0.5 * halfSecond, stopIndex);
             if (downSampled)
             {
                 storageIndex++;
@@ -740,7 +746,10 @@ int exportTCT02Cdfs(ProcessorState *state, double startTime, double stopTime, lo
         createVarFrom1DVar(exportCdfId, "Quality_flags", CDF_UINT2, startIndex, stopIndex, state->flags);
         createVarFrom1DVar(exportCdfId, "Calibration_flags", CDF_UINT4, startIndex, stopIndex, state->fitInfo);
         createVarFrom1DVar(exportCdfId, "GeoelectricPotential", CDF_REAL4, startIndex, stopIndex, state->geoPotential);
+        createVarFrom1DVar(exportCdfId, "GeoelectricPotentialDifference", CDF_REAL4, startIndex, stopIndex, state->geoPotentialDifference);
         createVarFrom1DVar(exportCdfId, "MaxAbsGeoelectricPotentialBaselineSlope", CDF_REAL4, startIndex, stopIndex, state->maxAbsGeopotentialSlope);
+        createVarFrom1DVar(exportCdfId, "GeoelectricPotentialDetrended", CDF_REAL4, startIndex, stopIndex, state->geoPotentialDetrended);
+        createVarFrom1DVar(exportCdfId, "MaxAbsGeoelectricPotentialDetrendedBaselineSlope", CDF_REAL4, startIndex, stopIndex, state->maxAbsGeopotentialDetrendedSlope);
         createVarFrom1DVar(exportCdfId, "OrbitRegion", CDF_UINT1, startIndex, stopIndex, state->region);
 
         // add attributes
