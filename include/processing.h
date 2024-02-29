@@ -37,8 +37,8 @@ enum FITINFO_BIT_MASKS {
 int initQualityData(ProcessorState *state);
 int calibrateFlows(ProcessorState *state);
 
-int removeOffsetsAndSetFlags(ProcessorState *state, void (*doInterestingStuff)(ProcessorState*));
-int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, void (*doInterestingStuff)(ProcessorState*));
+int removeOffsetsAndSetFlags(ProcessorState *state, void (*processRegion)(ProcessorState*));
+int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, void (*processRegion)(ProcessorState*));
 
 void updateDataQualityFlags(const char *satellite, uint8_t sensorIndex, uint8_t regionNumber, float driftValue, float mad, long timeIndex, uint16_t *flags, uint32_t *fitInfo);
 
@@ -61,6 +61,6 @@ int checkResult(int status, ProcessorState *state);
 int shutdown(int status, ProcessorState *state);
 
 void velocityBackgroundRemoval(ProcessorState *state);
-void geoelectricPotentialBackgroundRemoval(ProcessorState *state);
+void geoelectricPotentialEstimator(ProcessorState *state);
 
 #endif // PROCESSING_H

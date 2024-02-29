@@ -288,7 +288,7 @@ int removeOffsetsAndSetFlags(ProcessorState *state, void (*doInterestingStuff)(P
 
 }
 
-int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, void (*doInterestingStuff)(ProcessorState *))
+int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, void (*processRegion)(ProcessorState *))
 {
     // Robust linear least squares from GSL: https://www.gnu.org/software/gsl/doc/html/lls.html#examples
     long long timeIndex = 0;
@@ -432,8 +432,8 @@ int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, void (*doInterest
                     gsl_matrix_set(state->bgws.modelTimes2Matrix, state->bgws.modelDataIndex - state->bgws.modelDataMidPoint, 1, fitTime); 
                     gsl_matrix_set(state->bgws.modelTimesMatrix, state->bgws.modelDataIndex++, 1, fitTime); // seconds from start of file
                 }
-                // Perform background subtraction
-                doInterestingStuff(state);
+                // Perform regional analysis
+                processRegion(state);
                 fprintf(state->fitFile, "\n");
 
                 gsl_matrix_free(state->bgws.modelTimes1Matrix);
@@ -524,6 +524,8 @@ int initFields(ProcessorState *state)
     state->bctField = malloc(state->nRecs * sizeof state->bctField * 3);
     state->geoPotential = malloc(state->nRecs * sizeof state->geoPotential);
     state->geoPotentialDifference = malloc(state->nRecs * sizeof state->geoPotentialDifference);
+    state->exAdjusted= malloc(state->nRecs * sizeof state->exAdjusted);
+    state->exAdjustmentParameter= malloc(state->nRecs * sizeof state->exAdjustmentParameter);
     state->maxAbsGeopotentialSlope= malloc(state->nRecs * sizeof state->maxAbsGeopotentialSlope);
     state->geoPotentialDetrended = malloc(state->nRecs * sizeof state->geoPotentialDetrended);
     state->maxAbsGeopotentialDetrendedSlope= malloc(state->nRecs * sizeof state->maxAbsGeopotentialDetrendedSlope);
@@ -619,7 +621,7 @@ int calculateFields(ProcessorState *state)
     state->setFlags = true;
     // Linear offset model
     state->bgws.fitDegree = 2;
-    status = removeOffsetsAndSetFlags(state, geoelectricPotentialBackgroundRemoval);
+    status = removeOffsetsAndSetFlags(state, geoelectricPotentialEstimator);
     if (status != TIICT_OK)
         return status;
 
@@ -695,6 +697,8 @@ bool downSampleHalfSecond(ProcessorState *state, long *index, long storageIndex,
     float *maxAbsGeopotentialSlope = state->maxAbsGeopotentialSlope;
     float *geoPotentialDetrended = state->geoPotentialDetrended;
     float *maxAbsGeopotentialDetrendedSlope = state->maxAbsGeopotentialDetrendedSlope;
+    float *exAdjusted = state->exAdjusted;
+    float *exAdjustmentParameter= state->exAdjustmentParameter;
     uint8_t *region = state->region;
     uint16_t *flags = state->flags;
     uint32_t *fitInfo = state->fitInfo;
@@ -759,6 +763,9 @@ bool downSampleHalfSecond(ProcessorState *state, long *index, long storageIndex,
         // Take latest region in the half-second interval
         floatBuf[35] = region[timeIndex];
         floatBuf[36] = geoPotentialDifference[timeIndex];
+        floatBuf[37] += exAdjusted[timeIndex];
+        // Latest value
+        floatBuf[38] = exAdjustmentParameter[timeIndex];
 
         flagBuf &= flags[timeIndex];
         fitInfoBuf |= fitInfo[timeIndex];
@@ -810,7 +817,9 @@ bool downSampleHalfSecond(ProcessorState *state, long *index, long storageIndex,
         geoPotentialDetrended[storageIndex] = floatBuf[33] / 8.0; // Geoelectric potential H sensor
         maxAbsGeopotentialDetrendedSlope[storageIndex] = floatBuf[34]; // Take the maximum value                                                        
         region[storageIndex] = floatBuf[35]; // Latest region in the sample                                                            
-        geoPotentialDifference[storageIndex] = floatBuf[36]; // Latest region in the sample                                                            
+        geoPotentialDifference[storageIndex] = floatBuf[36]; // Latest sample in the region 
+        exAdjusted[storageIndex] = floatBuf[37] / 8.0;
+        exAdjustmentParameter[storageIndex] = floatBuf[38]; // Latest sample in the region
         // Flags set to 0 at 16 Hz based on magnitude of flow,
         // are not reset at 2 Hz, to ensure integrity of 2 Hz measurements
         // One can review 16 Hz measurements to examine details of flow where even a
@@ -1073,6 +1082,16 @@ int shutdown(int status, ProcessorState *state)
         free(state->maxAbsGeopotentialSlope);
         state->maxAbsGeopotentialSlope = NULL;
     }
+    if (state->exAdjusted!= NULL)
+    {
+        free(state->exAdjusted);
+        state->exAdjusted = NULL;
+    }
+    if (state->exAdjustmentParameter!= NULL)
+    {
+        free(state->exAdjustmentParameter);
+        state->exAdjustmentParameter = NULL;
+    }
     if (state->geoPotentialDetrended != NULL)
     {
         free(state->geoPotentialDetrended);
@@ -1176,7 +1195,6 @@ void velocityBackgroundRemoval(ProcessorState *state)
             c0 = gsl_vector_get(ws->fitCoefficients, 0);
             c1 = gsl_vector_get(ws->fitCoefficients, 1);
             stats = gsl_multifit_robust_statistics(gslFitWorkspace);
-            gsl_multifit_robust_free(gslFitWorkspace);
             // check median absolute deviation and median of signal
             // Note that median calculation sorts the array, so do this last
             double mad = stats.sigma_mad; // For full data fitted
@@ -1206,6 +1224,7 @@ void velocityBackgroundRemoval(ProcessorState *state)
                 }
             }
         }
+        gsl_multifit_robust_free(gslFitWorkspace);
     }
     gsl_matrix_free(cov);
 
@@ -1213,7 +1232,7 @@ void velocityBackgroundRemoval(ProcessorState *state)
 
 }
 
-void geoelectricPotentialBackgroundRemoval(ProcessorState *state)
+void geoelectricPotentialEstimator(ProcessorState *state)
 {
     long long timeIndex = 0;
     uint8_t **dataBuffers = state->dataBuffers;

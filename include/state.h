@@ -125,6 +125,8 @@ typedef struct ProcessorState {
     float *geoPotentialDifference;
     float *geoPotentialDetrended;
     float *maxAbsGeopotentialDetrendedSlope;
+    float *exAdjusted;
+    float *exAdjustmentParameter;
     
     // Offset removal options
     uint8_t interval;
