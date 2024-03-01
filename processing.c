@@ -45,11 +45,11 @@ char infoHeader[50] = {0};
 int initQualityData(ProcessorState *state)
 {
     // Quality flag and fitInfo flag initialized to zero
-    state->flags = malloc(state->nRecs * sizeof state->flags);
-    state->fitInfo = malloc(state->nRecs * sizeof state->fitInfo);
-    state->region = malloc(state->nRecs * sizeof state->region);
+    state->flags = malloc(state->nRecs * sizeof *state->flags);
+    state->fitInfo = malloc(state->nRecs * sizeof *state->fitInfo);
+    state->region = malloc(state->nRecs * sizeof *state->region);
     // Error estimates from Mean Absolute Deviation (MAD): default is -42. :)
-    state->viErrors = malloc(state->nRecs * sizeof state->viErrors * 4);
+    state->viErrors = malloc(state->nRecs * sizeof *state->viErrors * 4);
     if (state->flags == NULL || state->fitInfo == NULL || state->viErrors == NULL)
     {
         return TIICT_MEMORY;
@@ -261,7 +261,7 @@ int calibrateFlows(ProcessorState *state)
 
 }
 
-int removeOffsetsAndSetFlags(ProcessorState *state, void (*doInterestingStuff)(ProcessorState *))
+int removeOffsetsAndSetFlags(ProcessorState *state, int (*doInterestingStuff)(ProcessorState *))
 {
     int status = TIICT_OK;
 
@@ -288,9 +288,10 @@ int removeOffsetsAndSetFlags(ProcessorState *state, void (*doInterestingStuff)(P
 
 }
 
-int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, void (*processRegion)(ProcessorState *))
+int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, int (*processRegion)(ProcessorState *))
 {
     // Robust linear least squares from GSL: https://www.gnu.org/software/gsl/doc/html/lls.html#examples
+    int status = TIICT_OK;
     long long timeIndex = 0;
     uint8_t **dataBuffers = state->dataBuffers;
     uint16_t minDataPointsNeeded = 80;
@@ -433,7 +434,9 @@ int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, void (*processReg
                     gsl_matrix_set(state->bgws.modelTimesMatrix, state->bgws.modelDataIndex++, 1, fitTime); // seconds from start of file
                 }
                 // Perform regional analysis
-                processRegion(state);
+                status = processRegion(state);
+                if (status != TIICT_OK)
+                    return status;
                 fprintf(state->fitFile, "\n");
 
                 gsl_matrix_free(state->bgws.modelTimes1Matrix);
@@ -516,19 +519,19 @@ float madThreshold(char satellite, int sensorIndex)
 int initFields(ProcessorState *state)
 {
     // Set up new memory
-    state->xhat = malloc(state->nRecs * sizeof state->xhat * 3);
-    state->yhat = malloc(state->nRecs * sizeof state->yhat * 3);
-    state->zhat = malloc(state->nRecs * sizeof state->zhat * 3);
-    state->ectFieldH = malloc(state->nRecs * sizeof state->ectFieldH* 3);
-    state->ectFieldV = malloc(state->nRecs * sizeof state->ectFieldV * 3);
-    state->bctField = malloc(state->nRecs * sizeof state->bctField * 3);
-    state->geoPotential = malloc(state->nRecs * sizeof state->geoPotential);
-    state->geoPotentialDifference = malloc(state->nRecs * sizeof state->geoPotentialDifference);
-    state->exAdjusted= malloc(state->nRecs * sizeof state->exAdjusted);
-    state->exAdjustmentParameter= malloc(state->nRecs * sizeof state->exAdjustmentParameter);
-    state->maxAbsGeopotentialSlope= malloc(state->nRecs * sizeof state->maxAbsGeopotentialSlope);
-    state->geoPotentialDetrended = malloc(state->nRecs * sizeof state->geoPotentialDetrended);
-    state->maxAbsGeopotentialDetrendedSlope= malloc(state->nRecs * sizeof state->maxAbsGeopotentialDetrendedSlope);
+    state->xhat = malloc(state->nRecs * (sizeof *state->xhat) * 3);
+    state->yhat = malloc(state->nRecs * (sizeof *state->yhat) * 3);
+    state->zhat = malloc(state->nRecs * (sizeof *state->zhat) * 3);
+    state->ectFieldH = malloc(state->nRecs * (sizeof *state->ectFieldH) * 3);
+    state->ectFieldV = malloc(state->nRecs * (sizeof *state->ectFieldV) * 3);
+    state->bctField = malloc(state->nRecs * (sizeof *state->bctField) * 3);
+    state->geoPotential = malloc(state->nRecs * sizeof *state->geoPotential);
+    state->geoPotentialDifference = malloc(state->nRecs * sizeof *state->geoPotentialDifference);
+    state->exAdjusted= malloc(state->nRecs * sizeof *state->exAdjusted);
+    state->exAdjustmentParameter= malloc(state->nRecs * sizeof *state->exAdjustmentParameter);
+    state->maxAbsGeopotentialSlope= malloc(state->nRecs * sizeof *state->maxAbsGeopotentialSlope);
+    state->geoPotentialDetrended = malloc(state->nRecs * sizeof *state->geoPotentialDetrended);
+    state->maxAbsGeopotentialDetrendedSlope= malloc(state->nRecs * sizeof *state->maxAbsGeopotentialDetrendedSlope);
 
     if (state->xhat == NULL || state->yhat == NULL || state->zhat == NULL || state->ectFieldH == NULL || state->ectFieldV == NULL || state->bctField == NULL || state->geoPotential == NULL || state->maxAbsGeopotentialSlope == NULL)
         return TIICT_MEMORY;
@@ -554,21 +557,10 @@ int calculateFields(ProcessorState *state)
     float *bctField = state->bctField;
 
     long timeIndex = 0;
-    double previousTime = TIME();
-    double currentTime = TIME();
-    double deltaTime = 0.0;
-    state->geoPotential[0] = 0.0;
-    float previousExH = 0.0;
     float magVsat = sqrtf(VSATN()*VSATN() + VSATE()*VSATE() + VSATC() * VSATC());
-    float previousMagVsat = magVsat;
 
     for (timeIndex = 0; timeIndex < state->nRecs; timeIndex++)
     {
-        // For geoelectric potential estimation
-        currentTime = TIME();
-        deltaTime = (currentTime - previousTime) / 1000.0; // seconds
-        previousTime = currentTime;
-
         // Calculate xhat, yhat, zhat
         // xhat parallel to satellite velocity 
         magVsat = sqrtf(VSATN()*VSATN() + VSATE()*VSATE() + VSATC() * VSATC());
@@ -608,19 +600,9 @@ int calculateFields(ProcessorState *state)
         ectFieldV[ind + 1] = -1.0 * (-1.0 * MXV() * bctField[ind + 2] + MYV() * bctField[ind + 0]) / 1000000000.0 * 1000.0; 
         ectFieldV[ind + 2] = -1.0 * (MXV() * bctField[ind + 1] - MYH() * bctField[ind + 0]) / 1000000000.0 * 1000.0; 
 
-        if (timeIndex > 0)
-        {
-            previousExH = ectFieldH[3*(timeIndex-1)] / 1000.0;
-            // phi = - integral E-dot-dl along the path
-            state->geoPotential[timeIndex] = state->geoPotential[timeIndex-1] - previousExH * previousMagVsat * deltaTime;
-            previousMagVsat = magVsat;
-        }
     }
 
-    // Remove offsets and set calibration flags
-    state->setFlags = true;
-    // Linear offset model
-    state->bgws.fitDegree = 2;
+    state->setFlags = false;
     status = removeOffsetsAndSetFlags(state, geoelectricPotentialEstimator);
     if (status != TIICT_OK)
         return status;
@@ -630,6 +612,114 @@ int calculateFields(ProcessorState *state)
 
     return TIICT_OK;
 
+}
+
+int integrateField(ProcessorState *state, float *sourceField, int sourceStride, float scaleFactor, float *targetPotential, long startInd, long stopInd, bool vsDistance, bool positive, bool absoluteValue, bool removeMedianFromStart, float *medianDifference, float *firstSlope, float *lastSlope)
+{
+    int status = TIICT_OK;
+    long timeIndex = startInd;
+    uint8_t **dataBuffers = state->dataBuffers;
+    float previousField = 0.0;
+    double previousTime = TIME();
+    double currentTime = TIME();
+    double deltaTime = 0.0;
+    targetPotential[startInd] = 0.0;
+    float magVsat = sqrtf(VSATN()*VSATN() + VSATE()*VSATE() + VSATC() * VSATC());
+    float previousMagVsat = magVsat;
+
+    float signfactor = positive ? 1.0 : -1.0;
+    float distanceFactor = 0.0;
+    float nextContribution = 0.0;
+    for (timeIndex = startInd + 1; timeIndex < stopInd; timeIndex++)
+    {
+        currentTime = TIME();
+        deltaTime = (currentTime - previousTime) / 1000.0; // seconds
+        magVsat = sqrtf(VSATN()*VSATN() + VSATE()*VSATE() + VSATC() * VSATC());
+        previousField = sourceField[sourceStride*(timeIndex-1)] * scaleFactor;
+        nextContribution = signfactor * (absoluteValue ? fabsf(previousField) : previousField) * deltaTime;
+        if (vsDistance)
+            nextContribution *= magVsat;
+        targetPotential[timeIndex] = targetPotential[timeIndex-1] + nextContribution;
+        previousTime = currentTime;
+        previousMagVsat = magVsat;
+    }
+
+    // Estimate median values at endpoints 
+    float firstMedian = 0.0;
+    float lastMedian = 0.0;
+    status = regionMetrics(state, state->bgws.beginIndex0, state->bgws.beginIndex1, targetPotential, &firstMedian, firstSlope);
+    if (status != TIICT_OK)
+        return status;
+    status = regionMetrics(state, state->bgws.endIndex0, state->bgws.endIndex1, targetPotential, &lastMedian, lastSlope);
+    if (status != TIICT_OK)
+        return status;
+
+    if (removeMedianFromStart)
+    {
+        for (timeIndex = startInd; timeIndex < stopInd; timeIndex++)
+        {
+            targetPotential[timeIndex] -= firstMedian;
+        }
+    }
+    if (medianDifference != NULL)
+    {
+        *medianDifference = lastMedian - firstMedian;
+    }
+
+    return TIICT_OK;
+}
+
+int regionMetrics(ProcessorState *state, long startInd, long stopInd, float *parameter, float *median, float *slope)
+{
+    long timeIndex = startInd;
+    uint8_t ** dataBuffers = state->dataBuffers;
+    double t0 = TIME();
+    size_t n = stopInd - startInd + 1; 
+
+    // GSL median sorts buffer, so use a working buffer
+    gsl_matrix *distanceMatrix = gsl_matrix_alloc(n, 2);
+    gsl_vector *values = gsl_vector_alloc(n);
+    const gsl_multifit_robust_type * fitType = gsl_multifit_robust_bisquare;
+    gsl_multifit_robust_workspace * gslFitWorkspace = gsl_multifit_robust_alloc(fitType, n, 2);
+    gsl_vector *fitCoefficients = gsl_vector_alloc(2);
+    gsl_matrix *cov = gsl_matrix_alloc(2, 2);
+    gsl_multifit_robust_maxiter(GSL_FIT_MAXIMUM_ITERATIONS, gslFitWorkspace);
+
+    // Load times into the model data buffer
+    double fitDistance = 0.0;
+    double vMag = 0.0;
+    long ind = 0;
+    for (timeIndex = startInd; timeIndex < stopInd; timeIndex++)
+    {
+        ind = timeIndex - startInd;
+        vMag = sqrtf(VSATN()*VSATN() + VSATE()*VSATE() + VSATC() * VSATC());
+        fitDistance = (TIME() - t0)/1000. * (double)vMag;
+        gsl_matrix_set(distanceMatrix, ind, 0, 1.0);
+        gsl_matrix_set(distanceMatrix, ind, 1, fitDistance);
+        gsl_vector_set(values, ind, (double)parameter[timeIndex]);
+    }
+
+    if (slope != NULL)
+    {
+        int gslStatus = gsl_multifit_robust(distanceMatrix, values, fitCoefficients, cov, gslFitWorkspace);
+        if (gslStatus != GSL_SUCCESS)
+        {
+            timeIndex = stopInd;
+            double t1 = TIME();
+            fprintf(stderr, "%sregionMetrics: unable to estimate linear fit between epochs %lf and %lf\n", infoHeader, t0, t1);
+        }
+        *slope = (float)gsl_vector_get(fitCoefficients, 1);
+    }
+
+    if (median != NULL)
+    {
+        *median = (float)gsl_stats_median(values->data, 1, n);
+    }
+
+    gsl_vector_free(fitCoefficients);
+    gsl_matrix_free(distanceMatrix);
+    gsl_vector_free(values);
+    return TIICT_OK;
 }
 
 // Copied and modified from TRACIS interpolate.c
@@ -1126,7 +1216,7 @@ int shutdown(int status, ProcessorState *state)
     return status;
 }
 
-void velocityBackgroundRemoval(ProcessorState *state)
+int velocityBackgroundRemoval(ProcessorState *state)
 {
     long long timeIndex = 0;
     uint8_t **dataBuffers = state->dataBuffers;
@@ -1228,11 +1318,11 @@ void velocityBackgroundRemoval(ProcessorState *state)
     }
     gsl_matrix_free(cov);
 
-    return;
+    return TIICT_OK;
 
 }
 
-void geoelectricPotentialEstimator(ProcessorState *state)
+void geoelectricPotentialBackgroundRemoval(ProcessorState *state)
 {
     long long timeIndex = 0;
     uint8_t **dataBuffers = state->dataBuffers;
@@ -1256,15 +1346,6 @@ void geoelectricPotentialEstimator(ProcessorState *state)
     float vmag1 = 0.0;
     float vmag2 = 0.0;
 
-    // Set the region number
-    // 0 northern ascending, 1 equatorial descending
-    // 2 southern descending, 3 equatorial ascending
-    for (timeIndex = ws->beginIndex0; timeIndex < ws->endIndex1; timeIndex++)
-    {
-        state->region[timeIndex] = fitargs->regionNumber; 
-    }
-
-    // Load values into model data buffer once each for HX, HY, VX, VY
     ws->modelDataIndex = 0;
     vmag1 = 0.0;
     vmag2 = 0.0;
@@ -1372,5 +1453,72 @@ void geoelectricPotentialEstimator(ProcessorState *state)
 
     return;
 
+}
+
+int geoelectricPotentialEstimator(ProcessorState *state)
+{
+    int status = TIICT_OK;
+    long timeIndex = state->bgws.beginIndex0;
+    uint8_t **dataBuffers = state->dataBuffers;
+    double previousTime = TIME();
+    double currentTime = TIME();
+    double deltaTime = 0.0;
+    state->geoPotential[timeIndex] = 0.0;
+
+    float deltaPhi1 =0.0;
+    float deltaPhi2 =0.0;
+    float deltaPhi3 =0.0;
+    size_t bInd0 = state->bgws.beginIndex0;
+    size_t eInd1 = state->bgws.endIndex1;
+
+    // Set the region number
+    // 0 northern ascending, 1 equatorial descending
+    // 2 southern descending, 3 equatorial ascending
+    offset_model_fit_arguments *fitargs = &state->fitargs[state->interval];
+    for (timeIndex = bInd0; timeIndex < eInd1; timeIndex++)
+    {
+        state->region[timeIndex] = fitargs->regionNumber; 
+    }
+    
+    float s1 = 0.0;
+    float s2 = 0.0;
+    float s1p = 0.0;
+    float s2p = 0.0;
+    status = integrateField(state, state->ectFieldH, 3, 1/1000.0, state->geoPotential, bInd0, eInd1, true, false, false, true, &deltaPhi1, &s1, &s2); 
+    if (status != TIICT_OK)
+        return status;
+    status = integrateField(state, state->ectFieldH, 3, 1/1000.0, state->geoPotentialDetrended, bInd0, eInd1, true, true, false, true, &deltaPhi2, NULL, NULL); 
+
+    if (status != TIICT_OK)
+        return status;
+    status = integrateField(state, state->ectFieldH, 3, 1/1000.0, state->exAdjusted, bInd0, eInd1, true, true, true, true, &deltaPhi3, NULL, NULL); 
+    if (status != TIICT_OK)
+        return status;
+
+    // Zhu et al. (2020) DMSP rescaling factor 
+    float c = - deltaPhi2 / deltaPhi3;
+    for (timeIndex = bInd0; timeIndex < eInd1; timeIndex++)
+    {
+        state->exAdjusted[timeIndex] = state->ectFieldH[3*timeIndex] + c * fabsf(state->ectFieldH[3*timeIndex]);
+        state->exAdjustmentParameter[timeIndex] = c;
+        state->geoPotentialDifference[timeIndex] = deltaPhi1;
+    }
+
+    // Calculated adjusted geopotential
+    status = integrateField(state, state->exAdjusted, 1, 1/1000.0, state->geoPotentialDetrended, bInd0, eInd1, true, false, false, true, NULL, &s1p, &s2p); 
+    if (status != TIICT_OK)
+        return status;
+
+    s1 = fabsf(s1);
+    s2 = fabsf(s2);
+    s1p = fabsf(s1p);
+    s2p = fabsf(s2p);
+    for (timeIndex = bInd0; timeIndex < eInd1; timeIndex++)
+    {
+        state->maxAbsGeopotentialSlope[timeIndex] = 1000.0 * (s1 > s2 ? s1 : s2);
+        state->maxAbsGeopotentialDetrendedSlope[timeIndex] = 1000.0 * (s1p > s2p ? s1p : s2p);
+    }
+
+    return status;
 }
 
