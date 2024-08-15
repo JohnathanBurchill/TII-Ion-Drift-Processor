@@ -46,7 +46,10 @@
 #define BN() (MEAS(12, 0, 3))
 #define BE() (MEAS(12, 1, 3))
 #define BC() (MEAS(12, 2, 3))
-#define VBIAS() (MEAS(13, 0, 1))
-#define VFP() (MEAS(14, 0, 1))
+#define VMCPH() (MEAS(13, 0, 1))
+#define VMCPV() (MEAS(14, 0, 1))
+#define VBIASH() (MEAS(15, 0, 1))
+#define VBIASV() (MEAS(16, 0, 1))
+#define VFP() (MEAS(17, 0, 1))
 
 #endif // INDEXING_H

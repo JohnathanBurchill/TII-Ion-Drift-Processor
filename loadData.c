@@ -505,7 +505,10 @@ void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state)
         "Sat_Vel_N",            // 11
         "B-North",              // 12
         "Bias_Grid_H",          // 13
-        "Faceplate_Volt_Mon_H"  // 14
+        "Bias_Grid_V",          // 14
+        "MCP_Voltage_H",        // 15
+        "MCP_Voltage_V",        // 16
+        "Faceplate_Volt_Mon_H"  // 17
         };
 
     uint8_t nVars = numzVars;

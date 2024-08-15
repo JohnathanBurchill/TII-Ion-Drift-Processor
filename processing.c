@@ -91,8 +91,8 @@ int calibrateFlows(ProcessorState *state)
     //  2) bias voltage to nearest of -100 V, -62 V or left alone if too different from those values
     //  3) apply Level 1 calibration with bias dependence
     float value, innerDomeBias;
-    float vMcpH = -2000.0;
-    float vMcpV = -2000.0;
+    float vMcpH = 0.0;
+    float vMcpV = -0.0;
 
     // Adjust times for sample lag
     for (long timeIndex = 0; timeIndex < state->nRecs; timeIndex++)
@@ -125,10 +125,14 @@ int calibrateFlows(ProcessorState *state)
     {
         // Bias Voltage
         // TODO: need a more accurate replacement: i.e., early in mission the voltage was ~-60 V, not -62.
-        if (VBIAS() < -95.0)
-            *ADDR(13, 0, 1) = -100.;
-        else if(VBIAS() > -65. && VBIAS() < -59.0)
-            *ADDR(13, 0, 1) = -62.0;
+        if (VBIASH() < -95.0)
+            *ADDR(15, 0, 1) = -100.;
+        else if(VBIASH() > -65. && VBIASH() < -55.0)
+            *ADDR(15, 0, 1) = -62.0;
+        if (VBIASV() < -95.0)
+            *ADDR(16, 0, 1) = -100.;
+        else if(VBIASV() > -65. && VBIASV() < -55.0)
+            *ADDR(16, 0, 1) = -62.0;
 
         // VSatXYZ to m/s
         *ADDR(3, 0, 3) *= 1000.0;
@@ -141,7 +145,10 @@ int calibrateFlows(ProcessorState *state)
         *ADDR(10, 2, 3) *= 1000.0;
 
         // Apply level1 calibration with bias dependence
-        innerDomeBias = VBIAS() - VFP();
+        // Assumes H and V sensors have same bias, which is okay 
+        // since we set it to a set number due to known noise levels in monitors.
+        // Just use H sensor here
+        innerDomeBias = VBIASH() - VFP();
 
         // Get scaling parameter
         switch(state->args.satellite[0])
@@ -151,7 +158,7 @@ int calibrateFlows(ProcessorState *state)
                 shy = 574.0;
                 svx = 712.0;
                 svy = 712.0;
-                if (innerDomeBias >= -63.0 && innerDomeBias < -59.0)
+                if (innerDomeBias >= -63.0 && innerDomeBias < -55.0)
                 {
                     shx *= .76;
                     shy *= .76;
@@ -164,7 +171,7 @@ int calibrateFlows(ProcessorState *state)
                 shy = 553.0;
                 svx = 548.0;
                 svy = 548.0;
-                if (innerDomeBias >= -63.0 && innerDomeBias < -59.0)
+                if (innerDomeBias >= -63.0 && innerDomeBias < -55.0)
                 {
                     shx *= 450.5;
                     shy = 450.5; // Calibration 20210624, inner dome bias at -62 V.
@@ -177,7 +184,7 @@ int calibrateFlows(ProcessorState *state)
                 shy = 679.0;
                 svx = 2377.0;
                 svy = 2377.0;
-                if (innerDomeBias >= -63.0 && innerDomeBias < -59.0)
+                if (innerDomeBias >= -63.0 && innerDomeBias < -55.0)
                 {
                     shx *= .76;
                     shy *= .76;
@@ -186,7 +193,7 @@ int calibrateFlows(ProcessorState *state)
                 }
                 break;
         }
-        // Cross-track flows do not take into satellite potential
+        // Cross-track flows do not take into account variations in satellite potential
         // Change sign to get flow directions correct, then apply scaling
         // and subtract satellite velocity
 
@@ -210,9 +217,10 @@ int calibrateFlows(ProcessorState *state)
             // Add in the satellite potential
             // Then remove offsets from this
             // Then convert to flow velocity, adding ram energy of O+ before taking sqare root. 
+            vMcpH = VMCPH();
+            vMcpV = VMCPV();
             *ADDR(1, 0, 2) = eofr(MXH() - xch, innerDomeBias, vMcpH) + state->potentials[timeIndex];
             *ADDR(2, 0, 2) = eofr(MXV() - xcv, innerDomeBias, vMcpV) + state->potentials[timeIndex];
-
         }
         else
         {
