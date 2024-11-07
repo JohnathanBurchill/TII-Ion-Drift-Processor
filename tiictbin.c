@@ -239,7 +239,7 @@ int main(int argc, char* argv[])
             // except those for which baseline calibration was not done or was problematic: CALFLAG() == 0
             for (timeIndex = 0; timeIndex < nRecs; timeIndex++)
             {
-                if (FLAG() == 4 || (satellite == 'C' && minorVersion == 1) || (satellite == 'C' && fourByteCalFlag == true && (CALFLAG() == 0)))
+                if (FLAG() == 4 || (satellite == 'C'))
                 {
                     // Access bins with bins[mltIndex * nQDLats + qdlatIndex];
                     if (isfinite(PARAMETER()))
@@ -381,11 +381,7 @@ CDFstatus loadCrossTrackData(const char *filename, uint8_t **dataBuffers, long *
         ""
     };
     variables[NUM_DATA_VARIABLES-1] = (char *) parameterName;
-    if (minorVersion == 1)
-    {
-        variables[3] = "flags";
-    }
-    for (uint8_t i = 0; (i<nVars-1) || (i == nVars-1 && minorVersion == 2); i++)
+    for (uint8_t i = 0; i<nVars; i++)
     {
         status = CDFconfirmzVarExistence(calCdfId, variables[i]);
         if (status != CDF_OK)
@@ -400,7 +396,7 @@ CDFstatus loadCrossTrackData(const char *filename, uint8_t **dataBuffers, long *
     long varNum, numValues, numVarBytes;
     long numBytesPrev, numBytesToAdd, numBytesNew;
 
-    for (uint8_t i = 0; (i<nVars-1) || (i == nVars-1 && minorVersion == 2); i++)
+    for (uint8_t i = 0; i<nVars; i++)
     {
         varNum = CDFgetVarNum(calCdfId, variables[i]);
         if (varNum < CDF_OK)
