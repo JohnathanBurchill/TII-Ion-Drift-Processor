@@ -92,7 +92,7 @@ int calibrateFlows(ProcessorState *state)
     //  3) apply Level 1 calibration with bias dependence
     float value, innerDomeBias;
     float vMcpH = 0.0;
-    float vMcpV = -0.0;
+    float vMcpV = 0.0;
 
     // Adjust times for sample lag
     for (long timeIndex = 0; timeIndex < state->nRecs; timeIndex++)
@@ -200,18 +200,12 @@ int calibrateFlows(ProcessorState *state)
         *ADDR(1, 1, 2) = -1.0 * (MYH() - ych) * shy - VSATY();
         *ADDR(2, 1, 2) = -1.0 * (MYV() - ycv) * svy - VSATZ();
 
-        // Along-track flows take into account satellite potential 
+        // Along-track flows should take into account satellite potential 
         // by first converting flow to energy (eofr)
-        // adding the satellite potential estimate from LP
-        // then converting to velocity
-        // We no longer use the cross-track empirical sensitivity formulas,
-        // which are approximations anyway.
-        // TODO: revise calibration files to get MCP voltage 
-        // NOTE that inner dome bias is not measured but the setting for the H sensor.
-        // Remove effect of satellite potential
-        // TODO: take into account v-cross-B-dot-dl
+        // adding the satellite potential estimate from LP then converting to velocity
+        // We no longer use the cross-track empirical sensitivity formulas for along-track drift
 
-        if (state->usePotentials)
+        if (state->useEofR)
         {
             // Calculate ion energy for each sensor (from only the x moment for now)
             // Add in the satellite potential
@@ -219,8 +213,22 @@ int calibrateFlows(ProcessorState *state)
             // Then convert to flow velocity, adding ram energy of O+ before taking sqare root. 
             vMcpH = VMCPH();
             vMcpV = VMCPV();
-            *ADDR(1, 0, 2) = eofr(MXH() - xch, innerDomeBias, vMcpH) + state->potentials[timeIndex];
-            *ADDR(2, 0, 2) = eofr(MXV() - xcv, innerDomeBias, vMcpV) + state->potentials[timeIndex];
+            if (state->usePotentials) 
+            {
+                fprintf(stderr, "Using potentials!\n");
+                // Reserved method for scenario that satellite potential can be estimated reliably
+                // i.e. without significant noise levels, discontinuities, and transients
+                *ADDR(1, 0, 2) = eofr(MXH() - xch, innerDomeBias, vMcpH) + state->potentials[timeIndex];
+                *ADDR(2, 0, 2) = eofr(MXV() - xcv, innerDomeBias, vMcpV) + state->potentials[timeIndex];
+            }
+            else
+            {
+                // Use eofr estimate, no correction for variations in satellite potential
+                *ADDR(1, 0, 2) = eofr(MXH() - xch, innerDomeBias, -2000.0);
+                *ADDR(2, 0, 2) = eofr(MXV() - xcv, innerDomeBias, -2000.0);
+                //*ADDR(1, 0, 2) = eofr(MXH() - xch, innerDomeBias, vMcpH);
+                //*ADDR(2, 0, 2) = eofr(MXV() - xcv, innerDomeBias, vMcpV);
+            }
         }
         else
         {
@@ -243,12 +251,12 @@ int calibrateFlows(ProcessorState *state)
     if (status != TIICT_OK)
         return status;
 
-    // If using satellite potential, calculate ion along-track drift from offset-corrected energies
+    // If using EofR method, calculate ion along-track drift from offset-corrected energies
     // We have effectively removed 4.8 eV from each energy by setting the energy to 0 at mid-latitude
     // Add it back in before calculating velocity, then remove satellite velocity
     float backgroundRamEnergyeV = 0.0;
     float factor = 0.5 * mass / q;
-    if (state->usePotentials)
+    if (state->useEofR)
     {
         for (long timeIndex = 0; timeIndex < state->nRecs; timeIndex++)
         {
@@ -1007,16 +1015,23 @@ int initProcessor(int argc, char *argv[], ProcessorState *state)
 int parseArguments(int argc, char **argv, ProcessorState *state)
 {
     Arguments *args = &state->args;
-    // LP estimates of satellite potential
-    state->usePotentials = true;
+    // E-of-R method for along-track drift
+    state->useEofR = true;
+    // LP estimates of satellite potential are disabled by default
+    state->usePotentials = false;
 
     state->nOptions = 0;
     for (int i = 1; i < argc; i++)
     {
-        if (strcmp("--do-not-use-satellite-potential", argv[i]) == 0)
+        if (strcmp("--use-satellite-potential", argv[i]) == 0)
         {
             state->nOptions++;
-            state->usePotentials = false;
+            state->usePotentials = true;
+        }
+        else if (strcmp("--do-not-use-eofr-for-along-track-drift", argv[i]) == 0)
+        {
+            state->nOptions++;
+            state->useEofR = false;
         }
         else if (strcmp(argv[i], "--about") == 0)
         {

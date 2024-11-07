@@ -100,7 +100,8 @@ int loadLpCalData(ProcessorState *state)
     state->nLpRecs = 0;
 
     int status = TIICT_OK;
-    state->usePotentials = strcmp(state->args.exportVersion, "0401") >= 0; 
+    // Only used for version 0401 or greater, as earlier versions of calibration files did not include potential estimates
+    state->usePotentials &= (strcmp(state->args.exportVersion, "0401") >= 0); 
     if (state->usePotentials)
     {
         status = getLpData(state);
@@ -489,6 +490,7 @@ void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state)
         return;
     }
 
+
     // Variables
     char* variables[] = {
         "epoch",                // index 0
@@ -499,15 +501,15 @@ void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state)
         "QDLat",                // 5
         "QDLon",                // 6
         "Latitude",             // 7
-        "Long Tle",             // 8
+        "Longitide",            // 8
         "Radius",               // 9
         "Det H CorVx",          // 10
         "Sat_Vel_N",            // 11
         "B-North",              // 12
-        "Bias_Grid_H",          // 13
-        "Bias_Grid_V",          // 14
-        "MCP_Voltage_H",        // 15
-        "MCP_Voltage_V",        // 16
+        "MCP_Voltage_H",        // 13
+        "MCP_Voltage_V",        // 14
+        "Bias_Grid_H",          // 15
+        "Bias_Grid_V",          // 16
         "Faceplate_Volt_Mon_H"  // 17
         };
 
