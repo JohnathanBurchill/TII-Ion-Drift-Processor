@@ -377,7 +377,7 @@ CDFstatus loadCrossTrackData(const char *filename, uint8_t **dataBuffers, long *
         "QDLatitude",
         "Quality_flags",
         "Calibration_flags",
-        "VsatN"
+        "VsatN",
         ""
     };
     variables[NUM_DATA_VARIABLES-1] = (char *) parameterName;
