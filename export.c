@@ -539,7 +539,7 @@ void addAttributes(CDFid id, const char *dataset, const char *satellite, const c
         {"EhxAdjustmentParameter", "CDF_FLOAT", "*", "Parameter used to adjust the along-track electric field component to remove mid-latitude potential offset (Zhu et al., 2020).", -400., 400.},
         {"GeoelectricPotentialDetrended", "CDF_FLOAT", "V", "Geoelectric potential linearly detrended within each orbit region.", -1000000., 1000000.},
         {"MaxAbsGeoelectricPotentialDetrendedBaselineSlope", "CDF_FLOAT", "mV/m", "Maximum absolute slope of the mid-latitude detrended geoelectric potential estimates.", -1000000., 1000000.},
-        {"OrbitRegion", "CDF_UINT1", "*", "Orbit region poleward or equatorward of plus-or-minus 44.0 degrees quasi-dipole latitude. 0: northern polar ascending; 1: equatorial descending; 2: southern polar descending; 3: equatorial ascending.", 0, 3},
+        {"OrbitRegion", "CDF_UINT1", "*", "Orbit region poleward or equatorward of plus-or-minus 44.0 degrees quasi-dipole latitude. 0: northern polar ascending; 1: equatorial descending; 2: southern polar descending; 3: equatorial ascending; 255: incomplete or invalid.", 0, 3},
     };
 
     for (uint8_t i = 0; i < NUM_EXPORT_VARIABLES; i++)

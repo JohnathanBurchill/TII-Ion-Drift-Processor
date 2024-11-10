@@ -61,6 +61,7 @@ int initQualityData(ProcessorState *state)
         state->viErrors[4*ind+2] = DEFAULT_VI_ERROR;
         state->viErrors[4*ind+3] = DEFAULT_VI_ERROR;
         state->flags[ind] = 0;
+        state->region[ind] = 255; // Invalid or incomplete region
         // FITINFO_OFFSET_NOT_REMOVED = 1 and FITINFO_INCOMPLETE_REGION = 1 are the defaults for fitInfo
         // Set for each velocity component
         for (uint8_t k = 0; k < 4; k++)
@@ -1104,7 +1105,7 @@ void initHeader(ProcessorState *state)
     // set up info header
     sprintf(infoHeader, "TIICT %c%s %04d-%02d-%02d: ", args->satellite[0], args->exportVersion, args->year, args->month, args->day);
     fprintf(state->processingLogFile, "\n%s-------------------------------------------------\n", infoHeader);
-    fprintf(state->processingLogFile, "%sVersion 0302 20220519\n", infoHeader);
+    fprintf(state->processingLogFile, "%sVersion 0401 20241110\n", infoHeader);
     fprintf(state->processingLogFile, "%sProcessing date: %s\n", infoHeader, asctime(timeParts));
 
     return;
