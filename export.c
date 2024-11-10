@@ -82,9 +82,13 @@ int exportCdfs(ProcessorState *state)
             if (duration >= SECONDS_OF_DATA_REQUIRED_FOR_EXPORTING)
             {
                 // 16 Hz data
-                status |= exportTCT16Cdfs(state, startTime, stopTime, startIndex, stopIndex);
+                if (state->export16Hz) {
+                    status |= exportTCT16Cdfs(state, startTime, stopTime, startIndex, stopIndex);
+                }
                 // 2 Hz data
-                status |= exportTCT02Cdfs(state, startTime, stopTime, startIndex, stopIndex);
+                if (state->export2Hz) {
+                    status |= exportTCT02Cdfs(state, startTime, stopTime, startIndex, stopIndex);
+                }
 
                 recordsExported += (stopIndex - startIndex + 1);
                 minutesExported += (stopTime - startTime)/1000./60.;

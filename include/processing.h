@@ -57,6 +57,7 @@ bool downSampleHalfSecond(ProcessorState *state, long *index, long storageIndex,
 int runProcessor(int argc, char *argv[]);
 int initProcessor(int argc, char **argv, ProcessorState *state);
 int parseArguments(int argc, char **argv, ProcessorState *state);
+void cmdUsage(char *name);
 void initHeader(ProcessorState *state);
 
 int checkResult(int status, ProcessorState *state);

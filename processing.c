@@ -1020,21 +1020,28 @@ int parseArguments(int argc, char **argv, ProcessorState *state)
     // LP estimates of satellite potential are disabled by default
     state->usePotentials = false;
 
+    state->export2Hz = true;
+    state->export16Hz = true;
+
     state->nOptions = 0;
-    for (int i = 1; i < argc; i++)
-    {
-        if (strcmp("--use-satellite-potential", argv[i]) == 0)
-        {
+    for (int i = 1; i < argc; i++) {
+        if (strcmp("--use-satellite-potential", argv[i]) == 0) {
             state->nOptions++;
             state->usePotentials = true;
         }
-        else if (strcmp("--do-not-use-eofr-for-along-track-drift", argv[i]) == 0)
-        {
+        else if (strcmp("--no-16hz-export", argv[i]) == 0) {
+            state->nOptions++;
+            state->export16Hz = false;
+        }
+        else if (strcmp("--no-2hz-export", argv[i]) == 0) {
+            state->nOptions++;
+            state->export2Hz = false;
+        }
+        else if (strcmp("--do-not-use-eofr-for-along-track-drift", argv[i]) == 0) {
             state->nOptions++;
             state->useEofR = false;
         }
-        else if (strcmp(argv[i], "--about") == 0)
-        {
+        else if (strcmp(argv[i], "--about") == 0) {
             fprintf(stdout, "tiict - TII Cross-track ion drift processor, version %s.\n", SOFTWARE_VERSION);
             fprintf(stdout, "Copyright (C) 2024  Johnathan K Burchill\n");
             fprintf(stdout, "This program comes with ABSOLUTELY NO WARRANTY.\n");
@@ -1042,11 +1049,19 @@ int parseArguments(int argc, char **argv, ProcessorState *state)
             fprintf(stdout, "under the terms of the GNU General Public License.\n");
             return TIICT_ARGS_ABOUT;
         }
+        else if (strncmp(argv[i], "--", 2) == 0) {
+            cmdUsage(argv[0]);
+            return TIICT_ARGS_BAD;
+        }
     }
 
-    if (argc - state->nOptions != 10)
-    {
-        fprintf(stdout, "usage: %s satLetter year month day calversionString exportVersionString calDir lpDir exportDir\n", argv[0]);
+    if (argc - state->nOptions != 10) {
+        cmdUsage(argv[0]);
+        return TIICT_ARGS_BAD;
+    }
+
+    if (!state->export16Hz && !state->export2Hz) {
+        fprintf(stdout, "No records have been requested to be exported. Not processing.\n");
         return TIICT_ARGS_BAD;
     }
 
@@ -1069,6 +1084,13 @@ int parseArguments(int argc, char **argv, ProcessorState *state)
 
     return TIICT_OK;
 
+}
+
+void cmdUsage(char *name)
+{
+    fprintf(stdout, "usage: %s satLetter year month day calversionString exportVersionString calDir lpDir exportDir\n", name);
+
+    return;
 }
 
 void initHeader(ProcessorState *state)

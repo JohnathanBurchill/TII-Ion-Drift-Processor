@@ -134,6 +134,9 @@ typedef struct ProcessorState {
     bool setFlags;
     BackgroundRemovalWorkspace_t bgws;
 
+    bool export2Hz;
+    bool export16Hz;
+
 } ProcessorState;
 
 #endif // _STATE_H
