@@ -52,11 +52,10 @@ int main(int argc, char* argv[])
     snprintf(date, strlen(dateString), "%s", dateString);
 
     bool viyToEastward = false;
+    bool vixToDuskward = false;
 
-    for (int i = 1; i < argc; i++)
-    {
-        if (strcmp(argv[i], "--about") == 0)
-        {
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--about") == 0) {
             fprintf(stdout, "tiictbin - Calculates and prints requested statistics of specified parameter per QD latitude and MLT bin. Version %s.\n", SOFTWARE_VERSION);
             fprintf(stdout, "Copyright (C) 2024  Johnathan K Burchill\n");
             fprintf(stdout, "This program comes with ABSOLUTELY NO WARRANTY.\n");
@@ -65,18 +64,18 @@ int main(int argc, char* argv[])
 
             exit(0);
         }
-        if (strcmp(argv[i], "--viy-to-eastward") == 0)
+        else if (strcmp(argv[i], "--viy-to-eastward") == 0) {
             viyToEastward = true;
-
-        if (strcmp(argv[i], "--available-statistics") == 0)
-        {
+        }
+        else if (strcmp(argv[i], "--vix-to-duskward") == 0) {
+            vixToDuskward = true;
+        }
+        else if (strcmp(argv[i], "--available-statistics") == 0) {
             fprintf(stderr, "Available statistics:\n");
             printAvailableStatistics(stderr);
             exit(1);
         }
-
-        if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-help") == 0)
-        {
+        else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-help") == 0) {
             usage(argv[0]);
             exit(1);
         }
@@ -237,32 +236,36 @@ int main(int argc, char* argv[])
             // Number of records
             // Include all measurements for Swarm C, which are set to 0 flag always,
             // except those for which baseline calibration was not done or was problematic: CALFLAG() == 0
-            for (timeIndex = 0; timeIndex < nRecs; timeIndex++)
-            {
-                if (FLAG() == 4 || (satellite == 'C'))
-                {
+            for (timeIndex = 0; timeIndex < nRecs; timeIndex++) {
+                if (FLAG() == 4 || (satellite == 'C')) {
                     // Access bins with bins[mltIndex * nQDLats + qdlatIndex];
-                    if (isfinite(PARAMETER()))
-                    {
+                    if (isfinite(PARAMETER())) {
                         mltIndex = (int) floor((MLT() - mltmin) / deltamlt);
                         qdlatIndex = (int) floor((QDLAT() - qdlatmin) / deltaqdlat);
-                        if (mltIndex >= 0 && mltIndex < nMLTs && qdlatIndex >=0 && qdlatIndex < nQDLats)
-                        {
+                        if (mltIndex >= 0 && mltIndex < nMLTs && qdlatIndex >=0 && qdlatIndex < nQDLats) {
                             // TODO handle vector parameters
                             value = PARAMETER();
-                            if (viyToEastward)
-                            {
+                            if (viyToEastward) {
                                 // Flip sign of Viy to make positive viy always eastward as requested 
-                                if (VSATN() < 0)
-                                {
+                                if (VSATN() < 0) {
                                     value = -value;
                                 }
                             }
+                            else if (vixToDuskward) {
+                                if (QDLAT() > 0) {
+                                    if ((VSATN() < 0 && MLT() < 12.0) || (VSATN() >= 0 && MLT() >= 12.0)) {
+                                        value = -value;
+                                    }
+                                }
+                                else {
+                                    if ((VSATN() < 0 && MLT() >= 12.0) || (VSATN() >= 0 && MLT() < 12.0)) {
+                                        value = -value;
+                                    }
+                                }
+                            }
                             index = mltIndex * nQDLats + qdlatIndex;
-                            if (binSizes[index] >= binMaxSizes[index])
-                            {
-                                if(adjustBinStorage(binStorage, binMaxSizes, index, BIN_STORAGE_BLOCK_SIZE))
-                                {
+                            if (binSizes[index] >= binMaxSizes[index]) {
+                                if(adjustBinStorage(binStorage, binMaxSizes, index, BIN_STORAGE_BLOCK_SIZE)) {
                                     fprintf(stderr, "Unable to allocate additional bin storage.\n");
                                     exit(1);
                                 }
