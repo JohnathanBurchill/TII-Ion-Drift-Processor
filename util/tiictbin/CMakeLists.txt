@@ -1,6 +1,6 @@
-# TIICT Processor: util/CMakeLists.txt
+# TIICT Processor: util/tiictbin/CMakeLists.txt
 
-# Copyright (C) 2022  Johnathan K Burchill
+# Copyright (C) 2024  Johnathan K Burchill
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -15,5 +15,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-add_subdirectory(tiictParallel)
-add_subdirectory(tiictbin)
+project(TIICT)
+
+CMAKE_MINIMUM_REQUIRED(VERSION 3.0)
+
+ADD_EXECUTABLE(tiictbin tiictbin.c statistics.c)
+TARGET_LINK_LIBRARIES(tiictbin -lgslcblas -lgsl -lcdf -lm)
+
+install(TARGETS tiictbin DESTINATION $ENV{HOME}/bin)
