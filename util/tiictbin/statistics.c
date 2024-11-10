@@ -247,7 +247,7 @@ void printBinningResults(BinningState *binningState, char *parameter, char *stat
 
             denomBinValidSizes = binningState->binValidSizes[index] > 0 ? (double) binningState->binValidSizes[index] : 1.0;
 
-            fprintf(stdout, "%5.2lf %5.2lf %6.2lf %6.2lf %lf %ld %lf %lf\n", mlt1, mlt2, qdlat1, qdlat2, result, binningState->binSizes[index], (double)binningState->binSizes[index] / denomBinValidSizes, (double)binningState->binSizes[index] / denomNValsRead);
+            fprintf(stdout, "%5.3lf %5.3lf %6.3lf %6.3lf %lf %ld %lf %lf\n", mlt1, mlt2, qdlat1, qdlat2, result, binningState->binSizes[index], (double)binningState->binSizes[index] / denomBinValidSizes, (double)binningState->binSizes[index] / denomNValsRead);
         }
     }
 

@@ -166,7 +166,8 @@ void usage(char *name)
     fprintf(stdout, "%35s - %s\n", "--mltmin=<value>", "minimum magnetic local time");
     fprintf(stdout, "%35s - %s\n", "--mltmax=<value>", "maximum magnetic local time");
     fprintf(stdout, "%35s - %s\n", "--deltamlt=<value>", "magnetic local time bin width (at the polar cap if for equal-area binning)");
-    fprintf(stdout, "%35s - %s\n", "--flip-when-descending", "change sign of value when on descending part of orbit");
+    fprintf(stdout, "%35s - %s\n", "--flip-when-descending", "change sign of value when magnetically descending");
+    fprintf(stdout, "%35s - %s\n", "--flip-when-dawnward", "change sign of value when satellite is moving magnetically dawnward");
     fprintf(stdout, "%35s - %s\n", "--cdf-input-directory=<dir>", "path to directory containing binary input files");
     fprintf(stdout, "%35s - %s\n", "--flag-ignore-mask=<mask>", "ignores the given flag bits for determining data quality, e.g. --flag-ignore-mask=0b00000110 or --flag-ignore-mask=16");
     fprintf(stdout, "%35s - %s\n", "--flag-mask-type={AND|OR}", "interpret --flag-mask values as bitwise AND or as bitwise OR");
