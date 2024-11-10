@@ -79,6 +79,7 @@ typedef struct binningState
     long nValsBinned;
 
     bool flipParamWhenDawnward;
+    bool flipParamWhenSunward;
     bool flipParamWhenDescending;
 
     double solidAngleUnit;

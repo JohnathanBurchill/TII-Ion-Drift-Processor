@@ -72,6 +72,8 @@ int main(int argc, char *argv[])
     params.binningState.mltmax = 24.0;
     params.binningState.deltamlt = 8.0;
     params.binningState.flipParamWhenDescending = false;
+    params.binningState.flipParamWhenDawnward = false;
+    params.binningState.flipParamWhenSunward = false;
 
     // check options and arguments
     parseCommandLine(&params, argc, argv);
@@ -166,7 +168,8 @@ void usage(char *name)
     fprintf(stdout, "%35s - %s\n", "--mltmin=<value>", "minimum magnetic local time");
     fprintf(stdout, "%35s - %s\n", "--mltmax=<value>", "maximum magnetic local time");
     fprintf(stdout, "%35s - %s\n", "--deltamlt=<value>", "magnetic local time bin width (at the polar cap if for equal-area binning)");
-    fprintf(stdout, "%35s - %s\n", "--flip-when-descending", "change sign of value when magnetically descending");
+    fprintf(stdout, "%35s - %s\n", "--flip-when-descending", "change sign of value when satellite is moving magnetically southward");
+    fprintf(stdout, "%35s - %s\n", "--flip-when-sunward", "change sign of value when satellite is moving magnetically sunward");
     fprintf(stdout, "%35s - %s\n", "--flip-when-dawnward", "change sign of value when satellite is moving magnetically dawnward");
     fprintf(stdout, "%35s - %s\n", "--cdf-input-directory=<dir>", "path to directory containing binary input files");
     fprintf(stdout, "%35s - %s\n", "--flag-ignore-mask=<mask>", "ignores the given flag bits for determining data quality, e.g. --flag-ignore-mask=0b00000110 or --flag-ignore-mask=16");
@@ -195,8 +198,6 @@ void parseCommandLine(ProcessingParameters *params, int argc, char *argv[])
     params->flagIgnoreMask = 0;
     params->flagMaskIsAnd = true;
     params->flagRaisedIsGood = true;
-    params->binningState.flipParamWhenDawnward = false;
-    params->binningState.flipParamWhenDescending = false;
 
     for (int i = 0; i < argc; i++)
     {
@@ -302,6 +303,11 @@ void parseCommandLine(ProcessingParameters *params, int argc, char *argv[])
         {
             params->nOptions++;
             params->binningState.flipParamWhenDescending = true;
+        }
+        else if (strcmp(argv[i], "--flip-when-sunward") == 0)
+        {
+            params->nOptions++;
+            params->binningState.flipParamWhenSunward = true;
         }
         else if (strcmp(argv[i], "--flip-when-dawnward") == 0)
         {
@@ -547,6 +553,18 @@ int processFile(ProcessingParameters *params)
 
         if (params->binningState.flipParamWhenDescending && qdDirection < 0.0) {
             value = -value;
+        }
+        else if (params->binningState.flipParamWhenSunward) {
+            if (qdlat > 0.0) {
+                if ((qdDirection > 0.0 && (mlt < 6.0 || mlt > 18.0)) || (qdDirection <= 0.0 && (mlt >= 6.0 && mlt <= 18.0))) {
+                    value = -value;
+                }
+            }
+            else {
+                if ((qdDirection < 0.0 && (mlt < 6.0 || mlt > 18.0)) || (qdDirection >= 0.0 && (mlt >= 6.0 && mlt <= 18.0))) {
+                    value = -value;
+                }
+            }
         }
         else if (params->binningState.flipParamWhenDawnward) {
             if (qdlat > 0.0) {
