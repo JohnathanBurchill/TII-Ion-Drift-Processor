@@ -527,6 +527,7 @@ int processFile(ProcessingParameters *params)
         return status;
 
     float mlt = 0.0;
+    float lastMlt = 0.0;
     float qdlat = 0.0;
     float lastQdLat = 0.0;
     float value = 0.0;
@@ -534,49 +535,62 @@ int processFile(ProcessingParameters *params)
     uint32_t flagMask = ~params->flagIgnoreMask;
 
     bool includeValue = false;
-    float qdDirection = 0.0;
+    float qdDisplacement = 0.0;
+    float dawnwardDisplacement = 0.0;
+    float sunwardDisplacement = 0.0;
+
+    // Track direction in magnetic coordinates
+    float xmag = 0.0;
+    float lastXmag =0.0;
+    float ymag = 0.0;
+    float lastYmag = 0.0;
+    float theta = 0.0;
 
     for (int i = 0; i < params->nRecords; i++)
     {
         qdlat = params->qdlat[i];
-        if (i > 0)
-            qdDirection = qdlat - lastQdLat;
-        else
-            qdDirection = 0.0;
+        if (i > 0) {
+            qdDisplacement = qdlat - lastQdLat;
+        }
+        else {
+            qdDisplacement = 0.0;
+        }
         lastQdLat = qdlat;
+
         mlt = params->mlt[i];
+
+        // Track direction of orbit in magnetic coordinates
+        if (i > 0) {
+            // xhat is antisunward, yhat is dawnward
+            theta = 2.0 * M_PI * mlt / 24.0;
+            xmag = fabsf(qdlat) * cosf(theta);
+            ymag = fabsf(qdlat) * sinf(theta);
+            sunwardDisplacement = -(xmag - lastXmag);
+            dawnwardDisplacement = ymag - lastYmag; 
+        }
+        else {
+            sunwardDisplacement = 0.0;
+            dawnwardDisplacement = 0.0;
+        }
+        lastQdLat = qdlat;
+        lastMlt = mlt;
+        lastXmag = xmag;
+        lastYmag = ymag;
+
         value = params->values[i];
 
         if (params->flags != NULL)
             flag = params->flags[i];
         else flag = 0;
 
-        if (params->binningState.flipParamWhenDescending && qdDirection < 0.0) {
+        if (params->binningState.flipParamWhenDescending && qdDisplacement < 0.0) {
             value = -value;
         }
-        else if (params->binningState.flipParamWhenSunward) {
-            if (qdlat > 0.0) {
-                if ((qdDirection > 0.0 && (mlt < 6.0 || mlt > 18.0)) || (qdDirection <= 0.0 && (mlt >= 6.0 && mlt <= 18.0))) {
-                    value = -value;
-                }
-            }
-            else {
-                if ((qdDirection < 0.0 && (mlt < 6.0 || mlt > 18.0)) || (qdDirection >= 0.0 && (mlt >= 6.0 && mlt <= 18.0))) {
-                    value = -value;
-                }
-            }
+        else if (params->binningState.flipParamWhenSunward && sunwardDisplacement > 0) {
+            value = -value;
         }
-        else if (params->binningState.flipParamWhenDawnward) {
-            if (qdlat > 0.0) {
-                if ((qdDirection > 0.0 && mlt > 12.0) || (qdDirection <= 0.0 && mlt <= 12.0)) {
-                    value = -value;
-                }
-            }
-            else {
-                if ((qdDirection < 0.0 && mlt > 12.0) || (qdDirection >= 0.0 && mlt <= 12.0)) {
-                    value = -value;
-                }
-            }
+        else if (params->binningState.flipParamWhenDawnward && dawnwardDisplacement > 0) {
+            value = -value;
         }
         params->binningState.nValsRead++;
 
