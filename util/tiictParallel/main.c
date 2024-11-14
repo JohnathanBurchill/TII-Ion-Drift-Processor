@@ -33,13 +33,16 @@
 #include <curses.h>
 
 
-#define SOFTWARE_VERSION "1.2"
+#define SOFTWARE_VERSION "1.3"
+#define RELEASE_DATE "14 Nov 2024"
 
 #define THREAD_MANAGER_WAIT 100000 // uSeconds
 
 #define MAX_THREADS 38
 
 extern char infoHeader[50];
+
+void usageInfo(char *name);
 
 enum STATUS 
 {
@@ -61,6 +64,10 @@ typedef struct CommandArgs
 	char *calDir;
 	char *lpDir;
 	char *exportDir;
+    bool export2Hz;
+    bool export16Hz;
+    bool noZip;
+    bool useSatellitePotential;
 } CommandArgs;
 
 void ymd(char *date, int *y, int *m, int *d);
@@ -88,23 +95,46 @@ void cleanup(CommandArgs *args);
 int main(int argc, char *argv[])
 {
 
-    for (int i = 1; i < argc; i++)
-    {
-        if (strcmp(argv[i], "--about") == 0)
-        {
-            fprintf(stdout, "tiictParallel0401 version %s.\n", SOFTWARE_VERSION);
+    bool export2Hz = true;
+    bool export16Hz = true;
+    bool noZip = false;
+    bool useSatellitePotential = false;
+
+    int nOptions = 0;
+    for (int i = 1; i < argc; i++) {
+        if (strcmp("--no-2Hz", argv[i]) == 0) {
+            nOptions++;
+            export2Hz = false;
+        }
+        else if (strcmp("--no-16Hz", argv[i]) == 0) {
+            nOptions++;
+            export16Hz = false;
+        }
+        else if (strcmp("--no-zip", argv[i]) == 0) {
+            nOptions++;
+            noZip = true;
+        }
+        else if (strcmp("--use-satellite-potential", argv[i]) == 0) {
+            nOptions++;
+            useSatellitePotential = true;
+        }
+        else if (strcmp(argv[i], "--about") == 0) {
+            fprintf(stdout, "tiictParallel0401 version %s %s.\n", SOFTWARE_VERSION, RELEASE_DATE);
             fprintf(stdout, "Copyright (C) 2024  Johnathan K Burchill\n");
             fprintf(stdout, "This program comes with ABSOLUTELY NO WARRANTY.\n");
             fprintf(stdout, "This is free software, and you are welcome to redistribute it\n");
             fprintf(stdout, "under the terms of the GNU General Public License.\n");
             exit(0);
         }
+        else if (strncmp(argv[i], "--", 2) == 0) {
+            fprintf(stderr, "unable to parse %s\n", argv[i]);
+            exit(1);
+        }
     }
 
-	if (argc !=  9)
+	if (argc - nOptions !=  9)
 	{
-		printf("usage:\t%s startyyyymmdd endyyyymmdd calVersion exportVersion calDir lpDir exportDir nthreads\n\t\tparallel processes Swarm TII data to generate TIICT product for specified satellite and date.\n", argv[0]);
-		printf("\t%s --about\n\t\tprints copyright and license information.\n", argv[0]);
+        usageInfo(argv[0]);
 		exit(0);
 	}
 
@@ -123,7 +153,6 @@ int main(int argc, char *argv[])
 	{
 		nThreads = MAX_THREADS;
 	}
-
 	char *date = strdup(startDate);
 	char *d1 = strdup(startDate);
 	char *d2 = strdup(endDate);
@@ -235,6 +264,10 @@ int main(int argc, char *argv[])
 						commandArgs[i].month = month;
 						commandArgs[i].day = day;
 						commandArgs[i].returnValue = 0;
+						commandArgs[i].export2Hz = export2Hz;
+						commandArgs[i].export16Hz = export16Hz;
+						commandArgs[i].noZip = noZip;
+						commandArgs[i].useSatellitePotential = useSatellitePotential;
 						pthread_create(&threadIds[i], &attr, &runThread, (void*) &commandArgs[i]);
 						incrementDate(date);
 						queued++;
@@ -394,7 +427,7 @@ void *runThread(void *a)
 	// run tiict command as a system() call because CDF library is not thread safe
 	int status = 0;
 	char command[3*FILENAME_MAX+256] = {0};
-	sprintf(command, "tiict0401 %s %d %d %d %s %s %s %s %s > /dev/null 2>&1 ", args->satLetter, args->year, args->month, args->day, args->calVersion, args->exportVersion, args->calDir, args->lpDir, args->exportDir);
+	sprintf(command, "tiict0401 %s %d %d %d %s %s %s %s %s%s%s%s%s > /dev/null 2>&1 ", args->satLetter, args->year, args->month, args->day, args->calVersion, args->exportVersion, args->calDir, args->lpDir, args->exportDir, !args->export2Hz ? " --no-2hz-export" : "", !args->export16Hz ? " --no-16hz-export" : "", args->useSatellitePotential ? " --use-satellite-potential" : "", args->noZip ? " --no-zip-export" : "");
 	status = system(command);
 	args->returnValue = status;
 	args->threadRunning = false;
@@ -407,3 +440,15 @@ void cleanup(CommandArgs *args)
 	args->threadRunning = false;
 	return;
 }
+
+void usageInfo(char *name)
+{
+    printf("usage:\t%s startyyyymmdd endyyyymmdd calVersion exportVersion calDir lpDir exportDir nthreads\n\t\tparallel processes Swarm TII data to generate TIICT product for specified satellite and date.\n", name);
+    printf("Options:\n");
+    printf("%35s - %s\n", "--use-satellite-potential", "correct ion energies using LP-supplied floating potential");
+    printf("%35s - %s\n", "--no-16Hz", "Do not export 16 Hz product");
+    printf("%35s - %s\n", "--no-2Hz", "Do not export 2 Hz product");
+    printf("%35s - %s\n", "--no-zip", "Do not create ZIP files");
+    printf("%35s - %s\n", "--about", "prints copyright and license information");
+}
+

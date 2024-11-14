@@ -216,7 +216,6 @@ int calibrateFlows(ProcessorState *state)
             vMcpV = VMCPV();
             if (state->usePotentials) 
             {
-                fprintf(stderr, "Using potentials!\n");
                 // Reserved method for scenario that satellite potential can be estimated reliably
                 // i.e. without significant noise levels, discontinuities, and transients
                 *ADDR(1, 0, 2) = eofr(MXH() - xch, innerDomeBias, vMcpH) + state->potentials[timeIndex];
@@ -225,8 +224,8 @@ int calibrateFlows(ProcessorState *state)
             else
             {
                 // Use eofr estimate, no correction for variations in satellite potential
-                *ADDR(1, 0, 2) = eofr(MXH() - xch, innerDomeBias, -2000.0);
-                *ADDR(2, 0, 2) = eofr(MXV() - xcv, innerDomeBias, -2000.0);
+                *ADDR(1, 0, 2) = eofr(MXH() - xch, innerDomeBias, vMcpH);
+                *ADDR(2, 0, 2) = eofr(MXV() - xcv, innerDomeBias, vMcpV);
                 //*ADDR(1, 0, 2) = eofr(MXH() - xch, innerDomeBias, vMcpH);
                 //*ADDR(2, 0, 2) = eofr(MXV() - xcv, innerDomeBias, vMcpV);
             }
@@ -990,6 +989,16 @@ int initProcessor(int argc, char *argv[], ProcessorState *state)
     // Prefix for messages
     initHeader(state);
 
+    // Print command line 
+    fprintf(state->processingLogFile, "%sCalled as '", infoHeader);
+    for (int i = 0; i < argc; i++) {
+        fprintf(state->processingLogFile, "%s", argv[i]);
+        if (i < argc - 1) {
+            fprintf(state->processingLogFile, " ");
+        }
+    }
+    fprintf(state->processingLogFile, "'\n");
+
     // Confirm requested date has records. Abort otherwise.
     status = checkCalDataAvailability(state);
     if (status != TIICT_OK)
@@ -1023,6 +1032,7 @@ int parseArguments(int argc, char **argv, ProcessorState *state)
 
     state->export2Hz = true;
     state->export16Hz = true;
+    state->createZip = true;
 
     state->nOptions = 0;
     for (int i = 1; i < argc; i++) {
@@ -1037,6 +1047,10 @@ int parseArguments(int argc, char **argv, ProcessorState *state)
         else if (strcmp("--no-2hz-export", argv[i]) == 0) {
             state->nOptions++;
             state->export2Hz = false;
+        }
+        else if (strcmp("--no-zip-export", argv[i]) == 0) {
+            state->nOptions++;
+            state->createZip = false;
         }
         else if (strcmp("--do-not-use-eofr-for-along-track-drift", argv[i]) == 0) {
             state->nOptions++;
@@ -1106,7 +1120,7 @@ void initHeader(ProcessorState *state)
     sprintf(infoHeader, "TIICT %c%s %04d-%02d-%02d: ", args->satellite[0], args->exportVersion, args->year, args->month, args->day);
     fprintf(state->processingLogFile, "\n%s-------------------------------------------------\n", infoHeader);
     fprintf(state->processingLogFile, "%sVersion 0401 20241110\n", infoHeader);
-    fprintf(state->processingLogFile, "%sProcessing date: %s\n", infoHeader, asctime(timeParts));
+    fprintf(state->processingLogFile, "%sProcessing date: %s", infoHeader, asctime(timeParts));
 
     return;
 }

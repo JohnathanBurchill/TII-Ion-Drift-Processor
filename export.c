@@ -637,7 +637,9 @@ int exportTCT16Cdfs(ProcessorState *state, double startTime, double stopTime, lo
         fprintf(state->processingLogFile, "%sExported %ld records to %s.cdf\n", infoHeader, (stopIndex - startIndex + 1), cdfFileName);
         fflush(state->processingLogFile);
 
-        zipCdfFile(state, cdfFileName);
+        if (state->createZip) {
+            status = zipCdfFile(state, cdfFileName);
+        }
     }
 
     return status;
@@ -771,7 +773,9 @@ int exportTCT02Cdfs(ProcessorState *state, double startTime, double stopTime, lo
         fprintf(state->processingLogFile, "%sExported %ld records to %s.cdf\n", infoHeader, (stopIndex - startIndex + 1), cdfFileName);
         fflush(state->processingLogFile);
 
-        status = zipCdfFile(state, cdfFileName);
+        if (state->createZip) {
+            status = zipCdfFile(state, cdfFileName);
+        }
 
     }
 

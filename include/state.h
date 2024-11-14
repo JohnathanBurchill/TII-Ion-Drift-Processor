@@ -136,6 +136,7 @@ typedef struct ProcessorState {
 
     bool export2Hz;
     bool export16Hz;
+    bool createZip;
 
 } ProcessorState;
 
