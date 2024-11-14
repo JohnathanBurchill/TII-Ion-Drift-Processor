@@ -501,7 +501,7 @@ void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state)
         "QDLat",                // 5
         "QDLon",                // 6
         "Latitude",             // 7
-        "Longitide",            // 8
+        "Longitude",            // 8
         "Radius",               // 9
         "Det H CorVx",          // 10
         "Sat_Vel_N",            // 11
