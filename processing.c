@@ -226,8 +226,6 @@ int calibrateFlows(ProcessorState *state)
                 // Use eofr estimate, no correction for variations in satellite potential
                 *ADDR(1, 0, 2) = eofr(MXH() - xch, innerDomeBias, vMcpH);
                 *ADDR(2, 0, 2) = eofr(MXV() - xcv, innerDomeBias, vMcpV);
-                //*ADDR(1, 0, 2) = eofr(MXH() - xch, innerDomeBias, vMcpH);
-                //*ADDR(2, 0, 2) = eofr(MXV() - xcv, innerDomeBias, vMcpV);
             }
         }
         else

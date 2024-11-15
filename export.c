@@ -614,10 +614,7 @@ int exportTCT16Cdfs(ProcessorState *state, double startTime, double stopTime, lo
         createVarFrom2DVar(exportCdfId, "Vicrx", CDF_REAL4, startIndex, stopIndex, dataBuffers[10], 0, 3);
         createVarFrom2DVar(exportCdfId, "Vicry", CDF_REAL4, startIndex, stopIndex, dataBuffers[10], 1, 3);
         createVarFrom2DVar(exportCdfId, "Vicrz", CDF_REAL4, startIndex, stopIndex, dataBuffers[10], 2, 3);
-    
-        if (state->usePotentials)
-            createVarFrom1DVar(exportCdfId, "U_SC", CDF_REAL4, startIndex, stopIndex, state->potentials);
-    
+        createVarFrom1DVar(exportCdfId, "U_SC", CDF_REAL4, startIndex, stopIndex, state->potentials);
         createVarFrom1DVar(exportCdfId, "Quality_flags", CDF_UINT2, startIndex, stopIndex, state->flags);
         createVarFrom1DVar(exportCdfId, "Calibration_flags", CDF_UINT4, startIndex, stopIndex, state->fitInfo);
         createVarFrom1DVar(exportCdfId, "GeoelectricPotential", CDF_REAL4, startIndex, stopIndex, state->geoPotential);
@@ -750,9 +747,7 @@ int exportTCT02Cdfs(ProcessorState *state, double startTime, double stopTime, lo
         createVarFrom2DVar(exportCdfId, "Vicrx", CDF_REAL4, startIndex, stopIndex, dataBuffers[10], 0, 3);
         createVarFrom2DVar(exportCdfId, "Vicry", CDF_REAL4, startIndex, stopIndex, dataBuffers[10], 1, 3);
         createVarFrom2DVar(exportCdfId, "Vicrz", CDF_REAL4, startIndex, stopIndex, dataBuffers[10], 2, 3);
-        if (state->usePotentials)
-            createVarFrom1DVar(exportCdfId, "U_SC", CDF_REAL4, startIndex, stopIndex, state->potentials);
-
+        createVarFrom1DVar(exportCdfId, "U_SC", CDF_REAL4, startIndex, stopIndex, state->potentials);
         createVarFrom1DVar(exportCdfId, "Quality_flags", CDF_UINT2, startIndex, stopIndex, state->flags);
         createVarFrom1DVar(exportCdfId, "Calibration_flags", CDF_UINT4, startIndex, stopIndex, state->fitInfo);
         createVarFrom1DVar(exportCdfId, "GeoelectricPotential", CDF_REAL4, startIndex, stopIndex, state->geoPotential);

@@ -102,20 +102,18 @@ int loadLpCalData(ProcessorState *state)
     int status = TIICT_OK;
     // Only used for version 0401 or greater, as earlier versions of calibration files did not include potential estimates
     state->usePotentials &= (strcmp(state->args.exportVersion, "0401") >= 0); 
-    if (state->usePotentials)
+    // Read in the potentials in any case so they can be stored in the CDF file
+    status = getLpData(state);
+    if (status == TIICT_OK)
     {
-        status = getLpData(state);
-        if (status == TIICT_OK)
+        if (state->nLpRecs < LP_MIN_NUMBER_OF_POTENTIALS)
         {
-            if (state->nLpRecs < LP_MIN_NUMBER_OF_POTENTIALS)
-            {
-                fprintf(state->processingLogFile, "%sNot enough (%lu) LP potentials imported.\n", infoHeader, state->nLpRecs);
-                status =  TIICT_NO_LP_HM_DATA;
-            }
-            else
-            {
-                fprintf(state->processingLogFile, "%sLoaded %lu LP potentials, and interpolated them to the TII times.\n", infoHeader, state->nLpRecs);
-            }
+            fprintf(state->processingLogFile, "%sNot enough (%lu) LP potentials imported.\n", infoHeader, state->nLpRecs);
+            status =  TIICT_NO_LP_HM_DATA;
+        }
+        else
+        {
+            fprintf(state->processingLogFile, "%sLoaded %lu LP potentials, and interpolated them to the TII times.\n", infoHeader, state->nLpRecs);
         }
     }
 
