@@ -17,9 +17,7 @@
 
 project(TIICT)
 
-CMAKE_MINIMUM_REQUIRED(VERSION 3.0)
-
 ADD_EXECUTABLE(tiictbin tiictbin.c statistics.c)
-TARGET_LINK_LIBRARIES(tiictbin -lgslcblas -lgsl -lcdf -lm)
+TARGET_LINK_LIBRARIES(tiictbin ${LIBS})
 
 install(TARGETS tiictbin DESTINATION $ENV{HOME}/bin)

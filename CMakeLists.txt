@@ -16,11 +16,11 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 
+CMAKE_MINIMUM_REQUIRED(VERSION 3.30)
+
 PROJECT(TIICT)
 
-CMAKE_MINIMUM_REQUIRED(VERSION 3.3)
-
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+SET(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 ADD_DEFINITIONS(-DHAVE_GETOPT_H)
 
@@ -32,22 +32,24 @@ else (CMAKE_BUILD_TYPE STREQUAL Debug)
     SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -std=gnu99 ")
 endif(CMAKE_BUILD_TYPE STREQUAL Debug)
 
-INCLUDE_DIRECTORIES(include)
+INCLUDE(GNUInstallDirs)
 
 # GSL
 FIND_PACKAGE(GSL REQUIRED)
 
 # requires -lm on linux
-FIND_LIBRARY(MATH m)
-SET(LIBS ${LIBS} ${MATH} ${GSL_LIBRARY} )
+FIND_LIBRARY(MATH m REQUIRED)
+FIND_LIBRARY(TII tii REQUIRED)
+FIND_LIBRARY(CDF cdf HINTS /Applications/cdf/cdf/lib REQUIRED)
+SET(LIBS ${LIBS} ${MATH} ${GSL_LIBRARY} ${TII} ${CDF} ${GSL_LIBS})
 
-
-INCLUDE_DIRECTORIES(${INCLUDE_DIRS} ${GSL_INCLUDE_DIRS})
+INCLUDE_DIRECTORIES(include ${CMAKE_INSTALL_INCUDEDIR} ${INCLUDE_DIRS}
+${GSL_INCLUDE_DIRS} /Applications/cdf/cdf/include /usr/local/include)
 
 ADD_LIBRARY(Utilities utilities.c)
 ADD_LIBRARY(Processor processing.c export.c loadData.c utilities.c)
 TARGET_INCLUDE_DIRECTORIES(Processor PRIVATE)
-TARGET_LINK_LIBRARIES(Processor ${LIBS} -lgslcblas -ltii -lcdf)
+TARGET_LINK_LIBRARIES(Processor ${LIBS})
 
 ADD_EXECUTABLE(tiict0401 tiict.c processing.c export.c loadData.c)
 TARGET_INCLUDE_DIRECTORIES(tiict0401 PRIVATE)
@@ -55,15 +57,15 @@ TARGET_LINK_LIBRARIES(tiict0401 Processor)
 
 ADD_EXECUTABLE(tiictinspect tiictinspect.c)
 TARGET_INCLUDE_DIRECTORIES(tiictinspect PRIVATE)
-TARGET_LINK_LIBRARIES(tiictinspect Utilities ${LIBS} -lgslcblas -lcdf)
+TARGET_LINK_LIBRARIES(tiictinspect Utilities ${LIBS})
 
 ADD_EXECUTABLE(tiictqualityflags tiictqualityflags.c)
 TARGET_INCLUDE_DIRECTORIES(tiictqualityflags PRIVATE )
-TARGET_LINK_LIBRARIES(tiictqualityflags Utilities ${MATH} -lcdf)
+TARGET_LINK_LIBRARIES(tiictqualityflags Utilities ${LIBS})
 
 ADD_EXECUTABLE(tiictvariability tiictvariability.c)
 TARGET_INCLUDE_DIRECTORIES(tiictvariability PRIVATE )
-TARGET_LINK_LIBRARIES(tiictvariability Utilities ${LIBS} -lgslcblas -lcdf)
+TARGET_LINK_LIBRARIES(tiictvariability Utilities ${LIBS})
 
 # ADD_EXECUTABLE(tiictfitstatistics tiictfitstatistics.c)
 # TARGET_INCLUDE_DIRECTORIES(tiictfitstatistics PRIVATE )
