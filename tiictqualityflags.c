@@ -198,7 +198,7 @@ void loadCrossTrackData(const char * filename, uint8_t **dataBuffers, long *numb
     CDFid calCdfId;
     CDFstatus status;
     status = CDFopenCDF(validationFileName, &calCdfId);
-    if (status != CDF_OK) 
+    if (status != CDF_OK)
     {
         printErrorMessage(status);
         // Not necessarily an error. For example, some dates will have not calibration data.
@@ -246,7 +246,7 @@ void loadCrossTrackData(const char * filename, uint8_t **dataBuffers, long *numb
     };
     if (minorVersion == 1)
     {
-        variables[4] = "flags";
+        variables[2] = "flags";
     }
     for (uint8_t i = 0; (i<nVars-1) || (i == nVars-1 && minorVersion == 2); i++)
     {
@@ -259,7 +259,7 @@ void loadCrossTrackData(const char * filename, uint8_t **dataBuffers, long *numb
             exit(1);
         }
     }
-    
+
     long varNum, numValues, numVarBytes;
     long numBytesPrev, numBytesToAdd, numBytesNew;
 
@@ -280,7 +280,7 @@ void loadCrossTrackData(const char * filename, uint8_t **dataBuffers, long *numb
         status = CDFgetDataTypeSize(dataType, &numVarBytes);
         if (i == 3 && numVarBytes == 4)
         {
-            *fourByteCalFlag = true;            
+            *fourByteCalFlag = true;
         }
 
         numValues = 1;
