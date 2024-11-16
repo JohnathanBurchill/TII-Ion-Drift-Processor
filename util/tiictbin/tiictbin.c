@@ -109,7 +109,7 @@ int main(int argc, char *argv[])
     while (e != NULL)
     {
         if (fileMatch(e, &params) == true)
-            nFiles++;            
+            nFiles++;
         e = fts_read(f);
     }
     fts_close(f);
@@ -421,7 +421,10 @@ void parseCommandLine(ProcessingParameters *params, int argc, char *argv[])
 
             int maskBit = 0;
             int nFlaggedParams = 0;
-            int unsignedMask = abs(params->flagIgnoreMask);
+            int64_t unsignedMask = params->flagIgnoreMask;
+            if (unsignedMask < 0) {
+                unsignedMask = -unsignedMask;
+            }
             for (int b = 0; b < N_QUALITY_FLAG_BITS; b++)
             {
                 maskBit = (unsignedMask >> b) & 0x1;
@@ -439,7 +442,11 @@ void parseCommandLine(ProcessingParameters *params, int argc, char *argv[])
         }
     }
 
-    params->positiveFlagMask = abs(params->flagIgnoreMask);
+    int64_t posVal = params->flagIgnoreMask;
+    if (posVal < 0) {
+        posVal = -posVal;
+    }
+    params->positiveFlagMask = posVal;
 
     return;
 }
@@ -496,7 +503,7 @@ bool fileMatch(FTSENT *e, ProcessingParameters *params)
     if (nAssigned != 6) {
         return false;
     }
-    
+
     double fileFirstTime = computeEPOCH(y1, m1, d1, h1, min1, s1, 0);
     if (fileFirstTime == ILLEGAL_EPOCH_VALUE) {
         return false;
@@ -566,7 +573,7 @@ int processFile(ProcessingParameters *params)
             xmag = fabsf(qdlat) * cosf(theta);
             ymag = fabsf(qdlat) * sinf(theta);
             sunwardDisplacement = -(xmag - lastXmag);
-            dawnwardDisplacement = ymag - lastYmag; 
+            dawnwardDisplacement = ymag - lastYmag;
         }
         else {
             sunwardDisplacement = 0.0;
@@ -634,7 +641,7 @@ int loadTiictData(ProcessingParameters *params)
     long decoding, encoding, majority, maxrRec, numrVars, maxzRec, numzVars, numAttrs, format, numDims, dimSizes[CDF_MAX_DIMS];
 
     status = CDFopenCDF(params->inputFile, &cdfId);
-    if (status != CDF_OK) 
+    if (status != CDF_OK)
         return status;
 
     status = CDFgetFormat(cdfId, &format);
@@ -680,7 +687,7 @@ int loadTiictData(ProcessingParameters *params)
 	CDFcloseCDF(cdfId);
 
 	return status;
-    
+
 }
 
 CDFstatus loadCdfVariable(CDFid cdfId, char *variable, void **mem, long *nRecords)

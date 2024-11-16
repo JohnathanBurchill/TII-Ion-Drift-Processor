@@ -69,8 +69,8 @@ typedef struct processingParameters
 
     long nFiles;
 
-    uint32_t flagIgnoreMask;
-    uint32_t positiveFlagMask;
+    int64_t flagIgnoreMask;
+    uint64_t positiveFlagMask;
     bool flagMaskIsAnd;
     bool flagRaisedIsGood;
 
