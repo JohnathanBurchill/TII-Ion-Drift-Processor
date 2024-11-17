@@ -130,8 +130,8 @@ void drawFloatTimeSeries(Image *imageBuf, double *times, float *values, int firs
     int x0, y0;
     int x, y;
 
-    double t0 = times[firstInd];
-    double t1 = times[lastInd];
+    double t0 = times[firstInd]/1000.0;
+    double t1 = times[lastInd]/1000.0;
     int nValues = lastInd - firstInd + 1;
     double timeRange = t1 - t0;
     double tmpVal;
@@ -185,7 +185,7 @@ void drawFloatTimeSeries(Image *imageBuf, double *times, float *values, int firs
         // data
         for (int i = firstInd; i < lastInd; i+=stride)
         {
-            x0 = rescaleAsInteger(times[i], t0, t1, plotX0, plotX0 + plotWidth);
+            x0 = rescaleAsInteger(times[i]/1000.0, t0, t1, plotX0, plotX0 + plotWidth);
             tmpVal = values[i*tupleLength + tupleIndex]*valueScale;
             if (log10Scale)
             {
