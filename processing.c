@@ -96,14 +96,23 @@ int calibrateFlows(ProcessorState *state)
     float vMcpH = 0.0;
     float vMcpV = 0.0;
 
-    // Adjust times for sample lag
-    for (long timeIndex = 0; timeIndex < state->nRecs; timeIndex++)
-    {
-        ((double*)dataBuffers[0])[timeIndex] += ((1./32 - 0.0875)*1000.); // ms
-    }
+    // TII calibration file times have already been adjusted for sample lag
 
     // Choose a potential estimate (lpPhiSc, lpPhiScHighGain, or lpPhiScLowGain)
-    state->potentials = state->lpPhiSc;
+    switch (state->lpPotentialSource) {
+        case LP_POTENTIAL_HIGHGAIN:
+            state->potentials = state->lpPhiScHighGain;
+            break;
+        case LP_POTENTIAL_LOWGAIN:
+            state->potentials = state->lpPhiScLowGain;
+            break;
+        case LP_POTENTIAL_U_SC:
+            state->potentials = state->lpPhiSc;
+            break;
+        default:
+            state->potentials = NULL;
+            break;
+    }
 
     float enxh = 0.0;
     float enxv = 0.0;
@@ -1034,6 +1043,7 @@ int parseArguments(int argc, char **argv, ProcessorState *state)
     state->useEofR = true;
     // LP estimates of satellite potential are disabled by default
     state->usePotentials = false;
+    state->lpPotentialSource = LP_POTENTIAL_NONE;
 
     state->export2Hz = true;
     state->export16Hz = true;
@@ -1049,11 +1059,7 @@ int parseArguments(int argc, char **argv, ProcessorState *state)
 
     state->nOptions = 0;
     for (int i = 1; i < argc; i++) {
-        if (strcmp("--use-satellite-potential", argv[i]) == 0) {
-            state->nOptions++;
-            state->usePotentials = true;
-        }
-        else if (strcmp("--no-16hz-export", argv[i]) == 0) {
+        if (strcmp("--no-16hz-export", argv[i]) == 0) {
             state->nOptions++;
             state->export16Hz = false;
         }
@@ -1106,6 +1112,40 @@ int parseArguments(int argc, char **argv, ProcessorState *state)
                 return TIICT_ARGS_BAD;
             }
             state->movieFilename = argv[i] + 17;
+        }
+        else if (strncmp("--floating-potential-source=", argv[i], 28) == 0) {
+            state->nOptions++;
+            if (strlen(argv[i]) != 29) {
+                fprintf(stderr, "Unable to parse %s\n", argv[i]);
+                return TIICT_ARGS_BAD;
+            }
+            char source = (argv[i] + 28)[0];
+            switch (source) {
+                case 'H':
+                case 'h':
+                    state->lpPotentialSource = LP_POTENTIAL_HIGHGAIN;
+                    state->usePotentials = true;
+                    break;
+                case 'L':
+                case 'l':
+                    state->lpPotentialSource = LP_POTENTIAL_LOWGAIN;
+                    state->usePotentials = true;
+                    break;
+                case 'U':
+                case 'u':
+                    state->lpPotentialSource = LP_POTENTIAL_U_SC;
+                    state->usePotentials = true;
+                    break;
+                case 'N':
+                case 'n':
+                    state->lpPotentialSource = LP_POTENTIAL_NONE;
+                    state->usePotentials = false;
+                    break;
+                default:
+                    state->lpPotentialSource = LP_POTENTIAL_UNKNOWN;
+                    state->usePotentials = false;
+                    break;
+            }
         }
         else if (strcmp("--help", argv[i]) == 0) {
             cmdUsage(argv[0]);
@@ -1163,7 +1203,11 @@ void cmdUsage(char *name)
     fprintf(stdout, "%40s - %s\n", "--no-16hz-export", "do not export 16 Hz dataset");
     fprintf(stdout, "%40s - %s\n", "--no-2hz-export", "do not export 2 Hz dataset");
     fprintf(stdout, "%40s - %s\n", "--no-zip-export", "do not export zip archive");
-    fprintf(stdout, "%40s - %s\n", "--use-satellite-potential", "correct along-track drifts for satellite potential variations");
+    fprintf(stdout, "%40s - %s\n", "--floating-potential-source=<source>", "satellite floating potential source");
+    fprintf(stdout, "%40s %s\n", "", "'N' or 'n': none (default)");
+    fprintf(stdout, "%40s %s\n", "", "'U' or 'u': EXTD U_SC (blended)");
+    fprintf(stdout, "%40s %s\n", "", "'H' or 'h': EXTD high-gain probe");
+    fprintf(stdout, "%40s %s\n", "", "'L' or 'l': EXTD low-gain probe");
     fprintf(stdout, "%40s - %s\n", "--visualize", "generate a movie visualization of the results");
     fprintf(stdout, "%40s - %s\n", "--movie-dir", "movie output directory; default: '.'");
     fprintf(stdout, "%40s - %s\n", "--movie-filename", "movie filename; default: 'results.mp4'");

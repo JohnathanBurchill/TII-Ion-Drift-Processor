@@ -29,6 +29,15 @@ typedef enum DayType {
     NEXT_DAY = 1
 } DayType;
 
+enum LpPotentialSource {
+    LP_POTENTIAL_NONE = 0,
+    LP_POTENTIAL_HIGHGAIN = 1,
+    LP_POTENTIAL_LOWGAIN = 2,
+    LP_POTENTIAL_U_SC = 3,
+    LP_POTENTIAL_UNKNOWN = 4,
+};
+
+
 int getLpInputFilename(const char satelliteLetter, long year, long month, long day, const char *path, char *filename);
 int loadLpCalData(ProcessorState *state);
 int getLpData(ProcessorState *state);
