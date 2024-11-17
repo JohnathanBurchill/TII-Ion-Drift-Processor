@@ -76,7 +76,7 @@ typedef struct BackgroundRemovalWorkspace
     double tregion22;
     char startString[EPOCH_STRING_LEN+1];
     char stopString[EPOCH_STRING_LEN+1];
-    size_t fitDegree; // fit degree (e.g., linear is 2) 
+    size_t fitDegree; // fit degree (e.g., linear is 2)
 
 } BackgroundRemovalWorkspace_t;
 
@@ -128,7 +128,7 @@ typedef struct ProcessorState {
     float *maxAbsGeopotentialDetrendedSlope;
     float *exAdjusted;
     float *exAdjustmentParameter;
-    
+
     // Offset removal options
     uint8_t interval;
     bool setFlags;
@@ -137,6 +137,13 @@ typedef struct ProcessorState {
     bool export2Hz;
     bool export16Hz;
     bool createZip;
+
+    bool visualizeResults;
+    char *movieOutputDir;
+    char *movieFilename;
+    double movieT0;
+    double movieT1;
+
 
 } ProcessorState;
 

@@ -37,46 +37,53 @@ INCLUDE(GNUInstallDirs)
 # GSL
 FIND_PACKAGE(GSL REQUIRED)
 
+# Graphics stuff
+FIND_PACKAGE(PkgConfig REQUIRED)
+pkg_check_modules(LIBAV REQUIRED IMPORTED_TARGET
+    libavformat
+    libavcodec
+    libswresample
+    libswscale
+    libavutil
+)
+
+SET(CMAKE_SKIP_RPATH FALSE)
+
 # requires -lm on linux
 FIND_LIBRARY(MATH m REQUIRED)
 FIND_LIBRARY(TII tii REQUIRED)
+FIND_LIBRARY(TIIGRAPHICS tiigraphics REQUIRED)
 FIND_LIBRARY(CDF cdf HINTS /Applications/cdf/cdf/lib REQUIRED)
-SET(LIBS ${LIBS} ${MATH} ${GSL_LIBRARY} ${TII} ${CDF} ${GSL_LIBS})
+SET(LIBS ${LIBS} ${MATH} ${GSL_LIBRARY} ${TII})
 
 INCLUDE_DIRECTORIES(include ${CMAKE_INSTALL_INCUDEDIR} ${INCLUDE_DIRS}
 ${GSL_INCLUDE_DIRS} /Applications/cdf/cdf/include /usr/local/include)
 
 ADD_LIBRARY(Utilities utilities.c)
-ADD_LIBRARY(Processor processing.c export.c loadData.c utilities.c)
+ADD_LIBRARY(Processor processing.c export.c loadData.c utilities.c visualize.c)
 TARGET_INCLUDE_DIRECTORIES(Processor PRIVATE)
-TARGET_LINK_LIBRARIES(Processor ${LIBS})
+TARGET_LINK_LIBRARIES(Processor ${LIBS} ${GSL_LIBRARY} ${GSL_CBLAS_LIBRARY} ${TIIGRAPHICS} PkgConfig::LIBAV)
 
 ADD_EXECUTABLE(tiict0401 tiict.c processing.c export.c loadData.c)
 TARGET_INCLUDE_DIRECTORIES(tiict0401 PRIVATE)
-TARGET_LINK_LIBRARIES(tiict0401 Processor)
+TARGET_LINK_LIBRARIES(tiict0401 PRIVATE Processor ${LIBS} ${CDF})
 
 ADD_EXECUTABLE(tiictinspect tiictinspect.c)
 TARGET_INCLUDE_DIRECTORIES(tiictinspect PRIVATE)
-TARGET_LINK_LIBRARIES(tiictinspect Utilities ${LIBS})
+TARGET_LINK_LIBRARIES(tiictinspect Utilities ${LIBS} ${CDF})
 
 ADD_EXECUTABLE(tiictqualityflags tiictqualityflags.c)
 TARGET_INCLUDE_DIRECTORIES(tiictqualityflags PRIVATE )
-TARGET_LINK_LIBRARIES(tiictqualityflags Utilities ${LIBS})
+TARGET_LINK_LIBRARIES(tiictqualityflags Utilities ${LIBS} ${CDF})
 
 ADD_EXECUTABLE(tiictvariability tiictvariability.c)
 TARGET_INCLUDE_DIRECTORIES(tiictvariability PRIVATE )
-TARGET_LINK_LIBRARIES(tiictvariability Utilities ${LIBS})
+TARGET_LINK_LIBRARIES(tiictvariability Utilities ${LIBS} ${CDF})
 
-# ADD_EXECUTABLE(tiictfitstatistics tiictfitstatistics.c)
-# TARGET_INCLUDE_DIRECTORIES(tiictfitstatistics PRIVATE )
-# TARGET_LINK_LIBRARIES(tiictfitstatistics ${MATH})
+ADD_SUBDIRECTORY(util)
 
-
-add_subdirectory(util)
-
-install(TARGETS tiict0401 DESTINATION $ENV{HOME}/bin)
-install(TARGETS tiictinspect DESTINATION $ENV{HOME}/bin)
-install(TARGETS tiictqualityflags DESTINATION $ENV{HOME}/bin)
-# install(TARGETS tiictfitstatistics DESTINATION $ENV{HOME}/bin)
+INSTALL(TARGETS tiict0401 DESTINATION $ENV{HOME}/bin)
+INSTALL(TARGETS tiictinspect DESTINATION $ENV{HOME}/bin)
+INSTALL(TARGETS tiictqualityflags DESTINATION $ENV{HOME}/bin)
 
 

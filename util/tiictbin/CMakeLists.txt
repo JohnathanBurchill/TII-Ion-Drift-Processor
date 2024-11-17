@@ -18,6 +18,6 @@
 project(TIICT)
 
 ADD_EXECUTABLE(tiictbin tiictbin.c statistics.c)
-TARGET_LINK_LIBRARIES(tiictbin ${LIBS})
+TARGET_LINK_LIBRARIES(tiictbin ${LIBS} ${CDF})
 
 install(TARGETS tiictbin DESTINATION $ENV{HOME}/bin)
