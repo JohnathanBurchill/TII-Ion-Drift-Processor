@@ -40,7 +40,8 @@ int visualizeResults(ProcessorState *state)
 
     // Draw PA and measles time series
     int plotWidth = 700;
-    int plotHeight = 100;
+    int plotHeight0 = state->defaultPlotHeight;
+    int plotHeight = plotHeight0;
     int ox = 100;
     int oy = 140;
     int dotSize = 2;
@@ -84,55 +85,135 @@ int visualizeResults(ProcessorState *state)
     // Set background
     memset(image.pixels, BACKGROUND_COLOR, image.numberOfBytes);
 
-    int plotHeight0 = 55;
-    int plotHeight1 = 30;
     int plotdy = 25;
 
     int plotX0 = 100;
-    int plotY0 = 110;
-    int plotY1 = plotY0 + plotHeight0 + plotdy;
-    int plotY2 = plotY1 + plotHeight0 + plotdy;
-    int plotY3 = plotY2 + plotHeight0 + plotdy;
-    int plotY4 = plotY3 + plotHeight0 + plotdy;
-    int plotY5 = plotY4 + plotHeight0 + plotdy;
-    int plotY6 = plotY5 + plotHeight0 + plotdy;
+    int topMargin = 10;
+    int plotY0 = plotHeight0 + plotdy + topMargin;
 
     // Plots
 
-    float yr0 = -90.0;
-    float yr1 = 90.0;
+    // parse plot command
+    // from strsep docs
+    char *plotOptions, *string, *tofree;
+    tofree = string = strdup(state->plotCommand);
+    int maxPlots = state->maxPlotsPerScreen;
+    int nPlots = 0;
+    int nParams = 0;
+    float yr0 = 0.0;
+    float yr1 = 0.0;
+    float yScale = 0.0;
     char yr0str[255];
     char yr1str[255];
-    snprintf(yr0str, 255, "-90");
-    snprintf(yr1str, 255, "90");
-    drawFloatTimeSeries(&image, (double*)dataBuffers[0], (float*)dataBuffers[5], first, last, 1, 1.0, yr0, yr1, plotX0, plotY0, plotWidth, plotHeight0, "", "QD Lat", MAX_COLOR_VALUE + 1, yr0str, yr1str, false, dotSize, 12, true, 1, 0);
-    yr0 = -4.0; yr1 = 4.0;
-    snprintf(yr0str, 255, "-4");
-    snprintf(yr1str, 255, "4");
-    drawFloatTimeSeries(&image, (double*)dataBuffers[0], (float*)dataBuffers[1], first, last, 1, 0.001, yr0, yr1, plotX0, plotY1, plotWidth, plotHeight0, "", "Vixh", MAX_COLOR_VALUE + 1, yr0str, yr1str, false, dotSize, 12, true, 2, 0);
-    drawFloatTimeSeries(&image, (double*)dataBuffers[0], (float*)dataBuffers[2], first, last, 1, 0.001, yr0, yr1, plotX0, plotY2, plotWidth, plotHeight0, "", "Vixv", MAX_COLOR_VALUE + 1, yr0str, yr1str, false, dotSize, 12, true, 2, 0);
-    yr0 = -2.0; yr1 = 2.0;
-    snprintf(yr0str, 255, "-2");
-    snprintf(yr1str, 255, "2");
-    drawFloatTimeSeries(&image, (double*)dataBuffers[0], (float*)dataBuffers[1], first, last, 1, 0.001, yr0, yr1, plotX0, plotY3, plotWidth, plotHeight0, "", "Viy", MAX_COLOR_VALUE + 1, yr0str, yr1str, false, dotSize, 12, true, 2, 1);
-    drawFloatTimeSeries(&image, (double*)dataBuffers[0], (float*)dataBuffers[2], first, last, 1, 0.001, yr0, yr1, plotX0, plotY4, plotWidth, plotHeight0, "", "Viz", MAX_COLOR_VALUE + 1, yr0str, yr1str, false, dotSize, 12, true, 2, 1);
-
-    yr0 = -5.0; yr1 = 0.0;
-    snprintf(yr0str, 255, "-5");
-    snprintf(yr1str, 255, "0");
-    if (state->usePotentials) {
-        drawFloatTimeSeries(&image, (double*)dataBuffers[0], state->potentials, first, last, 1, 1.0, yr0, yr1, plotX0, plotY5, plotWidth, plotHeight0, "", "V_sc", MAX_COLOR_VALUE + 1, yr0str, yr1str, false, dotSize, 12, true, 1, 0);
+    int plotYOffset = plotY0;
+    int plotsMade = 0;
+    char *xLabel = "";
+    float *parameter = NULL;
+    char *parameterLabel = "";
+    bool gotParameter = false;
+    int stride = 1;
+    int tupleLength = 0;
+    int tupleIndex = 0;
+    // Count number of requested plots
+    while ((plotOptions = strsep(&string, ";")) != NULL) {
+        nPlots++;
     }
-    else {
-        // Draw zeros
-        drawFloatTimeSeries(&image, (double*)dataBuffers[0], (float*)dataBuffers[1], first, last, 1, 0.0, yr0, yr1, plotX0, plotY5, plotWidth, plotHeight0, "", "V_sc", MAX_COLOR_VALUE + 1, yr0str, yr1str, false, dotSize, 12, true, 1, 0);
+    free(tofree);
+    // Plot requested plots
+    tofree = string = strdup(state->plotCommand);
+    while ((plotOptions = strsep(&string, ";")) != NULL && plotsMade < nPlots) {
+        gotParameter = true;
+        tupleLength = 1;
+        tupleIndex = 0;
+        // Parse plot parameters
+        char **ap, *params[10];
+        nParams = 0;
+        for (ap = params; (*ap = strsep(&plotOptions, ",")) != NULL;) {
+            if (**ap != '\0') {
+                nParams++;
+                if (++ap >= &params[10]) {
+                    break;
+                }
+            }
+        }
+        if (nParams < 4) {
+            fprintf(stderr, "Plot command %s: expected at least %d plot parameters, skipping this plot\n", plotOptions, nParams);
+            gotParameter = false;
+            continue;
+        }
+
+        yr0 = atof(params[1]);
+        snprintf(yr0str, 255, "%s", params[1]);
+        yr1 = atof(params[2]);
+        snprintf(yr1str, 255, "%s", params[2]);
+        yScale = atof(params[3]);
+
+        int oldPlotHeight = plotHeight;
+        if (nParams == 5) {
+            plotHeight = atoi(params[4]);
+        }
+        else {
+            plotHeight = plotHeight0;
+        }
+        plotYOffset += (plotHeight - oldPlotHeight);
+
+        if (strcmp("QDLat", params[0]) == 0) {
+            parameter = (float*)dataBuffers[5];
+            parameterLabel = "QD Lat";
+        } else if (strcmp("PhiSc", params[0]) == 0) {
+            if (state->usePotentials) {
+                parameter = state->potentials;
+            }
+            else {
+                // Draw zeros
+                parameter = (float*)state->dataBuffers[1];
+                yScale = 0.0;
+            }
+            parameterLabel = "U_SC";
+        } else if (strcmp("Vixh", params[0]) == 0) {
+            parameter = (float*)dataBuffers[1];
+            parameterLabel = "Vixh";
+            tupleLength = 2;
+            tupleIndex = 0;
+        } else if (strcmp("Vixv", params[0]) == 0) {
+            parameter = (float*)dataBuffers[2];
+            parameterLabel = "Vixv";
+            tupleLength = 2;
+            tupleIndex = 0;
+        } else if (strcmp("Viy", params[0]) == 0) {
+            parameter = (float*)dataBuffers[1];
+            parameterLabel = "Viy";
+            tupleLength = 2;
+            tupleIndex = 1;
+        } else if (strcmp("Viz", params[0]) == 0) {
+            parameter = (float*)dataBuffers[2];
+            parameterLabel = "Viz";
+            tupleLength = 2;
+            tupleIndex = 1;
+        } else {
+            gotParameter = false;
+        }
+
+        if (gotParameter) {
+            drawFloatTimeSeries(&image, (double*)dataBuffers[0], parameter, first, last, stride, yScale, yr0, yr1, plotX0, plotYOffset, plotWidth, plotHeight, xLabel, parameterLabel, MAX_COLOR_VALUE + 1, yr0str, yr1str, false, dotSize, 12, true, tupleLength, tupleIndex);
+            plotYOffset += plotHeight + plotdy;
+            plotsMade++;
+        }
+
+        if ((maxPlots > 0 && plotsMade % maxPlots == 0) || plotsMade == nPlots || plotYOffset > IMAGE_HEIGHT - 1 - plotdy ) {
+            // Write video frames
+            for (int c = 0; c < 1.0 * VIDEO_FPS; c++) {
+                generateFrame(&image, frameCounter++);
+            }
+            // Reset image to make new plots
+            memset(image.pixels, BACKGROUND_COLOR, image.numberOfBytes);
+            plotHeight = plotHeight0;
+            plotYOffset = plotHeight + plotdy + topMargin;
+        }
     }
 
+    free(tofree);
 
-
-    for (int c = 0; c < 0.1 * VIDEO_FPS; c++) {
-        generateFrame(&image, frameCounter++);
-    }
 
     finishVideo();
 

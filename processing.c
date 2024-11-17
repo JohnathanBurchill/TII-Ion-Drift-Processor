@@ -1052,6 +1052,9 @@ int parseArguments(int argc, char **argv, ProcessorState *state)
     state->movieOutputDir = ".";
     state->movieFilename = "results.mp4";
     state->visualizeResults = false;
+    state->plotCommand = "QDLat,-90,90,1;PhiSc,-5,0,1;Vixh,-4,4,0.001;Vixv,-4,4,0.001;Viy,-2,2,0.001;Viz,-2,2,0.001";
+    state->defaultPlotHeight = 55;
+    state->maxPlotsPerScreen = 0;
 
     // Default automatically to first and last times for movie export
     state->movieT0 = -1;
@@ -1078,6 +1081,30 @@ int parseArguments(int argc, char **argv, ProcessorState *state)
         else if (strcmp("--visualize", argv[i]) == 0) {
             state->nOptions++;
             state->visualizeResults = true;
+        }
+        else if (strncmp("--plot-command=", argv[i], 15) == 0) {
+            state->nOptions++;
+            if (strlen(argv[i]) < 16) {
+                fprintf(stderr, "Unable to parse %s\n", argv[i]);
+                return TIICT_ARGS_BAD;
+            }
+            state->plotCommand = argv[i] + 15;
+        }
+        else if (strncmp("--plot-height=", argv[i], 14) == 0) {
+            state->nOptions++;
+            if (strlen(argv[i]) < 15) {
+                fprintf(stderr, "Unable to parse %s\n", argv[i]);
+                return TIICT_ARGS_BAD;
+            }
+            state->defaultPlotHeight = atoi(argv[i] + 14);
+        }
+        else if (strncmp("--max-screen-plots=", argv[i], 19) == 0) {
+            state->nOptions++;
+            if (strlen(argv[i]) < 20) {
+                fprintf(stderr, "Unable to parse %s\n", argv[i]);
+                return TIICT_ARGS_BAD;
+            }
+            state->maxPlotsPerScreen = atoi(argv[i] + 19);
         }
         else if (strncmp("--movie-dir=", argv[i], 12) == 0) {
             state->nOptions++;
@@ -1209,6 +1236,12 @@ void cmdUsage(char *name)
     fprintf(stdout, "%40s %s\n", "", "'H' or 'h': EXTD high-gain probe");
     fprintf(stdout, "%40s %s\n", "", "'L' or 'l': EXTD low-gain probe");
     fprintf(stdout, "%40s - %s\n", "--visualize", "generate a movie visualization of the results");
+    fprintf(stdout, "%40s - %s\n", "--plot-command=<cmd>", "plot instructions");
+    fprintf(stdout, "%40s %s\n", "", "Semicolon-separated commands of the form <param>,<ymin>,<ymax>,<yscale>[,<plotheight>]");
+    fprintf(stdout, "%40s %s\n", "", "params:");
+    fprintf(stdout, "%40s   %s\n", "", "QDLat, MLT, PhiSc, Vixh, Vixv, Viy, Viz");
+    fprintf(stdout, "%40s - %s\n", "--plot-height=<value>", "set the default plot height in pixels");
+    fprintf(stdout, "%40s - %s\n", "--max-screen-plots=<value>", "limit to <value> plots per screen. Defaule: 0 (automatic)");
     fprintf(stdout, "%40s - %s\n", "--movie-dir", "movie output directory; default: '.'");
     fprintf(stdout, "%40s - %s\n", "--movie-filename", "movie filename; default: 'results.mp4'");
     fprintf(stdout, "%40s - %s\n", "--do-not-use-eofr-for-along-track-drift", "use legacy method for estimating along-track drift");

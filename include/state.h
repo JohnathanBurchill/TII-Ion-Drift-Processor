@@ -140,6 +140,10 @@ typedef struct ProcessorState {
     bool createZip;
 
     bool visualizeResults;
+    char *plotCommand;
+    int defaultPlotHeight;
+    int maxPlotsPerScreen;
+
     char *movieOutputDir;
     char *movieFilename;
     double movieT0;
