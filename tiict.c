@@ -27,7 +27,8 @@ extern char infoHeader[50];
 int main(int argc, char* argv[])
 {
     // Can use this function in a library; main is a wrapper for command line execution
-    int status = runProcessor(argc, argv);
+    // Passing NULL since we do not need the results
+    int status = runProcessor(argc, argv, NULL);
 
     return status;
 }

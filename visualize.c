@@ -1,6 +1,7 @@
 #include "visualize.h"
 #include "state.h"
 #include "errors.h"
+#include "settings.h"
 
 #include <stdio.h>
 #include <tii/utility.h>
@@ -17,25 +18,45 @@ int visualizeResults(ProcessorState *state)
 {
     int frameCounter = 0;
 
-    Image templateImage = {0};
     Image image = {0};
-
-    if (allocImage(&templateImage, IMAGE_WIDTH, IMAGE_HEIGHT, 1) != DRAW_OK)
-    {
-        printf("Could not allocate memory for template image.\n");
-        goto cleanup;
-    }
     if (allocImage(&image, IMAGE_WIDTH, IMAGE_HEIGHT, 1) != DRAW_OK)
     {
         printf("Could not allocate memory for image.\n");
         goto cleanup;
     }
+    // Set background
+    memset(image.pixels, BACKGROUND_COLOR, image.numberOfBytes);
 
-    int status = initVideo(state->movieFilename);
-    if (status < 0)
-    {
-        fprintf(stderr, "Problem intializing video: got status %d.\n", status);
-        goto cleanup;
+    // Input data
+    uint8_t **dataBuffers = state->dataBuffers;
+    double *times = (double*)dataBuffers[0];
+
+    int firstIndex = 0;
+    int lastIndex = 0;
+
+    // Find first index
+    if (state->videoT0 >= 0) {
+        while (firstIndex < state->nRecs - 1 && times[firstIndex] < state->videoT0) {
+            firstIndex++;
+        }
+    }
+    else  {
+        state->videoT0 = times[firstIndex];
+    }
+    if (state->videoT1 >= 0) {
+        while (lastIndex < state->nRecs && times[lastIndex] < state->videoT1) {
+            lastIndex++;
+        }
+    }
+    else  {
+        state->videoT1 = times[state->nRecs-1];
+    }
+
+    if (strlen(state->videoFilename) == 0) {
+        char t0String[EPOCHx_STRING_MAX], t1String[EPOCHx_STRING_MAX];
+        encodeEPOCHx(state->videoT0, "<year><mm.02><dom.02>T<hour><min><sec>", t0String);
+        encodeEPOCHx(state->videoT1, "<year><mm.02><dom.02>T<hour><min><sec>", t1String);
+        snprintf(state->videoFilename, FILENAME_MAX, "%s/Swarm%s_TIICT_%s_%s_%s.mp4", state->videoOutputDir, state->args.satellite, t0String, t1String, state->args.exportVersion);
     }
 
     // Draw PA and measles time series
@@ -50,40 +71,6 @@ int visualizeResults(ProcessorState *state)
 
     dotSize = 2; // full day
     sprintf(xlabel, "%s", "UT hours");
-
-    // Input data
-    uint8_t **dataBuffers = state->dataBuffers;
-    double *allTimes = (double*)dataBuffers[0];
-    float *param = NULL;
-
-    int first = 0;
-    int last = 0;
-    // Find first index
-    if (state->movieT0 >= 0) {
-        while (first < state->nRecs - 1 && allTimes[first] < state->movieT0) {
-            first++;
-        }
-    }
-    if (state->movieT1 >= 0) {
-        while (last < state->nRecs && allTimes[last] < state->movieT1) {
-            last++;
-        }
-    }
-    size_t nValues = last - first + 1;
-    double *times = malloc(sizeof *times * nValues);
-    float *values = malloc(sizeof *values * nValues);
-    if (times == NULL || values == NULL) {
-        return TIICT_MEMORY;
-    }
-    // times to plot
-    int index = 0;
-    for (int i = first; i < last; i++) {
-        times[index++] = allTimes[i]/1000.0;
-    }
-    //insertTransition(&image, "Anomaly overview", IMAGE_WIDTH/2, IMAGE_HEIGHT/2-16, 24, 3.0, &frameCounter);
-
-    // Set background
-    memset(image.pixels, BACKGROUND_COLOR, image.numberOfBytes);
 
     int plotdy = 25;
 
@@ -120,6 +107,17 @@ int visualizeResults(ProcessorState *state)
     }
     free(tofree);
     // Plot requested plots
+
+
+    if (state->exportVideo) {
+        int status = initVideo(state->videoFilename);
+        if (status < 0)
+        {
+            fprintf(stderr, "Problem intializing video: got status %d.\n", status);
+            goto cleanup;
+        }
+    }
+
     tofree = string = strdup(state->plotCommand);
     while ((plotOptions = strsep(&string, ";")) != NULL && plotsMade < nPlots) {
         gotParameter = true;
@@ -137,7 +135,11 @@ int visualizeResults(ProcessorState *state)
             }
         }
         if (nParams < 4) {
-            fprintf(stderr, "Plot command %s: expected at least %d plot parameters, skipping this plot\n", plotOptions, nParams);
+            // Expected format: ...;<param>,<ymin>,<ymax>,<yscale>[,<plotheight>];...
+            // Skip empty plots, otherwise warn if not enough parameters
+            if (nParams > 0) {
+                fprintf(stderr, "Warning: plot command was %s: expected at least %d plot parameters, skipping this plot\n", plotOptions, nParams);
+            }
             gotParameter = false;
             continue;
         }
@@ -195,16 +197,28 @@ int visualizeResults(ProcessorState *state)
         }
 
         if (gotParameter) {
-            drawFloatTimeSeries(&image, (double*)dataBuffers[0], parameter, first, last, stride, yScale, yr0, yr1, plotX0, plotYOffset, plotWidth, plotHeight, xLabel, parameterLabel, MAX_COLOR_VALUE + 1, yr0str, yr1str, false, dotSize, 12, true, tupleLength, tupleIndex);
+            drawFloatTimeSeries(&image, (double*)dataBuffers[0], parameter, firstIndex, lastIndex, stride, yScale, yr0, yr1, plotX0, plotYOffset, plotWidth, plotHeight, xLabel, parameterLabel, MAX_COLOR_VALUE + 1, yr0str, yr1str, false, dotSize, 12, true, tupleLength, tupleIndex);
             plotYOffset += plotHeight + plotdy;
             plotsMade++;
         }
 
         if ((maxPlots > 0 && plotsMade % maxPlots == 0) || plotsMade == nPlots || plotYOffset > IMAGE_HEIGHT - 1 - plotdy ) {
             // Write video frames
-            for (int c = 0; c < 1.0 * VIDEO_FPS; c++) {
-                generateFrame(&image, frameCounter++);
+            if (state->exportVideo) {
+                for (int c = 0; c < 1.0 * VIDEO_FPS; c++) {
+                    generateFrame(&image, frameCounter++);
+                }
             }
+            // Store image frame for potential later use
+            void *mem = realloc(state->frames, sizeof *state->frames * state->nVideoFrames + 1);
+            if (mem == NULL) {
+                fprintf(stderr, "Unable to allocate memory for new image\n");
+                return TIICT_MEMORY;
+            }
+            state->frames = mem;
+            state->nVideoFrames++;
+            memcpy(&state->frames[state->nVideoFrames-1], &image, sizeof *state->frames);
+
             // Reset image to make new plots
             memset(image.pixels, BACKGROUND_COLOR, image.numberOfBytes);
             plotHeight = plotHeight0;
@@ -217,17 +231,13 @@ int visualizeResults(ProcessorState *state)
 
     finishVideo();
 
-    if (frameCounter > 0)
-        printf("%s\n", state->movieFilename);
-    else
-        printf("No-Frames-For-This-Date\n");
+    if (frameCounter > 0 && state->printVideoFilename) {
+        printf("%s\n", state->videoFilename);
+    }
 
 
 cleanup:
-    freeImage(&templateImage);
     freeImage(&image);
-
-    free(values);
 
     fflush(stdout);
 

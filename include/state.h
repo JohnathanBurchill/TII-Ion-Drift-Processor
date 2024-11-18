@@ -28,6 +28,8 @@
 #include <cdf.h>
 #include <gsl/gsl_multifit.h>
 
+#include <tiigraphics/draw.h>
+
 typedef struct offset_model_fit_arguments {
     const uint8_t regionNumber;
     const char *regionName;
@@ -137,17 +139,21 @@ typedef struct ProcessorState {
 
     bool export2Hz;
     bool export16Hz;
-    bool createZip;
+    bool exportZip;
+    bool exportVideo;
 
     bool visualizeResults;
     char *plotCommand;
     int defaultPlotHeight;
     int maxPlotsPerScreen;
 
-    char *movieOutputDir;
-    char *movieFilename;
-    double movieT0;
-    double movieT1;
+    char *videoOutputDir;
+    char videoFilename[FILENAME_MAX];
+    bool printVideoFilename;
+    double videoT0;
+    double videoT1;
+    Image *frames;
+    int nVideoFrames;
 
 
 } ProcessorState;

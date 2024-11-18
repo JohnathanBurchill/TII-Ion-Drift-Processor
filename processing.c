@@ -950,11 +950,14 @@ bool downSampleHalfSecond(ProcessorState *state, long *index, long storageIndex,
 
 }
 
-int runProcessor(int argc, char *argv[])
+int runProcessor(int argc, char *argv[], ProcessorState **result)
 {
     int status = TIICT_OK;
-    ProcessorState s = {0};
-    ProcessorState *state = &s;
+    ProcessorState *state = malloc(sizeof *state);
+    if (state == NULL) {
+        fprintf(stderr, "Unable to allocate memory for processor state.\n");
+        return TIICT_MEMORY;
+    }
 
     if ((status = initProcessor(argc, argv, state)) != TIICT_OK)
         return shutdown(status, state);
@@ -976,13 +979,19 @@ int runProcessor(int argc, char *argv[])
     }
 
     if (state->visualizeResults) {
-        visualizeResults(state);
+        status = visualizeResults(state);
     }
 
-    status = shutdown(status, state);
+    if (result != NULL) {
+        *result = state;
+        return status;
+    }
+    else {
+        // frees memory
+        status = shutdown(status, state);
+    }
 
     return status;
-
 
 }
 
@@ -1047,18 +1056,20 @@ int parseArguments(int argc, char **argv, ProcessorState *state)
 
     state->export2Hz = true;
     state->export16Hz = true;
-    state->createZip = true;
+    state->exportZip = true;
+    state->exportVideo = true;
 
-    state->movieOutputDir = ".";
-    state->movieFilename = "results.mp4";
+    state->videoOutputDir = ".";
+    state->videoFilename[0] = '\0';
+    state->printVideoFilename = false;
     state->visualizeResults = false;
-    state->plotCommand = "QDLat,-90,90,1;PhiSc,-5,0,1;Vixh,-4,4,0.001;Vixv,-4,4,0.001;Viy,-2,2,0.001;Viz,-2,2,0.001";
+    state->plotCommand = "QDLat,-90,90,1" ";PhiSc,-5,0,1" ";Vixh,-4,4,0.001" ";Vixv,-4,4,0.001" ";Viy,-2,2,0.001" ";Viz,-2,2,0.001";
     state->defaultPlotHeight = 55;
     state->maxPlotsPerScreen = 0;
 
-    // Default automatically to first and last times for movie export
-    state->movieT0 = -1;
-    state->movieT1 = -1;
+    // Default automatically to first and last times for video export
+    state->videoT0 = -1;
+    state->videoT1 = -1;
 
     state->nOptions = 0;
     for (int i = 1; i < argc; i++) {
@@ -1072,7 +1083,11 @@ int parseArguments(int argc, char **argv, ProcessorState *state)
         }
         else if (strcmp("--no-zip-export", argv[i]) == 0) {
             state->nOptions++;
-            state->createZip = false;
+            state->exportZip = false;
+        }
+        else if (strcmp("--no-video-export", argv[i]) == 0) {
+            state->nOptions++;
+            state->exportVideo = false;
         }
         else if (strcmp("--no-eofr", argv[i]) == 0) {
             state->nOptions++;
@@ -1082,13 +1097,13 @@ int parseArguments(int argc, char **argv, ProcessorState *state)
             state->nOptions++;
             state->visualizeResults = true;
         }
-        else if (strncmp("--plot-command=", argv[i], 15) == 0) {
+        else if (strncmp("--plots=", argv[i], 8) == 0) {
             state->nOptions++;
-            if (strlen(argv[i]) < 16) {
+            if (strlen(argv[i]) < 9) {
                 fprintf(stderr, "Unable to parse %s\n", argv[i]);
                 return TIICT_ARGS_BAD;
             }
-            state->plotCommand = argv[i] + 15;
+            state->plotCommand = argv[i] + 8;
         }
         else if (strncmp("--plot-height=", argv[i], 14) == 0) {
             state->nOptions++;
@@ -1106,13 +1121,13 @@ int parseArguments(int argc, char **argv, ProcessorState *state)
             }
             state->maxPlotsPerScreen = atoi(argv[i] + 19);
         }
-        else if (strncmp("--movie-dir=", argv[i], 12) == 0) {
+        else if (strncmp("--video-dir=", argv[i], 12) == 0) {
             state->nOptions++;
             if (strlen(argv[i]) < 13) {
                 fprintf(stderr, "Unable to parse %s\n", argv[i]);
                 return TIICT_ARGS_BAD;
             }
-            state->movieOutputDir = argv[i] + 12;
+            state->videoOutputDir = argv[i] + 12;
         }
         else if (strncmp("--t0=", argv[i], 5) == 0) {
             state->nOptions++;
@@ -1121,7 +1136,7 @@ int parseArguments(int argc, char **argv, ProcessorState *state)
                 return TIICT_ARGS_BAD;
             }
 
-            state->movieT0 = parseEPOCH4(argv[i] + 5);
+            state->videoT0 = parseEPOCH4(argv[i] + 5);
         }
         else if (strncmp("--t1=", argv[i], 5) == 0) {
             state->nOptions++;
@@ -1130,15 +1145,19 @@ int parseArguments(int argc, char **argv, ProcessorState *state)
                 return TIICT_ARGS_BAD;
             }
 
-            state->movieT1 = parseEPOCH4(argv[i] + 5);
+            state->videoT1 = parseEPOCH4(argv[i] + 5);
         }
-        else if (strncmp("--movie-filename=", argv[i], 17) == 0) {
+        else if (strncmp("--video-filename=", argv[i], 17) == 0) {
             state->nOptions++;
             if (strlen(argv[i]) < 18) {
                 fprintf(stderr, "Unable to parse %s\n", argv[i]);
                 return TIICT_ARGS_BAD;
             }
-            state->movieFilename = argv[i] + 17;
+            snprintf(state->videoFilename, FILENAME_MAX, "%s", argv[i] + 17);
+        }
+        else if (strcmp("--print-video-filename", argv[i]) == 0) {
+            state->nOptions++;
+            state->printVideoFilename = true;
         }
         else if (strncmp("--floating-potential-source=", argv[i], 28) == 0) {
             state->nOptions++;
@@ -1230,20 +1249,22 @@ void cmdUsage(char *name)
     fprintf(stdout, "%40s - %s\n", "--no-16hz-export", "do not export 16 Hz dataset");
     fprintf(stdout, "%40s - %s\n", "--no-2hz-export", "do not export 2 Hz dataset");
     fprintf(stdout, "%40s - %s\n", "--no-zip-export", "do not export zip archive");
+    fprintf(stdout, "%40s - %s\n", "--no-video-export", "do not export video");
     fprintf(stdout, "%40s - %s\n", "--floating-potential-source=<source>", "satellite floating potential source");
     fprintf(stdout, "%40s %s\n", "", "'N' or 'n': none (default)");
     fprintf(stdout, "%40s %s\n", "", "'U' or 'u': EXTD U_SC (blended)");
     fprintf(stdout, "%40s %s\n", "", "'H' or 'h': EXTD high-gain probe");
     fprintf(stdout, "%40s %s\n", "", "'L' or 'l': EXTD low-gain probe");
-    fprintf(stdout, "%40s - %s\n", "--visualize", "generate a movie visualization of the results");
+    fprintf(stdout, "%40s - %s\n", "--visualize", "generate a video visualization of the results");
     fprintf(stdout, "%40s - %s\n", "--plot-command=<cmd>", "plot instructions");
     fprintf(stdout, "%40s %s\n", "", "Semicolon-separated commands of the form <param>,<ymin>,<ymax>,<yscale>[,<plotheight>]");
     fprintf(stdout, "%40s %s\n", "", "params:");
     fprintf(stdout, "%40s   %s\n", "", "QDLat, MLT, PhiSc, Vixh, Vixv, Viy, Viz");
     fprintf(stdout, "%40s - %s\n", "--plot-height=<value>", "set the default plot height in pixels");
     fprintf(stdout, "%40s - %s\n", "--max-screen-plots=<value>", "limit to <value> plots per screen. Defaule: 0 (automatic)");
-    fprintf(stdout, "%40s - %s\n", "--movie-dir", "movie output directory; default: '.'");
-    fprintf(stdout, "%40s - %s\n", "--movie-filename", "movie filename; default: 'results.mp4'");
+    fprintf(stdout, "%40s - %s\n", "--video-dir", "video output directory; default: '.'");
+    fprintf(stdout, "%40s - %s\n", "--video-filename", "video filename; default: 'results.mp4'");
+    fprintf(stdout, "%40s - %s\n", "--print-video-filename", "print the video filename");
     fprintf(stdout, "%40s - %s\n", "--no-eofr", "use legacy method for estimating along-track drift");
     fprintf(stdout, "%40s - %s\n", "--about", "print copyright and license information");
     fprintf(stdout, "%40s - %s\n", "--help", "print this message");
@@ -1415,6 +1436,11 @@ int shutdown(int status, ProcessorState *state)
         free(state->region);
         state->region = NULL;
     }
+    if (state->nVideoFrames > 0) {
+        free(state->frames);
+    }
+
+    free(state);
 
     return status;
 }

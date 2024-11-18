@@ -64,9 +64,13 @@ ADD_LIBRARY(Processor processing.c export.c loadData.c utilities.c visualize.c)
 TARGET_INCLUDE_DIRECTORIES(Processor PRIVATE)
 TARGET_LINK_LIBRARIES(Processor ${LIBS} ${GSL_LIBRARY} ${GSL_CBLAS_LIBRARY} ${TIIGRAPHICS} PkgConfig::LIBAV)
 
-ADD_EXECUTABLE(tiict0401 tiict.c processing.c export.c loadData.c)
+ADD_EXECUTABLE(tiict0401 tiict.c)
 TARGET_INCLUDE_DIRECTORIES(tiict0401 PRIVATE)
 TARGET_LINK_LIBRARIES(tiict0401 PRIVATE Processor ${LIBS} ${CDF})
+
+#ADD_EXECUTABLE(tiictinteractive0401 tiictinteractive.c)
+#TARGET_INCLUDE_DIRECTORIES(tiictinteractive0401 PRIVATE)
+#TARGET_LINK_LIBRARIES(tiictinteractive0401 PRIVATE Processor ${LIBS} ${CDF})
 
 ADD_EXECUTABLE(tiictinspect tiictinspect.c)
 TARGET_INCLUDE_DIRECTORIES(tiictinspect PRIVATE)

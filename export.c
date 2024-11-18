@@ -65,7 +65,7 @@ int exportCdfs(ProcessorState *state)
     // Find last index not containing a gap of more than 10 minutes, or last index of the day
     stopIndex = startIndex;
     stopTime = startTime;
-    
+
     // case where there are no records on the requested or following days
     if (startIndex == state->nRecs)
     {
@@ -119,7 +119,7 @@ int exportCdfs(ProcessorState *state)
         }
     }
     // report
-    fprintf(state->processingLogFile, "%sExported %.0f orbits (%ld 16 Hz records) of science data in %d files. %.1f%% coverage.\n", infoHeader, minutesExported/94., recordsExported, filesExported, minutesExported/1440.0*100.0); 
+    fprintf(state->processingLogFile, "%sExported %.0f orbits (%ld 16 Hz records) of science data in %d files. %.1f%% coverage.\n", infoHeader, minutesExported/94., recordsExported, filesExported, minutesExported/1440.0*100.0);
 
     return status;
 
@@ -415,7 +415,7 @@ void addAttributes(CDFid id, const char *dataset, const char *satellite, const c
     CDFcreateAttr(id, "MODS", GLOBAL_SCOPE, &attrNum);
     addgEntry(id, attrNum, 0, "Second release of version 3, corrects data gaps associated with L0 overlaps.");
     CDFcreateAttr(id, "PI_name", GLOBAL_SCOPE, &attrNum);
-    addgEntry(id, attrNum, 0, "David Knudsen");   
+    addgEntry(id, attrNum, 0, "David Knudsen");
     CDFcreateAttr(id, "PI_affiliation", GLOBAL_SCOPE, &attrNum);
     addgEntry(id, attrNum, 0, "University of Calgary");
     CDFcreateAttr(id, "Acknowledgement", GLOBAL_SCOPE, &attrNum);
@@ -570,13 +570,13 @@ int exportTCT16Cdfs(ProcessorState *state, double startTime, double stopTime, lo
         fprintf(state->processingLogFile, "%sTIICT ZIP file exists. Not exporting.\n", infoHeader);
         return TIICT_ZIP_EXISTS;
     }
-    
+
     uint8_t **dataBuffers = state->dataBuffers;
 
     CDFid exportCdfId;
     CDFstatus status;
     status = CDFcreateCDF(cdfFileName, &exportCdfId);
-    if (status != CDF_OK) 
+    if (status != CDF_OK)
     {
         printErrorMessage(status);
         // Close export file
@@ -634,7 +634,7 @@ int exportTCT16Cdfs(ProcessorState *state, double startTime, double stopTime, lo
         fprintf(state->processingLogFile, "%sExported %ld records to %s.cdf\n", infoHeader, (stopIndex - startIndex + 1), cdfFileName);
         fflush(state->processingLogFile);
 
-        if (state->createZip) {
+        if (state->exportZip) {
             status = zipCdfFile(state, cdfFileName);
         }
     }
@@ -648,17 +648,17 @@ int exportTCT02Cdfs(ProcessorState *state, double startTime, double stopTime, lo
     fprintf(state->processingLogFile, "%sExporting 2 Hz data.\n",infoHeader);
 
     // Average the data to 2 Hz from 16 Hz
-    // In principle all 16 Hz data come from a single instrument source packet (ISP) 
+    // In principle all 16 Hz data come from a single instrument source packet (ISP)
     // so we can safely assume the number of samples is a multiple of 8
-    // This means we could simply average each 8 measurements together as assign the 
+    // This means we could simply average each 8 measurements together as assign the
     // time for each measurement as the average time for the 8 samples
-    // But this does not take acount day boundaries, where the first measurement of the day 
-    // does not correspond to the beginning of a chunk of 8 samples because 
+    // But this does not take acount day boundaries, where the first measurement of the day
+    // does not correspond to the beginning of a chunk of 8 samples because
     // the times have been adjusted for sampling lag.
 
     // The averaging strategy is therefore to keep only those 2 Hz samples for which we have
     // 8 16 Hz samples in the interval [0, 0.5) or [0.5, 1.0) for each UT second.
-    // Any samples for which 8 were not available are discarded, but can be obtained 
+    // Any samples for which 8 were not available are discarded, but can be obtained
     // for science from the 16 Hz data.
 
     // No attempt is made in this version of the software to remove outliers.
@@ -768,7 +768,7 @@ int exportTCT02Cdfs(ProcessorState *state, double startTime, double stopTime, lo
         fprintf(state->processingLogFile, "%sExported %ld records to %s.cdf\n", infoHeader, (stopIndex - startIndex + 1), cdfFileName);
         fflush(state->processingLogFile);
 
-        if (state->createZip) {
+        if (state->exportZip) {
             status = zipCdfFile(state, cdfFileName);
         }
 
