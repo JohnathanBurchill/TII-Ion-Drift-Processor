@@ -1074,7 +1074,7 @@ int parseArguments(int argc, char **argv, ProcessorState *state)
             state->nOptions++;
             state->createZip = false;
         }
-        else if (strcmp("--do-not-use-eofr-for-along-track-drift", argv[i]) == 0) {
+        else if (strcmp("--no-eofr", argv[i]) == 0) {
             state->nOptions++;
             state->useEofR = false;
         }
@@ -1244,7 +1244,7 @@ void cmdUsage(char *name)
     fprintf(stdout, "%40s - %s\n", "--max-screen-plots=<value>", "limit to <value> plots per screen. Defaule: 0 (automatic)");
     fprintf(stdout, "%40s - %s\n", "--movie-dir", "movie output directory; default: '.'");
     fprintf(stdout, "%40s - %s\n", "--movie-filename", "movie filename; default: 'results.mp4'");
-    fprintf(stdout, "%40s - %s\n", "--do-not-use-eofr-for-along-track-drift", "use legacy method for estimating along-track drift");
+    fprintf(stdout, "%40s - %s\n", "--no-eofr", "use legacy method for estimating along-track drift");
     fprintf(stdout, "%40s - %s\n", "--about", "print copyright and license information");
     fprintf(stdout, "%40s - %s\n", "--help", "print this message");
 
