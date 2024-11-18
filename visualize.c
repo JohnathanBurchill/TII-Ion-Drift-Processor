@@ -229,7 +229,9 @@ int visualizeResults(ProcessorState *state)
     free(tofree);
 
 
-    finishVideo();
+    if (state->exportVideo) {
+        finishVideo();
+    }
 
     if (frameCounter > 0 && state->printVideoFilename) {
         printf("%s\n", state->videoFilename);

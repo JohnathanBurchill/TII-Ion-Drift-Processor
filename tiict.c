@@ -20,10 +20,6 @@
 
 #include "processing.h"
 
-#include <gsl/gsl_errno.h>
-
-extern char infoHeader[50];
-
 int main(int argc, char* argv[])
 {
     // Can use this function in a library; main is a wrapper for command line execution
