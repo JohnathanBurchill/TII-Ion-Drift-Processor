@@ -152,8 +152,8 @@ typedef struct ProcessorState {
     char *videoOutputDir;
     char videoFilename[FILENAME_MAX];
     bool printVideoFilename;
-    double videoT0;
-    double videoT1;
+    double plotT0;
+    double plotT1;
     Image *frames;
     int nVideoFrames;
 

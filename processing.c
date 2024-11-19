@@ -1107,8 +1107,8 @@ int parseArguments(ProcessorState *state)
     state->maxPlotsPerScreen = 0;
 
     // Default automatically to first and last times for video export
-    state->videoT0 = -1;
-    state->videoT1 = -1;
+    state->plotT0 = -1;
+    state->plotT1 = -1;
 
     state->nOptions = 0;
     for (int i = 1; i < argc; i++) {
@@ -1175,7 +1175,7 @@ int parseArguments(ProcessorState *state)
                 return TIICT_ARGS_BAD;
             }
 
-            state->videoT0 = parseEPOCH4(argv[i] + 5);
+            state->plotT0 = parseEPOCH4(argv[i] + 5);
         }
         else if (strncmp("--t1=", argv[i], 5) == 0) {
             state->nOptions++;
@@ -1184,7 +1184,7 @@ int parseArguments(ProcessorState *state)
                 return TIICT_ARGS_BAD;
             }
 
-            state->videoT1 = parseEPOCH4(argv[i] + 5);
+            state->plotT1 = parseEPOCH4(argv[i] + 5);
         }
         else if (strncmp("--video-filename=", argv[i], 17) == 0) {
             state->nOptions++;

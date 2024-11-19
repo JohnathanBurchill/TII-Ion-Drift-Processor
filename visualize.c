@@ -32,31 +32,38 @@ int visualizeResults(ProcessorState *state)
     uint8_t **dataBuffers = state->dataBuffers;
     double *times = (double*)dataBuffers[0];
 
+    if (state->plotT0 < 0) {
+        state->plotT0 = times[0];
+    }
+    if (state->plotT1 < 0) {
+        state->plotT1 = times[state->nRecs - 1];
+    }
+
     int firstIndex = 0;
     int lastIndex = 0;
 
     // Find first index
-    if (state->videoT0 >= 0) {
-        while (firstIndex < state->nRecs - 1 && times[firstIndex] < state->videoT0) {
+    if (state->plotT0 >= 0) {
+        while (firstIndex < state->nRecs - 1 && times[firstIndex] < state->plotT0) {
             firstIndex++;
         }
     }
     else  {
-        state->videoT0 = times[firstIndex];
+        state->plotT0 = times[firstIndex];
     }
-    if (state->videoT1 >= 0) {
-        while (lastIndex < state->nRecs && times[lastIndex] < state->videoT1) {
+    if (state->plotT1 >= 0) {
+        while (lastIndex < state->nRecs && times[lastIndex] < state->plotT1) {
             lastIndex++;
         }
     }
     else  {
-        state->videoT1 = times[state->nRecs-1];
+        state->plotT1 = times[state->nRecs-1];
     }
 
     if (strlen(state->videoFilename) == 0) {
         char t0String[EPOCHx_STRING_MAX], t1String[EPOCHx_STRING_MAX];
-        encodeEPOCHx(state->videoT0, "<year><mm.02><dom.02>T<hour><min><sec>", t0String);
-        encodeEPOCHx(state->videoT1, "<year><mm.02><dom.02>T<hour><min><sec>", t1String);
+        encodeEPOCHx(state->plotT0, "<year><mm.02><dom.02>T<hour><min><sec>", t0String);
+        encodeEPOCHx(state->plotT1, "<year><mm.02><dom.02>T<hour><min><sec>", t1String);
         snprintf(state->videoFilename, FILENAME_MAX, "%s/Swarm%s_TIICT_%s_%s_%s.mp4", state->videoOutputDir, state->args.satellite, t0String, t1String, state->args.exportVersion);
     }
 
