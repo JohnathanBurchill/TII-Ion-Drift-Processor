@@ -959,16 +959,10 @@ int runProcessor(int argc, char *argv[], ProcessorState **result)
         state = *result;
     }
     else {
-        // Allocate memory for the processor state
-        state = malloc(sizeof *state);
-        if (state == NULL) {
-            fprintf(stderr, "Unable to allocate memory for processor state.\n");
-            return TIICT_MEMORY;
-        }
-        memset(state, 0, sizeof *state);
+        state = initState(argc, argv);
     }
 
-    status = initProcessor(argc, argv, state);
+    status = initProcessor(state);
     if (status != TIICT_OK) {
         goto cleanup;
     }
@@ -982,7 +976,6 @@ int runProcessor(int argc, char *argv[], ProcessorState **result)
     if (status != TIICT_OK) {
         goto cleanup;
     }
-
     status = calibrateFlows(state);
     if (status != TIICT_OK) {
         goto cleanup;
@@ -1028,17 +1021,32 @@ cleanup:
 
 }
 
-int initProcessor(int argc, char *argv[], ProcessorState *state)
+ProcessorState *initState(int argc, char **argv)
 {
-    int status = TIICT_OK;
-    void *args = &state->args;
-    state->args.argc = argc;
-    state->args.argv = argv;
+    // Allocate memory for the processor state
+    ProcessorState *state = malloc(sizeof *state);
+    if (state == NULL) {
+        fprintf(stderr, "Unable to allocate memory for processor state.\n");
+        return NULL;
+    }
+    memset(state, 0, sizeof *state);
+    Arguments *args = &state->args;
+    args->argc = argc;
+    args->argv = argv;
 
     // Check arguments and abort if not right
-    status = parseArguments(state);
-    if (status != TIICT_OK)
-        return status;
+    int status = parseArguments(state);
+    if (status != TIICT_OK) {
+        return NULL;
+    }
+
+    return state;
+}
+
+int initProcessor(ProcessorState *state)
+{
+    int status = TIICT_OK;
+    Arguments *args = &state->args;
 
     status = initLogFiles(state);
     if (status != TIICT_OK)
@@ -1049,9 +1057,9 @@ int initProcessor(int argc, char *argv[], ProcessorState *state)
 
     // Print command line
     fprintf(state->processingLogFile, "%sCalled as '", infoHeader);
-    for (int i = 0; i < argc; i++) {
-        fprintf(state->processingLogFile, "%s", argv[i]);
-        if (i < argc - 1) {
+    for (int i = 0; i < args->argc; i++) {
+        fprintf(state->processingLogFile, "%s", args->argv[i]);
+        if (i < args->argc - 1) {
             fprintf(state->processingLogFile, " ");
         }
     }

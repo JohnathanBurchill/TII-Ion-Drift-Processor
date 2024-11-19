@@ -81,6 +81,24 @@ void updatePlots(ProcessorState *state);
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
 
+    ProcessorState *state = initState(argc, argv);
+    if (state == NULL) {
+        fprintf(stderr, "Could not allocate processor state.\n");
+        return SDL_APP_FAILURE;
+    }
+
+    // New defaults
+    state->export16Hz = false;
+    state->export2Hz = false;
+    state->exportZip = false;
+    state->exportVideo = false;
+    state->visualizeResults =true;
+
+    int status = runProcessor(argc, argv, &state);
+    if (status != TIICT_OK) {
+        return SDL_APP_FAILURE;
+    }
+
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         SDL_Log("Couldn't initialize SDL: %s", SDL_GetError());
         return SDL_APP_FAILURE;
@@ -113,12 +131,6 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     as->colors->colors[BACKGROUND_COLOR ] = (SDL_Color){255, 255, 255, 255};
 
     resetDisplay(as);
-
-    ProcessorState *state = NULL;
-    int status = runProcessor(argc, argv, &state);
-    if (status != TIICT_OK) {
-        return SDL_APP_FAILURE;
-    }
 
     as->state = state;
     as->plotPage = 0;

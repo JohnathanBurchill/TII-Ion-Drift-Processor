@@ -55,7 +55,8 @@ void interpolate(double *times, double *values, size_t nVals, double *requestedT
 bool downSampleHalfSecond(ProcessorState *state, long *index, long storageIndex, double t0, long maxIndex);
 
 int runProcessor(int argc, char *argv[], ProcessorState **result);
-int initProcessor(int argc, char **argv, ProcessorState *state);
+ProcessorState *initState(int argc, char **argv);
+int initProcessor(ProcessorState *state);
 int parseArguments(ProcessorState *state);
 void cmdUsage(char *name);
 void initHeader(ProcessorState *state);
