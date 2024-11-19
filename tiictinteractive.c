@@ -17,25 +17,23 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
+#include "visualize.h"
+#include "state.h"
+#include "errors.h"
+#include "processing.h"
 
 #include "SDL3/SDL_error.h"
 #include "SDL3/SDL_init.h"
 #include "SDL3/SDL_keyboard.h"
 #include "SDL3/SDL_keycode.h"
 #include "SDL3/SDL_log.h"
-#include "SDL3/SDL_oldnames.h"
 #include "SDL3/SDL_pixels.h"
 #include "SDL3/SDL_render.h"
 #include "SDL3/SDL_surface.h"
 #include "SDL3/SDL_video.h"
-#include "processing.h"
-#include "state.h"
-#include "errors.h"
-#include "tiigraphics/colors.h"
-#include "tiigraphics/tiigraphics.h"
-#include "visualize.h"
 
-
+#include <tiigraphics/colors.h>
+#include <tiigraphics/tiigraphics.h>
 #include <tiigraphics/video.h>
 
 #include <stdio.h>
@@ -160,6 +158,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
     as->t1 = timesMs[state->nRecs - 1];
     double middleTime = 0.0;
     double timeRange = state->plotT1 - state->plotT0;
+    double secondsToAdvance = 0.0;
 
     if (event->type == SDL_EVENT_QUIT) {
         return SDL_APP_SUCCESS;  /* end the program, reporting success to the OS. */
@@ -232,12 +231,26 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
                 updatePlots(state);
                 break;
             case SDLK_PERIOD:
-                // Rewind the plot timerange by the current timerange
-                advancePlots(as, 1, MINUTES);
+                // Advance the plot by 10% of timeRange
+                secondsToAdvance = timeRange / 1000.0 / 10.0;
+                if (SDL_GetModState() & SDL_KMOD_SHIFT) {
+                    secondsToAdvance /= 5.0;
+                }
+                if (secondsToAdvance < 1.0) {
+                    secondsToAdvance = 1.0;
+                }
+                advancePlots(as, secondsToAdvance, SECONDS);
                 break;
             case SDLK_COMMA:
-                // Rewind the plot timerange by the current timerange
-                rewindPlots(as, 1, MINUTES);
+                // Rewind the plot by 10% of timeRange
+                secondsToAdvance = timeRange / 1000.0 / 10.0;
+                if (SDL_GetModState() & SDL_KMOD_SHIFT) {
+                    secondsToAdvance /= 5.0;
+                }
+                if (secondsToAdvance < 1.0) {
+                    secondsToAdvance = 1.0;
+                }
+                rewindPlots(as, secondsToAdvance, SECONDS);
                 break;
             case SDLK_H:
                 // Rewind the plot timerange by the current timerange
