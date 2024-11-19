@@ -106,20 +106,13 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
                 // Update processor results
                 resetVideoFrames(state);
                 shutdown(state);
-                free(state);
-                state = NULL;
                 status = runProcessor(argc, argv, &state);
-                as->results = state;
                 if (status != TIICT_OK) {
                     fprintf(stderr, "Encountered error running processor: %d\n", status);
+                    return SDL_APP_CONTINUE;
                 }
-                else {
-                    printf("Ran processor; number of images: %d\n", state->nVideoFrames);
-                }
+                printf("Ran processor; number of images: %d\n", state->nVideoFrames);
                 break;
-// Function keys example...
-//            case SDLK_F4:
-//                break;
             case SDLK_Q:
                 return SDL_APP_SUCCESS;  /* end the program, reporting success to the OS. */
                 break;
