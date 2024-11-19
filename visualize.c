@@ -61,9 +61,10 @@ int visualizeResults(ProcessorState *state)
     }
 
     if (strlen(state->videoFilename) == 0) {
-        char t0String[EPOCHx_STRING_MAX], t1String[EPOCHx_STRING_MAX];
-        encodeEPOCHx(state->plotT0, "<year><mm.02><dom.02>T<hour><min><sec>", t0String);
-        encodeEPOCHx(state->plotT1, "<year><mm.02><dom.02>T<hour><min><sec>", t1String);
+        char format[EPOCHx_FORMAT_MAX], t0String[EPOCHx_STRING_MAX], t1String[EPOCHx_STRING_MAX];
+        snprintf(format, EPOCHx_FORMAT_MAX, "<year><mm.02><dom.02>T<hour><min><sec>");
+        encodeEPOCHx(state->plotT0, format, t0String);
+        encodeEPOCHx(state->plotT1, format, t1String);
         snprintf(state->videoFilename, FILENAME_MAX, "%s/Swarm%s_TIICT_%s_%s_%s.mp4", state->videoOutputDir, state->args.satellite, t0String, t1String, state->args.exportVersion);
     }
 
