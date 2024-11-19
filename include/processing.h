@@ -56,12 +56,13 @@ bool downSampleHalfSecond(ProcessorState *state, long *index, long storageIndex,
 
 int runProcessor(int argc, char *argv[], ProcessorState **result);
 int initProcessor(int argc, char **argv, ProcessorState *state);
-int parseArguments(int argc, char **argv, ProcessorState *state);
+int parseArguments(ProcessorState *state);
 void cmdUsage(char *name);
 void initHeader(ProcessorState *state);
 
 int checkResult(int status, ProcessorState *state);
-int shutdown(int status, ProcessorState *state);
+void closeFiles(ProcessorState *state);
+int shutdown(ProcessorState *state);
 
 int velocityBackgroundRemoval(ProcessorState *state);
 void geoelectricPotentialBackgroundRemoval(ProcessorState *state);

@@ -36,6 +36,18 @@ INCLUDE(GNUInstallDirs)
 
 # GSL
 FIND_PACKAGE(GSL REQUIRED)
+# SDL3
+find_library(SDL3 SDL3 HINTS /usr/local/lib REQUIRED)
+
+# From ChatGPT 18 Nov 2024
+# Set RPATH for build and install
+set(CMAKE_BUILD_RPATH "/usr/local/lib")
+set(CMAKE_INSTALL_RPATH "/usr/local/lib")
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+
+# Prevent clearing RPATH during installation
+set(CMAKE_SKIP_BUILD_RPATH FALSE)
+set(CMAKE_SKIP_INSTALL_RPATH FALSE)
 
 # Graphics stuff
 FIND_PACKAGE(PkgConfig REQUIRED)
@@ -46,8 +58,6 @@ pkg_check_modules(LIBAV REQUIRED IMPORTED_TARGET
     libswscale
     libavutil
 )
-
-SET(CMAKE_SKIP_RPATH FALSE)
 
 # requires -lm on linux
 FIND_LIBRARY(MATH m REQUIRED)
@@ -68,9 +78,10 @@ ADD_EXECUTABLE(tiict0401 tiict.c)
 TARGET_INCLUDE_DIRECTORIES(tiict0401 PRIVATE)
 TARGET_LINK_LIBRARIES(tiict0401 PRIVATE Processor ${LIBS} ${CDF})
 
-#ADD_EXECUTABLE(tiictinteractive0401 tiictinteractive.c)
-#TARGET_INCLUDE_DIRECTORIES(tiictinteractive0401 PRIVATE)
-#TARGET_LINK_LIBRARIES(tiictinteractive0401 PRIVATE Processor ${LIBS} ${CDF})
+ADD_EXECUTABLE(tiictinteractive0401 tiictinteractive.c)
+TARGET_INCLUDE_DIRECTORIES(tiictinteractive0401 PRIVATE)
+TARGET_LINK_LIBRARIES(tiictinteractive0401 PRIVATE Processor ${LIBS} ${CDF} ${SDL3})
+#/usr/local/lib/libSDL3.dylib)
 
 ADD_EXECUTABLE(tiictinspect tiictinspect.c)
 TARGET_INCLUDE_DIRECTORIES(tiictinspect PRIVATE)
@@ -87,6 +98,7 @@ TARGET_LINK_LIBRARIES(tiictvariability Utilities ${LIBS} ${CDF})
 ADD_SUBDIRECTORY(util)
 
 INSTALL(TARGETS tiict0401 DESTINATION $ENV{HOME}/bin)
+INSTALL(TARGETS tiictinteractive0401 DESTINATION $ENV{HOME}/bin)
 INSTALL(TARGETS tiictinspect DESTINATION $ENV{HOME}/bin)
 INSTALL(TARGETS tiictqualityflags DESTINATION $ENV{HOME}/bin)
 

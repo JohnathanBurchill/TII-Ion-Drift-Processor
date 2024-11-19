@@ -17,6 +17,7 @@
 int visualizeResults(ProcessorState *state)
 {
     int frameCounter = 0;
+    static int timesReached = 0;
 
     Image image = {0};
     if (allocImage(&image, IMAGE_WIDTH, IMAGE_HEIGHT, 1) != DRAW_OK)
@@ -106,8 +107,8 @@ int visualizeResults(ProcessorState *state)
         nPlots++;
     }
     free(tofree);
-    // Plot requested plots
 
+    // Plot requested plots
 
     if (state->exportVideo) {
         int status = initVideo(state->videoFilename);
@@ -210,14 +211,16 @@ int visualizeResults(ProcessorState *state)
                 }
             }
             // Store image frame for potential later use
-            void *mem = realloc(state->frames, sizeof *state->frames * state->nVideoFrames + 1);
+            void *mem = realloc(state->frames, sizeof *state->frames * (state->nVideoFrames + 1));
             if (mem == NULL) {
                 fprintf(stderr, "Unable to allocate memory for new image\n");
                 return TIICT_MEMORY;
             }
             state->frames = mem;
             state->nVideoFrames++;
-            memcpy(&state->frames[state->nVideoFrames-1], &image, sizeof *state->frames);
+            Image *f = &state->frames[state->nVideoFrames-1];
+            allocImage(f, image.width, image.height, image.bytesPerPixel);
+            memcpy(state->frames[state->nVideoFrames-1].pixels, image.pixels, image.numberOfBytes);
 
             // Reset image to make new plots
             memset(image.pixels, BACKGROUND_COLOR, image.numberOfBytes);
@@ -229,6 +232,7 @@ int visualizeResults(ProcessorState *state)
     free(tofree);
 
 
+finish:
     if (state->exportVideo) {
         finishVideo();
     }

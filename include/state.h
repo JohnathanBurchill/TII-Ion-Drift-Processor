@@ -40,6 +40,8 @@ typedef struct offset_model_fit_arguments {
 } offset_model_fit_arguments;
 
 typedef struct Arguments {
+    int argc;
+    char **argv;
     const char* satellite;
     int year;
     int month;

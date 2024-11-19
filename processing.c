@@ -953,43 +953,76 @@ bool downSampleHalfSecond(ProcessorState *state, long *index, long storageIndex,
 int runProcessor(int argc, char *argv[], ProcessorState **result)
 {
     int status = TIICT_OK;
-    ProcessorState *state = malloc(sizeof *state);
-    if (state == NULL) {
-        fprintf(stderr, "Unable to allocate memory for processor state.\n");
-        return TIICT_MEMORY;
+    ProcessorState *state = NULL;
+    if (result != NULL && *result != NULL) {
+        // re-use the provided state
+        state = *result;
+    }
+    else {
+        // Allocate memory for the processor state
+        state = malloc(sizeof *state);
+        if (state == NULL) {
+            fprintf(stderr, "Unable to allocate memory for processor state.\n");
+            return TIICT_MEMORY;
+        }
+        memset(state, 0, sizeof *state);
     }
 
-    if ((status = initProcessor(argc, argv, state)) != TIICT_OK)
-        return shutdown(status, state);
+    status = initProcessor(argc, argv, state);
+    if (status != TIICT_OK) {
+        goto cleanup;
+    }
 
-    if ((status = loadTiiCalData(state)) != TIICT_OK)
-        return shutdown(status, state);
+    status = loadTiiCalData(state);
+    if (status != TIICT_OK) {
+        goto cleanup;
+    }
 
-    if ((status = loadLpCalData(state)) != TIICT_OK)
-        return shutdown(status, state);
+    status = loadLpCalData(state);
+    if (status != TIICT_OK) {
+        goto cleanup;
+    }
 
-    if ((status = calibrateFlows(state)) != TIICT_OK)
-        return shutdown(status, state);
+    status = calibrateFlows(state);
+    if (status != TIICT_OK) {
+        goto cleanup;
+    }
 
-    if ((status = calculateFields(state)) != TIICT_OK)
-        return shutdown(status, state);
+    status = calculateFields(state);
+    if (status != TIICT_OK) {
+        goto cleanup;
+    }
 
     if (state->export2Hz || state->export16Hz) {
         status = exportCdfs(state);
+        if (status != TIICT_OK) {
+            goto cleanup;
+        }
     }
 
     if (state->visualizeResults) {
         status = visualizeResults(state);
+        if (status != TIICT_OK) {
+            goto cleanup;
+        }
     }
 
+cleanup:
+
+    // Close files
+    closeFiles(state);
+
     if (result != NULL) {
+        // Return with results if requested
         *result = state;
         return status;
     }
     else {
-        // frees memory
-        status = shutdown(status, state);
+        // free memory
+        status = shutdown(state);
+        free(state);
     }
+    printf("9\n");
 
     return status;
 
@@ -999,9 +1032,11 @@ int initProcessor(int argc, char *argv[], ProcessorState *state)
 {
     int status = TIICT_OK;
     void *args = &state->args;
+    state->args.argc = argc;
+    state->args.argv = argv;
 
     // Check arguments and abort if not right
-    status = parseArguments(argc, argv, state);
+    status = parseArguments(state);
     if (status != TIICT_OK)
         return status;
 
@@ -1045,19 +1080,23 @@ int initProcessor(int argc, char *argv[], ProcessorState *state)
     return TIICT_OK;
 }
 
-int parseArguments(int argc, char **argv, ProcessorState *state)
+int parseArguments(ProcessorState *state)
 {
     Arguments *args = &state->args;
+    int argc = args->argc;
+    char **argv = args->argv;
+
     // E-of-R method for along-track drift
     state->useEofR = true;
     // LP estimates of satellite potential are disabled by default
     state->usePotentials = false;
     state->lpPotentialSource = LP_POTENTIAL_NONE;
+    state->frames = NULL;
 
     state->export2Hz = true;
     state->export16Hz = true;
     state->exportZip = true;
-    state->exportVideo = true;
+    state->exportVideo = false;
 
     state->videoOutputDir = ".";
     state->videoFilename[0] = '\0';
@@ -1085,9 +1124,9 @@ int parseArguments(int argc, char **argv, ProcessorState *state)
             state->nOptions++;
             state->exportZip = false;
         }
-        else if (strcmp("--no-video-export", argv[i]) == 0) {
+        else if (strcmp("--export-video", argv[i]) == 0) {
             state->nOptions++;
-            state->exportVideo = false;
+            state->exportVideo = true;
         }
         else if (strcmp("--no-eofr", argv[i]) == 0) {
             state->nOptions++;
@@ -1249,13 +1288,13 @@ void cmdUsage(char *name)
     fprintf(stdout, "%40s - %s\n", "--no-16hz-export", "do not export 16 Hz dataset");
     fprintf(stdout, "%40s - %s\n", "--no-2hz-export", "do not export 2 Hz dataset");
     fprintf(stdout, "%40s - %s\n", "--no-zip-export", "do not export zip archive");
-    fprintf(stdout, "%40s - %s\n", "--no-video-export", "do not export video");
+    fprintf(stdout, "%40s - %s\n", "--export-video", "export video of results");
+    fprintf(stdout, "%40s - %s\n", "--visualize", "generate visualizations of results");
     fprintf(stdout, "%40s - %s\n", "--floating-potential-source=<source>", "satellite floating potential source");
     fprintf(stdout, "%40s %s\n", "", "'N' or 'n': none (default)");
     fprintf(stdout, "%40s %s\n", "", "'U' or 'u': EXTD U_SC (blended)");
     fprintf(stdout, "%40s %s\n", "", "'H' or 'h': EXTD high-gain probe");
     fprintf(stdout, "%40s %s\n", "", "'L' or 'l': EXTD low-gain probe");
-    fprintf(stdout, "%40s - %s\n", "--visualize", "generate a video visualization of the results");
     fprintf(stdout, "%40s - %s\n", "--plot-command=<cmd>", "plot instructions");
     fprintf(stdout, "%40s %s\n", "", "Semicolon-separated commands of the form <param>,<ymin>,<ymax>,<yscale>[,<plotheight>]");
     fprintf(stdout, "%40s %s\n", "", "params:");
@@ -1296,18 +1335,15 @@ int checkResult(int status, ProcessorState *state)
         if (state->processingLogFile != NULL)
             fprintf(state->processingLogFile, "Error processing file. status = %d\n", status);
         state->returnStatus = status;
-        status = shutdown(status, state);
+        status = shutdown(state);
     }
 
     return status;
 
 }
 
-int shutdown(int status, ProcessorState *state)
+void closeFiles(ProcessorState *state)
 {
-    if (state == NULL)
-        return(EXIT_FAILURE);
-
     // Close fit log file
     if (state->fitFile != NULL)
     {
@@ -1321,128 +1357,63 @@ int shutdown(int status, ProcessorState *state)
     }
     fflush(stdout);
 
+    return;
+}
+
+int shutdown(ProcessorState *state)
+{
+    if (state == NULL)
+        return(EXIT_FAILURE);
+
     // Free the memory
-    for (uint8_t i = 0; i < NUM_CAL_VARIABLES; i++)
-        if (state->dataBuffers[i] != NULL)
-        {
-            free(state->dataBuffers[i]);
-            state->dataBuffers[i] = NULL;
-        }
+    for (uint8_t i = 0; i < NUM_CAL_VARIABLES; i++) {
+        free(state->dataBuffers[i]);
+        state->dataBuffers[i] = NULL;
+    }
+    free(state->lpTimes);
+    state->lpTimes = NULL;
+    free(state->lpPhiScHighGain);
+    state->lpPhiScHighGain = NULL;
+    free(state->lpPhiScLowGain);
+    state->lpPhiScLowGain = NULL;
+    free(state->lpPhiSc);
+    state->lpPhiSc = NULL;
+    free(state->xhat);
+    state->xhat = NULL;
+    free(state->yhat);
+    state->yhat = NULL;
+    free(state->zhat);
+    state->zhat = NULL;
+    free(state->ectFieldH);
+    state->ectFieldH = NULL;
+    free(state->ectFieldV);
+    state->ectFieldV = NULL;
+    free(state->bctField);
+    state->bctField = NULL;
+    free(state->geoPotential);
+    state->geoPotential = NULL;
+    free(state->geoPotentialDifference);
+    state->geoPotentialDifference = NULL;
+    free(state->maxAbsGeopotentialSlope);
+    state->maxAbsGeopotentialSlope = NULL;
+    free(state->exAdjusted);
+    state->exAdjusted = NULL;
+    free(state->exAdjustmentParameter);
+    state->exAdjustmentParameter = NULL;
+    free(state->geoPotentialDetrended);
+    state->geoPotentialDetrended = NULL;
+    free(state->maxAbsGeopotentialDetrendedSlope);
+    state->maxAbsGeopotentialDetrendedSlope = NULL;
+    free(state->viErrors);
+    state->viErrors = NULL;
+    free(state->flags);
+    state->flags = NULL;
+    free(state->fitInfo);
+    state->fitInfo = NULL;
+    free(state->region);
+    state->region = NULL;
 
-    if (state->lpTimes != NULL)
-    {
-        free(state->lpTimes);
-        state->lpTimes = NULL;
-    }
-    if (state->lpPhiScHighGain != NULL)
-    {
-        free(state->lpPhiScHighGain);
-        state->lpPhiScHighGain = NULL;
-    }
-    if (state->lpPhiScLowGain != NULL)
-    {
-        free(state->lpPhiScLowGain);
-        state->lpPhiScLowGain = NULL;
-    }
-    if (state->lpPhiSc != NULL)
-    {
-        free(state->lpPhiSc);
-        state->lpPhiSc = NULL;
-    }
-    // state->potentials is just a pointer to one of the above potentials
-
-    if (state->xhat != NULL)
-    {
-        free(state->xhat);
-        state->xhat = NULL;
-    }
-    if (state->yhat != NULL)
-    {
-        free(state->yhat);
-        state->yhat = NULL;
-    }
-    if (state->zhat != NULL)
-    {
-        free(state->zhat);
-        state->zhat = NULL;
-    }
-    if (state->ectFieldH != NULL)
-    {
-        free(state->ectFieldH);
-        state->ectFieldH = NULL;
-    }
-    if (state->ectFieldV != NULL)
-    {
-        free(state->ectFieldV);
-        state->ectFieldV = NULL;
-    }
-    if (state->bctField != NULL)
-    {
-        free(state->bctField);
-        state->bctField = NULL;
-    }
-    if (state->geoPotential != NULL)
-    {
-        free(state->geoPotential);
-        state->geoPotential = NULL;
-    }
-    if (state->geoPotentialDifference != NULL)
-    {
-        free(state->geoPotentialDifference);
-        state->geoPotentialDifference = NULL;
-    }
-    if (state->maxAbsGeopotentialSlope != NULL)
-    {
-        free(state->maxAbsGeopotentialSlope);
-        state->maxAbsGeopotentialSlope = NULL;
-    }
-    if (state->exAdjusted!= NULL)
-    {
-        free(state->exAdjusted);
-        state->exAdjusted = NULL;
-    }
-    if (state->exAdjustmentParameter!= NULL)
-    {
-        free(state->exAdjustmentParameter);
-        state->exAdjustmentParameter = NULL;
-    }
-    if (state->geoPotentialDetrended != NULL)
-    {
-        free(state->geoPotentialDetrended);
-        state->geoPotentialDetrended = NULL;
-    }
-    if (state->maxAbsGeopotentialDetrendedSlope != NULL)
-    {
-        free(state->maxAbsGeopotentialDetrendedSlope);
-        state->maxAbsGeopotentialDetrendedSlope = NULL;
-    }
-    if (state->viErrors != NULL)
-    {
-        free(state->viErrors);
-        state->viErrors = NULL;
-    }
-    if (state->flags != NULL)
-    {
-        free(state->flags);
-        state->flags = NULL;
-    }
-    if (state->fitInfo != NULL)
-    {
-        free(state->fitInfo);
-        state->fitInfo = NULL;
-    }
-    if (state->region != NULL)
-    {
-        free(state->region);
-        state->region = NULL;
-    }
-    if (state->nVideoFrames > 0) {
-        free(state->frames);
-    }
-
-    free(state);
-
-    return status;
+    return TIICT_OK;
 }
 
 int velocityBackgroundRemoval(ProcessorState *state)
