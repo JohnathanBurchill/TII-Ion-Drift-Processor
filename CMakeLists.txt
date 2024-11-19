@@ -16,7 +16,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 
-CMAKE_MINIMUM_REQUIRED(VERSION 3.30)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.20)
 
 PROJECT(TIICT)
 
@@ -64,7 +64,7 @@ FIND_LIBRARY(MATH m REQUIRED)
 FIND_LIBRARY(TII tii REQUIRED)
 FIND_LIBRARY(TIIGRAPHICS tiigraphics REQUIRED)
 FIND_LIBRARY(CDF cdf HINTS /Applications/cdf/cdf/lib REQUIRED)
-SET(LIBS ${LIBS} ${MATH} ${GSL_LIBRARY} ${TII})
+SET(LIBS ${LIBS} ${MATH} ${GSL_LIBRARY} ${GSL_CBLAS_LIBRARY} ${CDF} ${TIIGRAPHICS} ${TII})
 
 INCLUDE_DIRECTORIES(include ${CMAKE_INSTALL_INCUDEDIR} ${INCLUDE_DIRS}
 ${GSL_INCLUDE_DIRS} /Applications/cdf/cdf/include /usr/local/include)
@@ -72,7 +72,7 @@ ${GSL_INCLUDE_DIRS} /Applications/cdf/cdf/include /usr/local/include)
 ADD_LIBRARY(Utilities utilities.c)
 ADD_LIBRARY(Processor processing.c export.c loadData.c utilities.c visualize.c)
 TARGET_INCLUDE_DIRECTORIES(Processor PRIVATE)
-TARGET_LINK_LIBRARIES(Processor ${LIBS} ${GSL_LIBRARY} ${GSL_CBLAS_LIBRARY} ${TIIGRAPHICS} PkgConfig::LIBAV)
+TARGET_LINK_LIBRARIES(Processor ${LIBS} PkgConfig::LIBAV)
 
 ADD_EXECUTABLE(tiict0401 tiict.c)
 TARGET_INCLUDE_DIRECTORIES(tiict0401 PRIVATE)
@@ -80,20 +80,19 @@ TARGET_LINK_LIBRARIES(tiict0401 PRIVATE Processor ${LIBS} ${CDF})
 
 ADD_EXECUTABLE(tiictinteractive0401 tiictinteractive.c)
 TARGET_INCLUDE_DIRECTORIES(tiictinteractive0401 PRIVATE)
-TARGET_LINK_LIBRARIES(tiictinteractive0401 PRIVATE Processor ${LIBS} ${CDF} ${SDL3})
-#/usr/local/lib/libSDL3.dylib)
+TARGET_LINK_LIBRARIES(tiictinteractive0401 PRIVATE ${SDL3} Processor ${LIBS})
 
 ADD_EXECUTABLE(tiictinspect tiictinspect.c)
 TARGET_INCLUDE_DIRECTORIES(tiictinspect PRIVATE)
-TARGET_LINK_LIBRARIES(tiictinspect Utilities ${LIBS} ${CDF})
+TARGET_LINK_LIBRARIES(tiictinspect Utilities ${LIBS})
 
 ADD_EXECUTABLE(tiictqualityflags tiictqualityflags.c)
 TARGET_INCLUDE_DIRECTORIES(tiictqualityflags PRIVATE )
-TARGET_LINK_LIBRARIES(tiictqualityflags Utilities ${LIBS} ${CDF})
+TARGET_LINK_LIBRARIES(tiictqualityflags Utilities ${LIBS})
 
 ADD_EXECUTABLE(tiictvariability tiictvariability.c)
 TARGET_INCLUDE_DIRECTORIES(tiictvariability PRIVATE )
-TARGET_LINK_LIBRARIES(tiictvariability Utilities ${LIBS} ${CDF})
+TARGET_LINK_LIBRARIES(tiictvariability Utilities ${LIBS})
 
 ADD_SUBDIRECTORY(util)
 
