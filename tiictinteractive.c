@@ -94,6 +94,8 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     state->export2Hz = false;
     state->exportZip = false;
     state->exportVideo = false;
+    state->usePotentials = true;
+    state->lpPotentialSource = LP_POTENTIAL_LOWGAIN;
     state->visualizeResults =true;
 
     int status = runProcessor(argc, argv, &state);
@@ -173,18 +175,22 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
                 state->lpPotentialSource = LP_POTENTIAL_NONE;
                 state->usePotentials = false;
                 rerunProcessor(state);
+                break;
             case SDLK_2:
                 state->lpPotentialSource = LP_POTENTIAL_U_SC;
                 state->usePotentials = true;
                 rerunProcessor(state);
+                break;
             case SDLK_3:
                 state->lpPotentialSource = LP_POTENTIAL_LOWGAIN;
                 state->usePotentials = true;
                 rerunProcessor(state);
+                break;
             case SDLK_4:
                 state->lpPotentialSource = LP_POTENTIAL_HIGHGAIN;
                 state->usePotentials = true;
                 rerunProcessor(state);
+                break;
             case SDLK_U:
                 // Update processor results
                 rerunProcessor(state);
@@ -250,6 +256,9 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
                 if (SDL_GetModState() & SDL_KMOD_SHIFT) {
                     secondsToAdvance /= 5.0;
                 }
+                if (SDL_GetModState() & (SDL_KMOD_LCTRL | SDL_KMOD_RCTRL)) {
+                    secondsToAdvance /= 5.0;
+                }
                 if (secondsToAdvance < 1.0) {
                     secondsToAdvance = 1.0;
                 }
@@ -259,6 +268,9 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
                 // Rewind the plot by 10% of timeRange
                 secondsToAdvance = timeRange / 1000.0 / 10.0;
                 if (SDL_GetModState() & SDL_KMOD_SHIFT) {
+                    secondsToAdvance /= 5.0;
+                }
+                if (SDL_GetModState() & (SDL_KMOD_LCTRL | SDL_KMOD_RCTRL)) {
                     secondsToAdvance /= 5.0;
                 }
                 if (secondsToAdvance < 1.0) {
@@ -429,6 +441,7 @@ void advancePlots(AppState_t *as, double amount, TimeUnit_enum units)
         as->state->plotT0 = as->state->plotT1 - timeRange;
     }
     updatePlots(as->state);
+
     return;
 }
 
@@ -451,11 +464,7 @@ void rewindPlots(AppState_t *as, double amount, TimeUnit_enum units)
 
 void updatePlots(ProcessorState *state)
 {
-    if (state->nVideoFrames > 0) {
-        free(state->frames);
-        state->frames = NULL;
-        state->nVideoFrames = 0;
-    }
+    resetVideoFrames(state);
     visualizeResults(state);
 
     return;
@@ -464,9 +473,13 @@ void updatePlots(ProcessorState *state)
 void rerunProcessor(ProcessorState *state)
 {
     resetVideoFrames(state);
+    shutdown(state);
+    loadTiiCalData(state);
+    loadLpCalData(state);
     calibrateFlows(state);
     calculateFields(state);
     visualizeResults(state);
+    updatePlots(state);
 
     return;
 }
