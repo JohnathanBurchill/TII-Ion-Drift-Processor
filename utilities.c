@@ -33,9 +33,9 @@ extern char infoHeader[50];
 #define DIRECTORY_PERMISSIONS 0755
 
 // Generates the filename for exported CDF file, with full path
-void constructExportFileName(const char *dataset, double startTime, double stopTime, const char *exportDir, const char *exportVersion, const char *satellite, char *cdfFileName) 
+void constructExportFileName(const char *dataset, double startTime, double stopTime, const char *exportDir, const char *exportVersion, const char *satellite, char *cdfFileName)
 {
- 
+
     long startyear, startmonth, startday, starthour, startminute, startsecond, startmillisecond;
     long stopyear, stopmonth, stopday, stophour, stopminute, stopsecond, stopmillisecond;
 
@@ -44,6 +44,7 @@ void constructExportFileName(const char *dataset, double startTime, double stopT
 
     sprintf(cdfFileName, "%s/%s/%s/SW_EXPT_EFI%s_%s_%04ld%02ld%02ldT%02ld%02ld%02ld_%04ld%02ld%02ldT%02ld%02ld%02ld_%s", exportDir, exportVersion, dataset, satellite, dataset, startyear, startmonth, startday, starthour, startminute, startsecond, stopyear, stopmonth, stopday, stophour, stopminute, stopsecond, exportVersion);
 
+    return;
 }
 
 void printErrorMessageToFile(FILE *file, CDFstatus status)
@@ -51,6 +52,8 @@ void printErrorMessageToFile(FILE *file, CDFstatus status)
     char errorMessage[CDF_STATUSTEXT_LEN + 1];
     CDFgetStatusText(status, errorMessage);
     fprintf(file, "%s%s\n", infoHeader, errorMessage);
+
+    return;
 }
 
 void printErrorMessage(CDFstatus status)
@@ -58,6 +61,8 @@ void printErrorMessage(CDFstatus status)
     char errorMessage[CDF_STATUSTEXT_LEN + 1];
     CDFgetStatusText(status, errorMessage);
     fprintf(stdout, "%s%s\n", infoHeader, errorMessage);
+
+    return;
 }
 
 void closeCdf(CDFid id)
@@ -69,6 +74,7 @@ void closeCdf(CDFid id)
         printErrorMessage(status);
     }
 
+    return;
 }
 
 int makeSureDirExists(const char *exportDir, const char *exportVersion, const char *subdir)
@@ -100,6 +106,4 @@ int makeSureDirExists(const char *exportDir, const char *exportVersion, const ch
     }
 
     return status;
-
-
 }
