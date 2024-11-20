@@ -108,12 +108,16 @@ int loadLpCalData(ProcessorState *state)
     {
         if (state->nLpRecs < LP_MIN_NUMBER_OF_POTENTIALS)
         {
-            fprintf(state->processingLogFile, "%sNot enough (%lu) LP potentials imported.\n", infoHeader, state->nLpRecs);
+            if (state->writeLogFiles) {
+                fprintf(state->processingLogFile, "%sNot enough (%lu) LP potentials imported.\n", infoHeader, state->nLpRecs);
+            }
             status =  TIICT_NO_LP_HM_DATA;
         }
         else
         {
-            fprintf(state->processingLogFile, "%sLoaded %lu LP potentials, and interpolated them to the TII times.\n", infoHeader, state->nLpRecs);
+            if (state->writeLogFiles) {
+                fprintf(state->processingLogFile, "%sLoaded %lu LP potentials, and interpolated them to the TII times.\n", infoHeader, state->nLpRecs);
+            }
         }
     }
 
@@ -150,16 +154,22 @@ int getLpData(ProcessorState *state)
         res = getLpInputFilename(state->args.satellite[0], date.tm_year+1900, date.tm_mon+1, date.tm_mday, state->args.lpDir, lpFile);
         if (res != 0)
         {
-            fprintf(state->processingLogFile, "%sNo LP data for %4d%02d%02d\n", infoHeader, date.tm_year+1900, date.tm_mon+1, date.tm_mday);
+            if (state->writeLogFiles) {
+                fprintf(state->processingLogFile, "%sNo LP data for %4d%02d%02d\n", infoHeader, date.tm_year+1900, date.tm_mon+1, date.tm_mday);
+            }
             date.tm_mday = date.tm_mday + 1;
             continue;
         }
-        fprintf(state->processingLogFile, "%sLoading LP data from %s\n", infoHeader, lpFile);
+        if (state->writeLogFiles) {
+            fprintf(state->processingLogFile, "%sLoading LP data from %s\n", infoHeader, lpFile);
+        }
 
         status = loadLpInputs(lpFile, &lpTimes2Hz, &lpVsHg, &lpVsLg, &lpVs, &state->nLpRecs);
         if (status == TIICT_MEMORY)
         {
-            fprintf(state->processingLogFile, "%sUnable to allocate memory for LP data. Skipping processing.", infoHeader);
+            if (state->writeLogFiles) {
+                fprintf(state->processingLogFile, "%sUnable to allocate memory for LP data. Skipping processing.", infoHeader);
+            }
             return status;
         }
 
@@ -168,7 +178,9 @@ int getLpData(ProcessorState *state)
     }
     if (state->nLpRecs == 0)
     {
-        fprintf(state->processingLogFile, "%sNo LP records found. Skipping processing.", infoHeader);
+        if (state->writeLogFiles) {
+            fprintf(state->processingLogFile, "%sNo LP records found. Skipping processing.", infoHeader);
+        }
         return TIICT_NO_LP_HM_DATA;
     }
 
@@ -178,7 +190,9 @@ int getLpData(ProcessorState *state)
     state->lpPhiSc = malloc(sizeof(float) * state->nRecs);
     if (state->lpPhiScHighGain == NULL || state->lpPhiScLowGain == NULL || state->lpPhiSc == NULL)
     {
-        fprintf(state->processingLogFile, "%sUnable to allocate memory for LP interpolation. Skipping processing.", infoHeader);
+        if (state->writeLogFiles) {
+            fprintf(state->processingLogFile, "%sUnable to allocate memory for LP interpolation. Skipping processing.", infoHeader);
+        }
         return TIICT_MEMORY;
     }
     bzero(state->lpPhiScHighGain, sizeof(float) * state->nRecs);
@@ -328,7 +342,9 @@ int loadTiiCalData(ProcessorState *state)
         state->args.year = year;
         state->args.month= month;
         state->args.day = day + i;
-        fprintf(state->processingLogFile, "%sLoading calibration data for %04d%02d%02d\n", infoHeader, state->args.year, state->args.month, state->args.day);
+        if (state->writeLogFiles) {
+            fprintf(state->processingLogFile, "%sLoading calibration data for %04d%02d%02d\n", infoHeader, state->args.year, state->args.month, state->args.day);
+        }
 
         loadTiiCalDataFromDate(i, state);
     }
@@ -336,10 +352,11 @@ int loadTiiCalData(ProcessorState *state)
     state->args.year = year;
     state->args.month = month;
     state->args.day = day;
-
-    fprintf(state->processingLogFile, "%sNumber of records: %ld\n", infoHeader, state->nRecs);
-    fprintf(state->processingLogFile, "%sLoaded %ld bytes (%ld MB) of calibration data.\n", infoHeader, state->memoryAllocated, state->memoryAllocated / 1024 / 1024);
-    fflush(state->processingLogFile);
+    if (state->writeLogFiles) {
+        fprintf(state->processingLogFile, "%sNumber of records: %ld\n", infoHeader, state->nRecs);
+        fprintf(state->processingLogFile, "%sLoaded %ld bytes (%ld MB) of calibration data.\n", infoHeader, state->memoryAllocated, state->memoryAllocated / 1024 / 1024);
+        fflush(state->processingLogFile);
+    }
 
     if (state->nRecs < 16*SECONDS_OF_DATA_REQUIRED_FOR_PROCESSING)
         return TIICT_NOT_ENOUGH_CALIBRATION_RECORDS;
@@ -367,7 +384,9 @@ void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state)
     state->args.month = timestructure.tm_mon + 1;
     state->args.day = timestructure.tm_mday;
     setCalibrationFileName(state, state->args.year, state->args.month, state->args.day);
-    fprintf(state->processingLogFile, "%s from %s\n", infoHeader, state->calibrationFileName);
+    if (state->writeLogFiles) {
+        fprintf(state->processingLogFile, "%s from %s\n", infoHeader, state->calibrationFileName);
+    }
 
     // Open the CDF file with validation
     CDFsetValidate(VALIDATEFILEon);
@@ -377,11 +396,15 @@ void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state)
     if (status != CDF_OK)
     {
         // Not necessarily an error. For example, some dates will have not calibration data.
-        fprintf(state->processingLogFile, "%sSkipping this date.\n", infoHeader);
+        if (state->writeLogFiles) {
+            fprintf(state->processingLogFile, "%sSkipping this date.\n", infoHeader);
+        }
         return;
     }
 
-    fprintf(state->processingLogFile, "%sFound CDF file.\n", infoHeader);
+    if (state->writeLogFiles) {
+        fprintf(state->processingLogFile, "%sFound CDF file.\n", infoHeader);
+    }
 
     // Attributes
     long attrN;
@@ -399,7 +422,9 @@ void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state)
     status = CDFinquireCDF(calCdfId, &numDims, dimSizes, &encoding, &majority, &maxrRec, &numrVars, &maxzRec, &numzVars, &numAttrs);
     if (status != CDF_OK)
     {
-        fprintf(state->processingLogFile, "%sProblem with calibration file. Skipping this date.\n", infoHeader);
+        if (state->writeLogFiles) {
+            fprintf(state->processingLogFile, "%sProblem with calibration file. Skipping this date.\n", infoHeader);
+        }
         closeCdf(calCdfId);
         return;
     }
@@ -407,7 +432,9 @@ void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state)
     status = CDFgetzVarAllocRecords(calCdfId, CDFgetVarNum(calCdfId, "epoch"), &nRecs);
     if (status != CDF_OK)
     {
-        fprintf(state->processingLogFile, "%sProblem with calibration file. Skipping this date.\n", infoHeader);
+        if (state->writeLogFiles) {
+            fprintf(state->processingLogFile, "%sProblem with calibration file. Skipping this date.\n", infoHeader);
+        }
         closeCdf(calCdfId);
         return;
     }
@@ -415,7 +442,9 @@ void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state)
     {
         // Not enough to do anything useful
         // TODO: maybe increase this threshold to require a larger number of points each day?
-        fprintf(state->processingLogFile, "%sFewer than %.0f s of data. Skipping this date.\n", infoHeader, (float)SECONDS_OF_DATA_REQUIRED_FOR_PROCESSING);
+        if (state->writeLogFiles) {
+            fprintf(state->processingLogFile, "%sFewer than %.0f s of data. Skipping this date.\n", infoHeader, (float)SECONDS_OF_DATA_REQUIRED_FOR_PROCESSING);
+        }
         CDFcloseCDF(calCdfId);
         return;
     }
@@ -437,7 +466,9 @@ void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state)
                 status = CDFgetzVarRecordData(calCdfId, epochNum, startRecord, &recordTime);
                 if (status != CDF_OK)
                 {
-                    fprintf(state->processingLogFile, "%sCould not read epoch record from CDF file. Skipping this calibration date.\n", infoHeader);
+                    if (state->writeLogFiles) {
+                        fprintf(state->processingLogFile, "%sCould not read epoch record from CDF file. Skipping this calibration date.\n", infoHeader);
+                    }
                     closeCdf(calCdfId);
                     return;
                 }
@@ -461,7 +492,9 @@ void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state)
                 status = CDFgetzVarRecordData(calCdfId, epochNum, stopRecord, &recordTime);
                 if (status != CDF_OK)
                 {
-                    fprintf(state->processingLogFile, "%sCould not read epoch record from CDF file. Skipping this calibration date.\n", infoHeader);
+                    if (state->writeLogFiles) {
+                        fprintf(state->processingLogFile, "%sCould not read epoch record from CDF file. Skipping this calibration date.\n", infoHeader);
+                    }
                     closeCdf(calCdfId);
                     return;
                 }
@@ -472,7 +505,9 @@ void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state)
             }
             break;
         default:
-            fprintf(state->processingLogFile, "%sError: Day type must be one of PREVIOUS_DAY, REQUESTED_DAY, or NEXT_DAY. Skipping this calibration data.\n", infoHeader);
+            if (state->writeLogFiles) {
+                fprintf(state->processingLogFile, "%sError: Day type must be one of PREVIOUS_DAY, REQUESTED_DAY, or NEXT_DAY. Skipping this calibration data.\n", infoHeader);
+            }
             closeCdf(calCdfId);
             return;
     }
@@ -483,7 +518,9 @@ void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state)
     {
         // Not enough to do anything useful
         // TODO: maybe increase this threshold to require a larger number of points each day?
-        fprintf(state->processingLogFile, "%sFewer than %.0f s of data meet constraints. Skipping this date.\n", infoHeader, (float)SECONDS_OF_DATA_REQUIRED_FOR_PROCESSING);
+        if (state->writeLogFiles) {
+            fprintf(state->processingLogFile, "%sFewer than %.0f s of data meet constraints. Skipping this date.\n", infoHeader, (float)SECONDS_OF_DATA_REQUIRED_FOR_PROCESSING);
+        }
         CDFcloseCDF(calCdfId);
         return;
     }
@@ -514,11 +551,15 @@ void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state)
     uint8_t nVars = numzVars;
     if (nVars != NUM_CAL_VARIABLES)
     {
-        fprintf(state->processingLogFile, "%sError: number of calibration variables should be %d. Got %ld. Skipping this date.\n", infoHeader, (uint8_t) NUM_CAL_VARIABLES, numzVars);
+        if (state->writeLogFiles) {
+            fprintf(state->processingLogFile, "%sError: number of calibration variables should be %d. Got %ld. Skipping this date.\n", infoHeader, (uint8_t) NUM_CAL_VARIABLES, numzVars);
+        }
         closeCdf(calCdfId);
         return;
     }
-    fprintf(state->processingLogFile, "%sChecking calibration file variables...", infoHeader);
+    if (state->writeLogFiles) {
+        fprintf(state->processingLogFile, "%sChecking calibration file variables...", infoHeader);
+    }
     for (uint8_t i = 0; i<nVars; i++)
     {
         // fprintf(state->processingLogFile, "%s%20s ", infoHeader, variables[i]);
@@ -526,7 +567,9 @@ void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state)
         if (status != CDF_OK)
         {
 
-            fprintf(state->processingLogFile, "%sError reading variable %s. Skipping this date.\n", infoHeader, variables[i]);
+            if (state->writeLogFiles) {
+                fprintf(state->processingLogFile, "%sError reading variable %s. Skipping this date.\n", infoHeader, variables[i]);
+            }
             closeCdf(calCdfId);
             return;
         }
@@ -535,7 +578,9 @@ void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state)
             // fprintf(state->processingLogFile, "%s OK\n", infoHeader);
         }
     }
-    fprintf(state->processingLogFile, "%sOK\n", infoHeader);
+    if (state->writeLogFiles) {
+        fprintf(state->processingLogFile, "%sOK\n", infoHeader);
+    }
 
     long varNum, numValues, numVarBytes;
     long numBytesPrev, numBytesToAdd, numBytesNew;
@@ -547,7 +592,9 @@ void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state)
         if (varNum < CDF_OK)
         {
             printErrorMessage(varNum);
-            fprintf(state->processingLogFile, "%sError reading variable ID for %s. Skipping this date.\n", infoHeader, variables[i]);
+            if (state->writeLogFiles) {
+                fprintf(state->processingLogFile, "%sError reading variable ID for %s. Skipping this date.\n", infoHeader, variables[i]);
+            }
             closeCdf(calCdfId);
             return;
         }
@@ -573,7 +620,9 @@ void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state)
         if (status != CDF_OK)
         {
 
-            fprintf(state->processingLogFile, "%sError loading data for %s. Skipping this date.\n", infoHeader, variables[i]);
+            if (state->writeLogFiles) {
+                fprintf(state->processingLogFile, "%sError loading data for %s. Skipping this date.\n", infoHeader, variables[i]);
+            }
             closeCdf(calCdfId);
             return;
         }
@@ -581,19 +630,21 @@ void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state)
     // close CDF
     closeCdf(calCdfId);
     // Number of records obtained for this date
-    switch (dayType)
-    {
-        case PREVIOUS_DAY:
-            fprintf(state->processingLogFile, "%sGot %ld s of data for previous day\n", infoHeader, nRecs / 16);
-            break;
-        case REQUESTED_DAY:
-            fprintf(state->processingLogFile, "%sGot %ld s of data for requested day\n", infoHeader, nRecs / 16);
-            break;
-        case NEXT_DAY:
-            fprintf(state->processingLogFile, "%sGot %ld s of data for next day\n", infoHeader, nRecs / 16);
-            break;
-        default:
-            break;
+    if (state->writeLogFiles) {
+        switch (dayType)
+        {
+            case PREVIOUS_DAY:
+                fprintf(state->processingLogFile, "%sGot %ld s of data for previous day\n", infoHeader, nRecs / 16);
+                break;
+            case REQUESTED_DAY:
+                fprintf(state->processingLogFile, "%sGot %ld s of data for requested day\n", infoHeader, nRecs / 16);
+                break;
+            case NEXT_DAY:
+                fprintf(state->processingLogFile, "%sGot %ld s of data for next day\n", infoHeader, nRecs / 16);
+                break;
+            default:
+                break;
+        }
     }
     // Update number of records found and memory allocated
     state->nRecs += nRecs;
@@ -615,7 +666,9 @@ int checkCalDataAvailability(ProcessorState *state)
     setCalibrationFileName(state, state->args.year, state->args.month, state->args.day);
     if (access(state->calibrationFileName, F_OK) != 0)
     {
-        fprintf(state->processingLogFile, "%sCalibration file %s not found. Skipping this date.\n", infoHeader, state->calibrationFileName);
+        if (state->writeLogFiles) {
+            fprintf(state->processingLogFile, "%sCalibration file %s not found. Skipping this date.\n", infoHeader, state->calibrationFileName);
+        }
         return TIICT_NO_CAL_FILE;
     }
     CDFid calCdfId;
@@ -623,7 +676,9 @@ int checkCalDataAvailability(ProcessorState *state)
     status = CDFopenCDF(state->calibrationFileName, &calCdfId);
     if (status != CDF_OK)
     {
-        fprintf(state->processingLogFile, "%sUnable to open %s. Skipping this date.\n", infoHeader, state->calibrationFileName);
+        if (state->writeLogFiles) {
+            fprintf(state->processingLogFile, "%sUnable to open %s. Skipping this date.\n", infoHeader, state->calibrationFileName);
+        }
         return TIICT_CDF_READ;
     }
 
@@ -632,19 +687,25 @@ int checkCalDataAvailability(ProcessorState *state)
     status = CDFgetzVarAllocRecords(calCdfId, CDFgetVarNum(calCdfId, "epoch"), &nRecords);
     if (status != CDF_OK)
     {
-        printErrorMessageToFile(state->processingLogFile, status);
+        if (state->writeLogFiles) {
+            printErrorMessageToFile(state->processingLogFile, status);
+        }
         return TIICT_CDF_READ;
     }
     closeCdf(calCdfId);
 
     if (nRecords < (16 * SECONDS_OF_DATA_REQUIRED_FOR_PROCESSING))
     {
-        fprintf(state->processingLogFile, "%sLess than %.0f s of data available. Skipping this date.\n", infoHeader, (float)SECONDS_OF_DATA_REQUIRED_FOR_PROCESSING);
+        if (state->writeLogFiles) {
+            fprintf(state->processingLogFile, "%sLess than %.0f s of data available. Skipping this date.\n", infoHeader, (float)SECONDS_OF_DATA_REQUIRED_FOR_PROCESSING);
+        }
         return TIICT_NOT_ENOUGH_CALIBRATION_RECORDS;
     }
     else
     {
-        fprintf(state->processingLogFile, "%sProcessing %ld calibration records for this date.\n", infoHeader, nRecords);
+        if (state->writeLogFiles) {
+            fprintf(state->processingLogFile, "%sProcessing %ld calibration records for this date.\n", infoHeader, nRecords);
+        }
     }
 
     return TIICT_OK;

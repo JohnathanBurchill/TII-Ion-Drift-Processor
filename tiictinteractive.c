@@ -17,10 +17,12 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
+
+#include "processing.h"
+#include "loadData.h"
 #include "visualize.h"
 #include "state.h"
 #include "errors.h"
-#include "processing.h"
 
 #include "SDL3/SDL_error.h"
 #include "SDL3/SDL_init.h"
@@ -75,6 +77,7 @@ double calculateDeltaT(AppState_t *as, TimeUnit_enum units, int sign);
 void advancePlots(AppState_t *as, double amount, TimeUnit_enum units);
 void rewindPlots(AppState_t *as, double amount, TimeUnit_enum units);
 void updatePlots(ProcessorState *state);
+void rerunProcessor(ProcessorState *state);
 
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
@@ -86,6 +89,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     }
 
     // New defaults
+    state->writeLogFiles = false;
     state->export16Hz = false;
     state->export2Hz = false;
     state->exportZip = false;
@@ -165,15 +169,25 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
     }
     if (event->type == SDL_EVENT_KEY_UP) {
         switch (event->key.key) {
+            case SDLK_1:
+                state->lpPotentialSource = LP_POTENTIAL_NONE;
+                state->usePotentials = false;
+                rerunProcessor(state);
+            case SDLK_2:
+                state->lpPotentialSource = LP_POTENTIAL_U_SC;
+                state->usePotentials = true;
+                rerunProcessor(state);
+            case SDLK_3:
+                state->lpPotentialSource = LP_POTENTIAL_LOWGAIN;
+                state->usePotentials = true;
+                rerunProcessor(state);
+            case SDLK_4:
+                state->lpPotentialSource = LP_POTENTIAL_HIGHGAIN;
+                state->usePotentials = true;
+                rerunProcessor(state);
             case SDLK_U:
                 // Update processor results
-                resetVideoFrames(state);
-                shutdown(state);
-                status = runProcessor(argc, argv, &state);
-                if (status != TIICT_OK) {
-                    fprintf(stderr, "Encountered error running processor: %d\n", status);
-                    return SDL_APP_CONTINUE;
-                }
+                rerunProcessor(state);
                 break;
             case SDLK_EQUALS:
                 // Plus on regular keboard
@@ -442,6 +456,16 @@ void updatePlots(ProcessorState *state)
         state->frames = NULL;
         state->nVideoFrames = 0;
     }
+    visualizeResults(state);
+
+    return;
+}
+
+void rerunProcessor(ProcessorState *state)
+{
+    resetVideoFrames(state);
+    calibrateFlows(state);
+    calculateFields(state);
     visualizeResults(state);
 
     return;

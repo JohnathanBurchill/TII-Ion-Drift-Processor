@@ -248,8 +248,10 @@ int calibrateFlows(ProcessorState *state)
 
     }
 
-    fprintf(state->processingLogFile, "%sPrepared calibration data.\n", infoHeader);
-    fflush(state->processingLogFile);
+    if (state->writeLogFiles) {
+        fprintf(state->processingLogFile, "%sPrepared calibration data.\n", infoHeader);
+        fflush(state->processingLogFile);
+    }
 
     // Remove offsets and set calibration flags
     state->setFlags = true;
@@ -304,9 +306,11 @@ int removeOffsetsAndSetFlags(ProcessorState *state, int (*doInterestingStuff)(Pr
             return status;
     }
 
-    fprintf(state->processingLogFile, "%sRemoved offsets and calculated flags.\n", infoHeader);
-    fflush(state->fitFile);
-    fflush(state->processingLogFile);
+    if (state->writeLogFiles) {
+        fprintf(state->processingLogFile, "%sRemoved offsets and calculated flags.\n", infoHeader);
+        fflush(state->fitFile);
+        fflush(state->processingLogFile);
+    }
 
     return status;
 
@@ -426,7 +430,9 @@ int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, int (*processRegi
                 state->bgws.numModel1Points = state->bgws.beginIndex1 - state->bgws.beginIndex0;
                 state->bgws.numModel2Points = state->bgws.endIndex1 - state->bgws.endIndex0;
                 state->bgws.numModelPoints = state->bgws.numModel1Points + state->bgws.numModel2Points;
-                fprintf(state->fitFile, "%d %d %lld %lld %f %f %f %f", fitargs->regionNumber, numFits, state->bgws.numModel1Points, state->bgws.numModel2Points, state->bgws.tregion11, state->bgws.tregion12, state->bgws.tregion21, state->bgws.tregion22);
+                if (state->writeLogFiles) {
+                    fprintf(state->fitFile, "%d %d %lld %lld %f %f %f %f", fitargs->regionNumber, numFits, state->bgws.numModel1Points, state->bgws.numModel2Points, state->bgws.tregion11, state->bgws.tregion12, state->bgws.tregion21, state->bgws.tregion22);
+                }
                 // Allocate fit buffers
                 state->bgws.modelTimesMatrix = gsl_matrix_alloc(state->bgws.numModelPoints, state->bgws.fitDegree);
                 state->bgws.modelTimes1Matrix = gsl_matrix_alloc(state->bgws.numModel1Points, state->bgws.fitDegree);
@@ -459,9 +465,12 @@ int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, int (*processRegi
                 }
                 // Perform regional analysis
                 status = processRegion(state);
-                if (status != TIICT_OK)
+                if (status != TIICT_OK) {
                     return status;
-                fprintf(state->fitFile, "\n");
+                }
+                if (state->writeLogFiles) {
+                    fprintf(state->fitFile, "\n");
+                }
 
                 gsl_matrix_free(state->bgws.modelTimes1Matrix);
                 gsl_matrix_free(state->bgws.modelTimes2Matrix);
@@ -475,7 +484,9 @@ int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, int (*processRegi
             }
             else
             {
-                fprintf(state->processingLogFile, "%s Fit error: did not get both endpoints of region defined for CDF_EPOCHS %f, %f, %f, %f: not fitting and not removing offsets.\n", infoHeader, state->bgws.tregion11, state->bgws.tregion12, state->bgws.tregion21, state->bgws.tregion22);
+                if (state->writeLogFiles) {
+                    fprintf(state->processingLogFile, "%s Fit error: did not get both endpoints of region defined for CDF_EPOCHS %f, %f, %f, %f: not fitting and not removing offsets.\n", infoHeader, state->bgws.tregion11, state->bgws.tregion12, state->bgws.tregion21, state->bgws.tregion22);
+                }
                 // Fit region flag for incomplete region is already accounted for as complete_region bit is 0
             }
 
@@ -631,8 +642,10 @@ int calculateFields(ProcessorState *state)
     if (status != TIICT_OK)
         return status;
 
-    fprintf(state->processingLogFile, "%sCalculated fields.\n", infoHeader);
-    fflush(state->processingLogFile);
+    if (state->writeLogFiles) {
+        fprintf(state->processingLogFile, "%sCalculated fields.\n", infoHeader);
+        fflush(state->processingLogFile);
+    }
 
     return TIICT_OK;
 
@@ -976,6 +989,7 @@ int runProcessor(int argc, char *argv[], ProcessorState **result)
     if (status != TIICT_OK) {
         goto cleanup;
     }
+
     status = calibrateFlows(state);
     if (status != TIICT_OK) {
         goto cleanup;
@@ -1003,7 +1017,9 @@ int runProcessor(int argc, char *argv[], ProcessorState **result)
 cleanup:
 
     // Close files
-    closeFiles(state);
+    if (state->writeLogFiles) {
+        closeFiles(state);
+    }
 
     if (result != NULL) {
         // Return with results if requested
@@ -1048,22 +1064,26 @@ int initProcessor(ProcessorState *state)
     int status = TIICT_OK;
     Arguments *args = &state->args;
 
-    status = initLogFiles(state);
-    if (status != TIICT_OK)
-        return status;
-
-    // Prefix for messages
-    initHeader(state);
-
-    // Print command line
-    fprintf(state->processingLogFile, "%sCalled as '", infoHeader);
-    for (int i = 0; i < args->argc; i++) {
-        fprintf(state->processingLogFile, "%s", args->argv[i]);
-        if (i < args->argc - 1) {
-            fprintf(state->processingLogFile, " ");
+    if (state->writeLogFiles) {
+        status = initLogFiles(state);
+        if (status != TIICT_OK) {
+            return status;
         }
+
+
+        // Prefix for messages
+        initHeader(state);
+
+        // Print command line
+        fprintf(state->processingLogFile, "%sCalled as '", infoHeader);
+        for (int i = 0; i < args->argc; i++) {
+            fprintf(state->processingLogFile, "%s", args->argv[i]);
+            if (i < args->argc - 1) {
+                fprintf(state->processingLogFile, " ");
+            }
+        }
+        fprintf(state->processingLogFile, "'\n");
     }
-    fprintf(state->processingLogFile, "'\n");
 
     // Confirm requested date has records. Abort otherwise.
     status = checkCalDataAvailability(state);
@@ -1113,6 +1133,7 @@ int parseArguments(ProcessorState *state)
     state->plotCommand = "QDLat,-90,90,1" ";PhiSc,-5,0,1" ";Vixh,-4,4,0.001" ";Vixv,-4,4,0.001" ";Viy,-2,2,0.001" ";Viz,-2,2,0.001";
     state->defaultPlotHeight = 55;
     state->maxPlotsPerScreen = 0;
+    state->writeLogFiles = true;
 
     // Default automatically to first and last times for video export
     state->plotT0 = -1;
@@ -1120,7 +1141,11 @@ int parseArguments(ProcessorState *state)
 
     state->nOptions = 0;
     for (int i = 1; i < argc; i++) {
-        if (strcmp("--no-16hz-export", argv[i]) == 0) {
+        if (strcmp("--no-log-files", argv[i]) == 0) {
+            state->nOptions++;
+            state->writeLogFiles = false;
+        }
+        else if (strcmp("--no-16hz-export", argv[i]) == 0) {
             state->nOptions++;
             state->export16Hz = false;
         }
@@ -1293,6 +1318,7 @@ void cmdUsage(char *name)
 {
     fprintf(stdout, "usage: %s satLetter year month day calversionString exportVersionString calDir lpDir exportDir\n", name);
     fprintf(stdout, "options:\n");
+    fprintf(stdout, "%40s - %s\n", "--no-log-files", "do not write log files");
     fprintf(stdout, "%40s - %s\n", "--no-16hz-export", "do not export 16 Hz dataset");
     fprintf(stdout, "%40s - %s\n", "--no-2hz-export", "do not export 2 Hz dataset");
     fprintf(stdout, "%40s - %s\n", "--no-zip-export", "do not export zip archive");
@@ -1329,9 +1355,11 @@ void initHeader(ProcessorState *state)
 
     // set up info header
     sprintf(infoHeader, "TIICT %c%s %04d-%02d-%02d: ", args->satellite[0], args->exportVersion, args->year, args->month, args->day);
-    fprintf(state->processingLogFile, "\n%s-------------------------------------------------\n", infoHeader);
-    fprintf(state->processingLogFile, "%sVersion 0401 20241110\n", infoHeader);
-    fprintf(state->processingLogFile, "%sProcessing date: %s", infoHeader, asctime(timeParts));
+    if (state->writeLogFiles) {
+        fprintf(state->processingLogFile, "\n%s-------------------------------------------------\n", infoHeader);
+        fprintf(state->processingLogFile, "%sVersion 0401 20241110\n", infoHeader);
+        fprintf(state->processingLogFile, "%sProcessing date: %s", infoHeader, asctime(timeParts));
+    }
 
     return;
 }
@@ -1340,8 +1368,11 @@ int checkResult(int status, ProcessorState *state)
 {
     if (status != TIICT_OK)
     {
-        if (state->processingLogFile != NULL)
-            fprintf(state->processingLogFile, "Error processing file. status = %d\n", status);
+        if (state->processingLogFile != NULL) {
+            if (state->writeLogFiles) {
+                fprintf(state->processingLogFile, "Error processing file. status = %d\n", status);
+            }
+        }
         state->returnStatus = status;
         status = shutdown(state);
     }
@@ -1466,18 +1497,20 @@ int velocityBackgroundRemoval(ProcessorState *state)
         // Robust linear model fit and removal
         gslFitWorkspace = gsl_multifit_robust_alloc(fitType, ws->numModelPoints, ws->fitDegree);
         gslStatus = gsl_multifit_robust_maxiter(GSL_FIT_MAXIMUM_ITERATIONS, gslFitWorkspace);
-        if (gslStatus)
+        if (gslStatus && state->writeLogFiles)
         {
             fprintf(state->processingLogFile, "%sCould not set maximum GSL iterations.\n", infoHeader);
         }
         gslStatus = gsl_multifit_robust(ws->modelTimesMatrix, ws->modelValues, ws->fitCoefficients, cov, gslFitWorkspace);
         if (gslStatus)
         {
-            toEncodeEPOCH(ws->tregion11, 0, ws->startString);
-            toEncodeEPOCH(ws->tregion22, 0, ws->stopString);
-            fprintf(state->processingLogFile, "%s<GSL Fit Error: %s> for fit region from %s to %s spanning latitudes %.0f to %.0f.\n", infoHeader, gsl_strerror(gslStatus), ws->startString, ws->stopString, fitargs->lat1, fitargs->lat4);
-            // Print "-9999999999.GSLERRORNUMBER" for each of the nine fit parameters
-            fprintf(state->fitFile, " -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d", gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus);
+            if (state->writeLogFiles) {
+                toEncodeEPOCH(ws->tregion11, 0, ws->startString);
+                toEncodeEPOCH(ws->tregion22, 0, ws->stopString);
+                fprintf(state->processingLogFile, "%s<GSL Fit Error: %s> for fit region from %s to %s spanning latitudes %.0f to %.0f.\n", infoHeader, gsl_strerror(gslStatus), ws->startString, ws->stopString, fitargs->lat1, fitargs->lat4);
+                // Print "-9999999999.GSLERRORNUMBER" for each of the nine fit parameters
+                fprintf(state->fitFile, " -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d", gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus);
+            }
             if (state->setFlags)
             {
                 for (timeIndex = ws->beginIndex0; timeIndex < ws->endIndex1; timeIndex++)
@@ -1500,7 +1533,9 @@ int velocityBackgroundRemoval(ProcessorState *state)
             double mad2 = gsl_stats_mad(ws->model2Values->data, 1, ws->numModel2Points, ws->work2->data); // For last segment
             double median1 = gsl_stats_median(ws->model1Values->data, 1, ws->numModel1Points);
             double median2 = gsl_stats_median(ws->model2Values->data, 1, ws->numModel2Points);
-            fprintf(state->fitFile, " %f %f %f %f %f %f %f %f %f", c0, c1, stats.adj_Rsq, stats.rmse, median1, median2, mad, mad1, mad2);
+            if (state->writeLogFiles) {
+                fprintf(state->fitFile, " %f %f %f %f %f %f %f %f %f", c0, c1, stats.adj_Rsq, stats.rmse, median1, median2, mad, mad1, mad2);
+            }
             // Remove the offsets and assign flags for this region
             for (timeIndex = ws->beginIndex0; timeIndex < ws->endIndex1; timeIndex++)
             {
@@ -1587,7 +1622,7 @@ void geoelectricPotentialBackgroundRemoval(ProcessorState *state)
     gslStatus = gsl_multifit_robust_maxiter(GSL_FIT_MAXIMUM_ITERATIONS, gslFitWorkspace1);
     gslStatus = gsl_multifit_robust_maxiter(GSL_FIT_MAXIMUM_ITERATIONS, gslFitWorkspace2);
     gslStatus = gsl_multifit_robust(ws->modelTimesMatrix, ws->modelValues, ws->fitCoefficients, cov, gslFitWorkspace);
-    if (gslStatus)
+    if (gslStatus && state->writeLogFiles)
     {
         toEncodeEPOCH(ws->tregion11, 0, ws->startString);
         toEncodeEPOCH(ws->tregion22, 0, ws->stopString);

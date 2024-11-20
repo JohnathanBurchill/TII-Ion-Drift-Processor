@@ -95,6 +95,7 @@ typedef struct ProcessorState {
     FILE *fitFile;
     char processingLogFilename[FILENAME_MAX];
     FILE *processingLogFile;
+    bool writeLogFiles;
 
     // Calibration CDF data
     char calibrationFileName[CDF_PATHNAME_LEN];

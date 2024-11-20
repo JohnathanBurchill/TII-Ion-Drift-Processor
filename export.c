@@ -69,7 +69,9 @@ int exportCdfs(ProcessorState *state)
     // case where there are no records on the requested or following days
     if (startIndex == state->nRecs)
     {
-        fprintf(state->processingLogFile, "%sNo records found for requested date.\n", infoHeader);
+        if (state->writeLogFiles) {
+            fprintf(state->processingLogFile, "%sNo records found for requested date.\n", infoHeader);
+        }
         exporting = false;
     }
     while (exporting)
@@ -96,10 +98,12 @@ int exportCdfs(ProcessorState *state)
             }
             else
             {
-                char startString[EPOCH_STRING_LEN+1], stopString[EPOCH_STRING_LEN+1];
-                toEncodeEPOCH(startTime, 0, startString);
-                toEncodeEPOCH(TIME(), 0, stopString);
-                fprintf(state->processingLogFile, "%sInterval spanning %s to %s has a duration of less than %d seconds: not exporting %ld records.\n", infoHeader, startString, stopString, SECONDS_OF_DATA_REQUIRED_FOR_EXPORTING, stopIndex - startIndex + 1);
+                if (state->writeLogFiles) {
+                    char startString[EPOCH_STRING_LEN+1], stopString[EPOCH_STRING_LEN+1];
+                    toEncodeEPOCH(startTime, 0, startString);
+                    toEncodeEPOCH(TIME(), 0, stopString);
+                    fprintf(state->processingLogFile, "%sInterval spanning %s to %s has a duration of less than %d seconds: not exporting %ld records.\n", infoHeader, startString, stopString, SECONDS_OF_DATA_REQUIRED_FOR_EXPORTING, stopIndex - startIndex + 1);
+                }
             }
 
             // Try next interval
@@ -119,7 +123,9 @@ int exportCdfs(ProcessorState *state)
         }
     }
     // report
-    fprintf(state->processingLogFile, "%sExported %.0f orbits (%ld 16 Hz records) of science data in %d files. %.1f%% coverage.\n", infoHeader, minutesExported/94., recordsExported, filesExported, minutesExported/1440.0*100.0);
+    if (state->writeLogFiles) {
+        fprintf(state->processingLogFile, "%sExported %.0f orbits (%ld 16 Hz records) of science data in %d files. %.1f%% coverage.\n", infoHeader, minutesExported/94., recordsExported, filesExported, minutesExported/1440.0*100.0);
+    }
 
     return status;
 
@@ -553,12 +559,14 @@ void addAttributes(CDFid id, const char *dataset, const char *satellite, const c
 
 int exportTCT16Cdfs(ProcessorState *state, double startTime, double stopTime, long startIndex, long stopIndex)
 {
-    fprintf(state->processingLogFile, "%sExporting 16 Hz data.\n",infoHeader);
-    char epochString[EPOCH_STRING_LEN+1];
-    toEncodeEPOCH(startTime, 0, epochString);
-    fprintf(state->processingLogFile, "%sStartTime: %s\n", infoHeader, epochString);
-    toEncodeEPOCH(stopTime, 0, epochString);
-    fprintf(state->processingLogFile, "%sStoptime: %s\n", infoHeader, epochString);
+    if (state->writeLogFiles) {
+        fprintf(state->processingLogFile, "%sExporting 16 Hz data.\n",infoHeader);
+        char epochString[EPOCH_STRING_LEN+1];
+        toEncodeEPOCH(startTime, 0, epochString);
+        fprintf(state->processingLogFile, "%sStartTime: %s\n", infoHeader, epochString);
+        toEncodeEPOCH(stopTime, 0, epochString);
+        fprintf(state->processingLogFile, "%sStoptime: %s\n", infoHeader, epochString);
+    }
 
     char cdfFileName[CDF_PATHNAME_LEN];
     constructExportFileName("TCT16", startTime, stopTime, state->args.exportDir, state->args.exportVersion, state->args.satellite, cdfFileName);
@@ -567,7 +575,9 @@ int exportTCT16Cdfs(ProcessorState *state, double startTime, double stopTime, lo
     sprintf(zipFileName, "%s.ZIP", cdfFileName);
     if (access(zipFileName, F_OK) == 0)
     {
-        fprintf(state->processingLogFile, "%sTIICT ZIP file exists. Not exporting.\n", infoHeader);
+        if (state->writeLogFiles) {
+            fprintf(state->processingLogFile, "%sTIICT ZIP file exists. Not exporting.\n", infoHeader);
+        }
         return TIICT_ZIP_EXISTS;
     }
 
@@ -631,8 +641,10 @@ int exportTCT16Cdfs(ProcessorState *state, double startTime, double stopTime, lo
 
         // Close export file
         closeCdf(exportCdfId);
-        fprintf(state->processingLogFile, "%sExported %ld records to %s.cdf\n", infoHeader, (stopIndex - startIndex + 1), cdfFileName);
-        fflush(state->processingLogFile);
+        if (state->writeLogFiles) {
+            fprintf(state->processingLogFile, "%sExported %ld records to %s.cdf\n", infoHeader, (stopIndex - startIndex + 1), cdfFileName);
+            fflush(state->processingLogFile);
+        }
 
         if (state->exportZip) {
             status = zipCdfFile(state, cdfFileName);
@@ -645,7 +657,9 @@ int exportTCT16Cdfs(ProcessorState *state, double startTime, double stopTime, lo
 
 int exportTCT02Cdfs(ProcessorState *state, double startTime, double stopTime, long startIndex, long stopIndex)
 {
-    fprintf(state->processingLogFile, "%sExporting 2 Hz data.\n",infoHeader);
+    if (state->writeLogFiles) {
+        fprintf(state->processingLogFile, "%sExporting 2 Hz data.\n",infoHeader);
+    }
 
     // Average the data to 2 Hz from 16 Hz
     // In principle all 16 Hz data come from a single instrument source packet (ISP)
@@ -662,7 +676,9 @@ int exportTCT02Cdfs(ProcessorState *state, double startTime, double stopTime, lo
     // for science from the 16 Hz data.
 
     // No attempt is made in this version of the software to remove outliers.
-    fprintf(state->processingLogFile, "%sDown-sampling 16 Hz to 2 Hz.\n",infoHeader);
+    if (state->writeLogFiles) {
+        fprintf(state->processingLogFile, "%sDown-sampling 16 Hz to 2 Hz.\n",infoHeader);
+    }
 
     uint8_t** dataBuffers = state->dataBuffers;
     long timeIndex;
@@ -688,12 +704,13 @@ int exportTCT02Cdfs(ProcessorState *state, double startTime, double stopTime, lo
     stopIndex = startIndex + n2HzSamples - 1;
     startTime = *((double*)dataBuffers[0] + (startIndex));
     stopTime = *((double*)dataBuffers[0] + (stopIndex));
-
-    char epochString[EPOCH_STRING_LEN+1];
-    toEncodeEPOCH(startTime, 0, epochString);
-    fprintf(state->processingLogFile, "%sStartTime: %s\n", infoHeader, epochString);
-    toEncodeEPOCH(stopTime, 0, epochString);
-    fprintf(state->processingLogFile, "%sStoptime: %s\n", infoHeader, epochString);
+    if (state->writeLogFiles) {
+        char epochString[EPOCH_STRING_LEN+1];
+        toEncodeEPOCH(startTime, 0, epochString);
+        fprintf(state->processingLogFile, "%sStartTime: %s\n", infoHeader, epochString);
+        toEncodeEPOCH(stopTime, 0, epochString);
+        fprintf(state->processingLogFile, "%sStoptime: %s\n", infoHeader, epochString);
+    }
 
     CDFid exportCdfId;
     CDFstatus status;
@@ -704,7 +721,9 @@ int exportTCT02Cdfs(ProcessorState *state, double startTime, double stopTime, lo
     sprintf(zipFileName, "%s.ZIP", cdfFileName);
     if (access(zipFileName, F_OK) == 0)
     {
-        fprintf(state->processingLogFile, "%sTIICT ZIP file exists. Not exporting.\n", infoHeader);
+        if (state->writeLogFiles) {
+            fprintf(state->processingLogFile, "%sTIICT ZIP file exists. Not exporting.\n", infoHeader);
+        }
         return TIICT_ZIP_EXISTS;
     }
 
@@ -765,8 +784,10 @@ int exportTCT02Cdfs(ProcessorState *state, double startTime, double stopTime, lo
 
         // Close export file
         closeCdf(exportCdfId);
-        fprintf(state->processingLogFile, "%sExported %ld records to %s.cdf\n", infoHeader, (stopIndex - startIndex + 1), cdfFileName);
-        fflush(state->processingLogFile);
+        if (state->writeLogFiles) {
+            fprintf(state->processingLogFile, "%sExported %ld records to %s.cdf\n", infoHeader, (stopIndex - startIndex + 1), cdfFileName);
+            fflush(state->processingLogFile);
+        }
 
         if (state->exportZip) {
             status = zipCdfFile(state, cdfFileName);
@@ -785,7 +806,9 @@ int zipCdfFile(ProcessorState *state, char *cdfFileName)
     int status = system(NULL);
     if (status == 0)
     {
-        fprintf(state->processingLogFile, "%sSystem shell call not available. Not archiving CDF.\n", infoHeader);
+        if (state->writeLogFiles) {
+            fprintf(state->processingLogFile, "%sSystem shell call not available. Not archiving CDF.\n", infoHeader);
+        }
         return TIICT_SHELL;
     }
     status = system("zip -q 1 > /dev/null");
@@ -796,18 +819,24 @@ int zipCdfFile(ProcessorState *state, char *cdfFileName)
         status = system(command);
         if (WIFEXITED(status) && (WEXITSTATUS(status) == 0))
         {
-            fprintf(state->processingLogFile, "%sStored CDF file in %s.ZIP\n", infoHeader, cdfFileName);
+            if (state->writeLogFiles) {
+                fprintf(state->processingLogFile, "%sStored CDF file in %s.ZIP\n", infoHeader, cdfFileName);
+            }
             status = TIICT_OK;
         }
         else
         {
-            fprintf(state->processingLogFile, "%sFailed to archive CDF file.\n", infoHeader);
+            if (state->writeLogFiles) {
+                fprintf(state->processingLogFile, "%sFailed to archive CDF file.\n", infoHeader);
+            }
             status = TIICT_ZIP;
         }
     }
     else
     {
-        fprintf(state->processingLogFile, "zip is unusable. Not archiving CDF.\n");
+        if (state->writeLogFiles) {
+            fprintf(state->processingLogFile, "zip is unusable. Not archiving CDF.\n");
+        }
         status = TIICT_ZIP;
     }
 
@@ -821,13 +850,17 @@ int initDirectories(ProcessorState *state)
     int dirStat = makeSureDirExists(args->exportDir, args->exportVersion, "TCT16");
     if (dirStat != 0)
     {
-        fprintf(state->processingLogFile, "%sTCT16 export directory is unavailable (or could not be created).\n", infoHeader);
+        if (state->writeLogFiles) {
+            fprintf(state->processingLogFile, "%sTCT16 export directory is unavailable (or could not be created).\n", infoHeader);
+        }
         return TIICT_EXPORT_DIRECTORY_TCT16;
     }
     dirStat = makeSureDirExists(args->exportDir, args->exportVersion, "TCT02");
     if (dirStat != 0)
     {
-        fprintf(state->processingLogFile, "%sTCT02 export directory is unavailable (or could not be created).\n", infoHeader);
+        if (state->writeLogFiles) {
+            fprintf(state->processingLogFile, "%sTCT02 export directory is unavailable (or could not be created).\n", infoHeader);
+        }
         return TIICT_EXPORT_DIRECTORY_TCT02;
     }
 
@@ -838,8 +871,9 @@ int initLogFiles(ProcessorState *state)
 {
     Arguments *a = &state->args;
     int status = makeSureDirExists(a->exportDir, a->exportVersion, "logs");
-    if (status != TIICT_OK)
+    if (status != TIICT_OK) {
         return status;
+    }
     sprintf(state->fitLogFilename, "%s/%s/logs/%s%04d%02d%02d.fit", a->exportDir, a->exportVersion, a->satellite, a->year, a->month, a->day);
     sprintf(state->processingLogFilename, "%s/%s/logs/%s%04d%02d%02d.log", a->exportDir, a->exportVersion, a->satellite, a->year, a->month, a->day);
 
@@ -853,8 +887,9 @@ int initLogFiles(ProcessorState *state)
     memcpy(state->fitargs, f, 4 * sizeof(offset_model_fit_arguments));
 
     state->fitFile = fopen(state->fitLogFilename, "a");
-    if (state->fitFile == NULL)
+    if (state->fitFile == NULL) {
         return TIICT_LOG_WRITE;
+    }
     fprintf(state->fitFile, "EFI TII CrossTrackCalibration fit results by fit region.\n");
     fprintf(state->fitFile, "Each region consists of two mid-latitude segments denoted by CDF_EPOCH times T11, T12, T21, and T22.\n");
     fprintf(state->fitFile, "Linear models based on robust least squares (GNU Scientific Library) are subtracted from each region for which a fit can be obtained.\n");
@@ -869,7 +904,12 @@ int initLogFiles(ProcessorState *state)
     fprintf(state->fitFile, "\n");
     fflush(state->fitFile);
 
-    state->processingLogFile = fopen(state->processingLogFilename, "a");
+    if (state->writeLogFiles) {
+        state->processingLogFile = fopen(state->processingLogFilename, "a");
+    }
+    else {
+        state->processingLogFile = stdout;
+    }
     if (state->processingLogFile == NULL)
         return TIICT_LOG_WRITE;
     fflush(state->processingLogFile);
