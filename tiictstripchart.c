@@ -1,6 +1,6 @@
 /*
 
-    TII Cross-Track Ion Drift Processor: tiictinteractive.c
+    TII Cross-Track Ion Drift Processor: tiictstripchart.c
 
     Copyright (C) 2024  Johnathan K Burchill
 
