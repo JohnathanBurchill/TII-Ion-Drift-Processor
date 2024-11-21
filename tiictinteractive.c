@@ -56,6 +56,8 @@ typedef struct AppState {
     SDL_Window *window;
     SDL_Renderer *plotRenderer;
     SDL_Palette *colors;
+    bool playing;
+    int playbackDirection;
 } AppState_t;
 
 typedef enum TimeUnit {
@@ -149,6 +151,8 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         // arbitrary value
         as->samplePeriodSeconds = 1.0;
     }
+    as->playing = false;
+    as->playbackDirection = 1;
 
     return SDL_APP_CONTINUE;  /* carry on with the program! */
 }
@@ -287,8 +291,16 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
                 // Advance the plot timerange by the current timerange
                 advancePlots(as, 1, TIME_RANGES);
                 break;
+            case SDLK_SPACE:
+                // Toggle playback
+                as->playing = !as->playing;
+                break;
+            case SDLK_R:
+                // Toggle playback direction
+                as->playbackDirection = -as->playbackDirection;
+                break;
             case SDLK_Q:
-                return SDL_APP_SUCCESS;  /* end the program, reporting success to the OS. */
+                return SDL_APP_SUCCESS;
                 break;
             default:
                 break;
@@ -315,25 +327,25 @@ SDL_AppResult SDL_AppIterate(void *appstate)
         return SDL_APP_CONTINUE;
     }
 
+    // Handle playback
+    if (as->playing) {
+        double timeRange = state->plotT1 - state->plotT0;
+        double deltaT = timeRange / 2000.0 / 1000.0; // seconds
+        if (as->playbackDirection > 0) {
+            advancePlots(as, deltaT, SECONDS);
+        }
+        else {
+            rewindPlots(as, deltaT, SECONDS);
+        }
+    }
+
     SDL_Surface *indexedSurface = SDL_CreateSurfaceFrom(IMAGE_WIDTH, IMAGE_HEIGHT, SDL_PIXELFORMAT_INDEX8, state->frames[as->plotPage].pixels, IMAGE_WIDTH);
     SDL_SetSurfacePalette(indexedSurface, as->colors);
-//    bool gotFG = false;
-//    int counts[256] = {0};
-//    for (int i = 0; i < state->frames[as->plotPage].numberOfPixels; i++) {
-//        counts[state->frames[as->plotPage].pixels[i]]++;
-//    }
-//    for (int i = 253; i < 256; i++) {
-//        printf(" %d", counts[i]);
-//        if ((i+1) % 16 == 0) {
-//            printf("\n");
-//        }
-//    }
-//    printf("\n");
 
     SDL_Texture *plotTexture = SDL_CreateTextureFromSurface(as->plotRenderer, indexedSurface);
-    SDL_Log("%s", SDL_GetError());
     SDL_DestroySurface(indexedSurface);
     SDL_RenderTexture(as->plotRenderer, plotTexture, NULL, NULL);
+    SDL_DestroyTexture(plotTexture);
     SDL_RenderPresent(as->plotRenderer);
 
     return SDL_APP_CONTINUE;
@@ -345,6 +357,9 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
     ProcessorState *state = (ProcessorState*)as->state;
     shutdown(state);
     if (state->nVideoFrames > 0) {
+        for (int i = 0; i < state->nVideoFrames; i++) {
+            free(state->frames[i].pixels);
+        }
         free(state->frames);
     }
     free(state);
@@ -355,6 +370,9 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
 void resetVideoFrames(ProcessorState *state)
 {
     if (state != NULL) {
+        for (int i = 0; i < state->nVideoFrames; i++) {
+            free(state->frames[i].pixels);
+        }
         free(state->frames);
         state->frames = NULL;
     }
