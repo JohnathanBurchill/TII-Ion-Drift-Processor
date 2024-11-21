@@ -61,6 +61,7 @@ typedef struct AppState {
     SDL_Palette *colors;
     bool playing;
     int playbackDirection;
+    double playbackRate;
 } AppState_t;
 
 typedef enum TimeUnit {
@@ -156,6 +157,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     }
     as->playing = false;
     as->playbackDirection = 1;
+    as->playbackRate = 1.0;
 
     return SDL_APP_CONTINUE;  /* carry on with the program! */
 }
@@ -187,18 +189,18 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
     }
     if (event->type == SDL_EVENT_KEY_UP) {
         switch (event->key.key) {
-            case SDLK_A:
-                state->args.satellite = "A";
-                rerunProcessor(state);
-                break;
-            case SDLK_B:
-                state->args.satellite = "B";
-                rerunProcessor(state);
-                break;
-            case SDLK_C:
-                state->args.satellite = "C";
-                rerunProcessor(state);
-                break;
+//            case SDLK_A:
+//                state->args.satellite = "A";
+//                rerunProcessor(state);
+//                break;
+//            case SDLK_B:
+//                state->args.satellite = "B";
+//                rerunProcessor(state);
+//                break;
+//            case SDLK_C:
+//                state->args.satellite = "C";
+//                rerunProcessor(state);
+//                break;
             case SDLK_E:
                 // Toggle use of eofr for along-track drift
                 state->useEofR = !state->useEofR;
@@ -327,6 +329,10 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
                 // Toggle playback direction
                 as->playbackDirection = -as->playbackDirection;
                 break;
+            case SDLK_X:
+                // Toggle playback rate
+                as->playbackRate = as->playbackRate > 1.0 ? 1.0 : 10.0;
+                break;
             case SDLK_Q:
                 return SDL_APP_SUCCESS;
                 break;
@@ -358,7 +364,7 @@ SDL_AppResult SDL_AppIterate(void *appstate)
     // Handle playback
     if (as->playing) {
         double timeRange = state->plotT1 - state->plotT0;
-        double deltaT = timeRange / 2000.0 / 1000.0; // seconds
+        double deltaT = timeRange / 2000.0 / 1000.0 * as->playbackRate; // seconds
         if (as->playbackDirection > 0) {
             advancePlots(as, deltaT, SECONDS);
         }
