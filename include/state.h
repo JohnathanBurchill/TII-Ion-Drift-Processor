@@ -96,6 +96,7 @@ typedef struct ProcessorState {
     char processingLogFilename[FILENAME_MAX];
     FILE *processingLogFile;
     bool writeLogFiles;
+    char processingDateString[32];
 
     // Calibration CDF data
     char calibrationFileName[CDF_PATHNAME_LEN];

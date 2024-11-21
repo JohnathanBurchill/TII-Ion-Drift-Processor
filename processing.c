@@ -28,6 +28,7 @@
 #include "export.h"
 #include "visualize.h"
 
+#include <_time.h>
 #include <tii/detector.h>
 #include <tii/isp.h>
 
@@ -1064,15 +1065,27 @@ int initProcessor(ProcessorState *state)
     int status = TIICT_OK;
     Arguments *args = &state->args;
 
+    // Prefix for messages
+    initHeader(state);
+
+    // Offset model parameters
+    offset_model_fit_arguments f[4] = {
+        {0, "Northern ascending", 44.0, 50.0, 50.0, 44.0},
+        {1, "Equatorial descending", 44.0, 38.0, -38.0, -44.0},
+        {2, "Southern descending", -44.0, -50.0, -50.0, -44.0},
+        {3, "Equatorial ascending", -44.0, -38.0, 38.0, 44.0},
+    };
+    memcpy(state->fitargs, f, 4 * sizeof(offset_model_fit_arguments));
+
     if (state->writeLogFiles) {
         status = initLogFiles(state);
         if (status != TIICT_OK) {
             return status;
         }
 
-
-        // Prefix for messages
-        initHeader(state);
+        fprintf(state->processingLogFile, "\n%s-------------------------------------------------\n", infoHeader);
+        fprintf(state->processingLogFile, "%sVersion 0401 20241110\n", infoHeader);
+        fprintf(state->processingLogFile, "%sProcessing date: %s", infoHeader, state->processingDateString);
 
         // Print command line
         fprintf(state->processingLogFile, "%sCalled as '", infoHeader);
@@ -1101,10 +1114,11 @@ int initProcessor(ProcessorState *state)
         state->dataBuffers[i] = NULL;
     }
     state->nRecs = 0;
+    state->nLpRecs = 0;
+    state->memoryAllocated = 0;
 
     // Turn off GSL failsafe error handler. We typically check the GSL return codes.
     gsl_set_error_handler_off();
-
     return TIICT_OK;
 }
 
@@ -1355,11 +1369,9 @@ void initHeader(ProcessorState *state)
 
     // set up info header
     sprintf(infoHeader, "TIICT %c%s %04d-%02d-%02d: ", args->satellite[0], args->exportVersion, args->year, args->month, args->day);
-    if (state->writeLogFiles) {
-        fprintf(state->processingLogFile, "\n%s-------------------------------------------------\n", infoHeader);
-        fprintf(state->processingLogFile, "%sVersion 0401 20241110\n", infoHeader);
-        fprintf(state->processingLogFile, "%sProcessing date: %s", infoHeader, asctime(timeParts));
-    }
+
+    // Store the processing start time string
+    asctime_r(timeParts, state->processingDateString);
 
     return;
 }
@@ -1409,6 +1421,9 @@ int shutdown(ProcessorState *state)
         free(state->dataBuffers[i]);
         state->dataBuffers[i] = NULL;
     }
+
+
+
     free(state->lpTimes);
     state->lpTimes = NULL;
     free(state->lpPhiScHighGain);
@@ -1417,6 +1432,7 @@ int shutdown(ProcessorState *state)
     state->lpPhiScLowGain = NULL;
     free(state->lpPhiSc);
     state->lpPhiSc = NULL;
+    state->potentials = NULL;
     free(state->xhat);
     state->xhat = NULL;
     free(state->yhat);
@@ -1451,6 +1467,14 @@ int shutdown(ProcessorState *state)
     state->fitInfo = NULL;
     free(state->region);
     state->region = NULL;
+
+    free(state->frames);
+    state->frames = NULL;
+
+    state->nRecs = 0;
+    state->nLpRecs = 0;
+    state->memoryAllocated = 0;
+    state->nVideoFrames = 0;
 
     return TIICT_OK;
 }

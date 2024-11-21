@@ -18,6 +18,7 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+#include "export.h"
 #include "processing.h"
 #include "loadData.h"
 #include "visualize.h"
@@ -472,8 +473,9 @@ void updatePlots(ProcessorState *state)
 
 void rerunProcessor(ProcessorState *state)
 {
-    resetVideoFrames(state);
     shutdown(state);
+    initProcessor(state);
+    initLogFiles(state);
     loadTiiCalData(state);
     loadLpCalData(state);
     calibrateFlows(state);
