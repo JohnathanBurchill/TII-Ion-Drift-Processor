@@ -46,6 +46,9 @@
 #include <SDL3/SDL_main.h>
 
 typedef struct AppState {
+    ProcessorState *stateA;
+    ProcessorState *stateB;
+    ProcessorState *stateC;
     ProcessorState *state;
     int plotPage;
     double dayBegin;
@@ -162,9 +165,17 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
     int status = 0;
     AppState_t *as = (AppState_t *)appstate;
     ProcessorState *state = (ProcessorState *)as->state;
+    if (state == NULL) {
+        resetDisplay(as);
+        return SDL_APP_CONTINUE;
+    }
     int argc = state->args.argc;
     char **argv = state->args.argv;
     double *timesMs = (double*)state->dataBuffers[0];
+    if (timesMs == NULL) {
+        resetDisplay(as);
+        return SDL_APP_CONTINUE;
+    }
     as->t0 = timesMs[0];
     as->t1 = timesMs[state->nRecs - 1];
     double middleTime = 0.0;
@@ -176,6 +187,18 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
     }
     if (event->type == SDL_EVENT_KEY_UP) {
         switch (event->key.key) {
+            case SDLK_A:
+                state->args.satellite = "A";
+                rerunProcessor(state);
+                break;
+            case SDLK_B:
+                state->args.satellite = "B";
+                rerunProcessor(state);
+                break;
+            case SDLK_C:
+                state->args.satellite = "C";
+                rerunProcessor(state);
+                break;
             case SDLK_E:
                 // Toggle use of eofr for along-track drift
                 state->useEofR = !state->useEofR;
@@ -496,11 +519,27 @@ void updatePlots(ProcessorState *state)
 
 void rerunProcessor(ProcessorState *state)
 {
+    int status = TIICT_OK;
     shutdown(state);
-    initProcessor(state);
-    initLogFiles(state);
-    loadTiiCalData(state);
-    loadLpCalData(state);
+    status = initProcessor(state);
+    if (status != TIICT_OK) {
+        shutdown(state);
+        return;
+    }
+    status = initLogFiles(state);
+    if (status != TIICT_OK) {
+        shutdown(state);
+        return;
+    }
+    status = loadTiiCalData(state);
+    if (status != TIICT_OK) {
+        return;
+    }
+    status = loadLpCalData(state);
+    if (status != TIICT_OK) {
+        shutdown(state);
+        return;
+    }
     calibrateFlows(state);
     calculateFields(state);
     visualizeResults(state);

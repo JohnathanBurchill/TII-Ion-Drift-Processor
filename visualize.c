@@ -1,4 +1,5 @@
 #include "visualize.h"
+#include "loadData.h"
 #include "state.h"
 #include "errors.h"
 #include "settings.h"
@@ -102,6 +103,7 @@ int visualizeResults(ProcessorState *state)
     char yr0str[255];
     char yr1str[255];
     int plotYOffset = plotY0;
+    int yText = topMargin;
     int plotsMade = 0;
     char *xLabel = "";
     float *parameter = NULL;
@@ -212,6 +214,39 @@ int visualizeResults(ProcessorState *state)
         }
 
         if ((maxPlots > 0 && plotsMade % maxPlots == 0) || plotsMade == nPlots || plotYOffset > IMAGE_HEIGHT - 1 - plotdy ) {
+            // Add annotations
+            int fsize = 15;
+            yText = topMargin;
+            char label[255];
+            snprintf(label, 255, "Swarm %s", state->args.satellite);
+            annotate(label, fsize, 5, yText, &image);
+            fsize = 12;
+            yText += fontheight(fsize);
+            snprintf(label, 255, "%04d-%02d-%02d", state->args.year, state->args.month, state->args.day);
+            annotate(label, fsize, 5, yText, &image);
+            fsize = 9;
+            yText += fontheight(fsize);
+            snprintf(label, 255, "Vix: %s", state->useEofR ? "eofr" : "legacy");
+            annotate(label, fsize, 5, yText, &image);
+            yText += fontheight(fsize);
+            char *potentialSource = "None";
+            switch (state->lpPotentialSource) {
+                case LP_POTENTIAL_U_SC:
+                    potentialSource = "U_SC";
+                    break;
+                case LP_POTENTIAL_LOWGAIN:
+                    potentialSource = "LG";
+                    break;
+                case LP_POTENTIAL_HIGHGAIN:
+                    potentialSource = "HG";
+                    break;
+                default:
+                    break;
+            }
+            snprintf(label, 255, "V_float: %s", potentialSource);
+            annotate(label, fsize, 5, yText, &image);
+
+
             // Write video frames
             if (state->exportVideo) {
                 for (int c = 0; c < 1.0 * VIDEO_FPS; c++) {
