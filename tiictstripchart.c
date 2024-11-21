@@ -96,9 +96,9 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     state->export16Hz = false;
     state->export2Hz = false;
     state->exportZip = false;
-    state->usePotentials = true;
-    state->lpPotentialSource = LP_POTENTIAL_LOWGAIN;
-    state->visualizeResults =true;
+    state->usePotentials = false;
+    state->lpPotentialSource = LP_POTENTIAL_NONE;
+    state->visualizeResults = true;
     state->exportVideo = false;
 
     int status = runProcessor(argc, argv, &state);
