@@ -877,15 +877,6 @@ int initLogFiles(ProcessorState *state)
     sprintf(state->fitLogFilename, "%s/%s/logs/%s%04d%02d%02d.fit", a->exportDir, a->exportVersion, a->satellite, a->year, a->month, a->day);
     sprintf(state->processingLogFilename, "%s/%s/logs/%s%04d%02d%02d.log", a->exportDir, a->exportVersion, a->satellite, a->year, a->month, a->day);
 
-    // Offset model parameters
-    offset_model_fit_arguments f[4] = {
-        {0, "Northern ascending", 44.0, 50.0, 50.0, 44.0},
-        {1, "Equatorial descending", 44.0, 38.0, -38.0, -44.0},
-        {2, "Southern descending", -44.0, -50.0, -50.0, -44.0},
-        {3, "Equatorial ascending", -44.0, -38.0, 38.0, 44.0},
-    };
-    memcpy(state->fitargs, f, 4 * sizeof(offset_model_fit_arguments));
-
     state->fitFile = fopen(state->fitLogFilename, "a");
     if (state->fitFile == NULL) {
         return TIICT_LOG_WRITE;
