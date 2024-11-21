@@ -176,6 +176,11 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
     }
     if (event->type == SDL_EVENT_KEY_UP) {
         switch (event->key.key) {
+            case SDLK_E:
+                // Toggle use of eofr for along-track drift
+                state->useEofR = !state->useEofR;
+                rerunProcessor(state);
+                break;
             case SDLK_1:
                 state->lpPotentialSource = LP_POTENTIAL_NONE;
                 state->usePotentials = false;
