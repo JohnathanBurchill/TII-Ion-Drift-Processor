@@ -28,7 +28,7 @@
 #include "export.h"
 #include "visualize.h"
 
-#include <_time.h>
+#include <time.h>
 #include <tii/detector.h>
 #include <tii/isp.h>
 
