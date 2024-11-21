@@ -93,10 +93,10 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     state->export16Hz = false;
     state->export2Hz = false;
     state->exportZip = false;
-    state->exportVideo = false;
     state->usePotentials = true;
     state->lpPotentialSource = LP_POTENTIAL_LOWGAIN;
     state->visualizeResults =true;
+    state->exportVideo = false;
 
     int status = runProcessor(argc, argv, &state);
     if (status != TIICT_OK) {

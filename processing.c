@@ -1622,13 +1622,15 @@ void geoelectricPotentialBackgroundRemoval(ProcessorState *state)
     gslStatus = gsl_multifit_robust_maxiter(GSL_FIT_MAXIMUM_ITERATIONS, gslFitWorkspace1);
     gslStatus = gsl_multifit_robust_maxiter(GSL_FIT_MAXIMUM_ITERATIONS, gslFitWorkspace2);
     gslStatus = gsl_multifit_robust(ws->modelTimesMatrix, ws->modelValues, ws->fitCoefficients, cov, gslFitWorkspace);
-    if (gslStatus && state->writeLogFiles)
+    if (gslStatus )
     {
-        toEncodeEPOCH(ws->tregion11, 0, ws->startString);
-        toEncodeEPOCH(ws->tregion22, 0, ws->stopString);
-        fprintf(state->processingLogFile, "%s<GSL Fit Error: %s> for fit region from %s to %s spanning latitudes %.0f to %.0f.\n", infoHeader, gsl_strerror(gslStatus), ws->startString, ws->stopString, fitargs->lat1, fitargs->lat4);
-        // Print "-9999999999.GSLERRORNUMBER" for each of the nine fit parameters
-        fprintf(state->fitFile, " -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d", gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus);
+        if (state->writeLogFiles) {
+            toEncodeEPOCH(ws->tregion11, 0, ws->startString);
+            toEncodeEPOCH(ws->tregion22, 0, ws->stopString);
+            fprintf(state->processingLogFile, "%s<GSL Fit Error: %s> for fit region from %s to %s spanning latitudes %.0f to %.0f.\n", infoHeader, gsl_strerror(gslStatus), ws->startString, ws->stopString, fitargs->lat1, fitargs->lat4);
+            // Print "-9999999999.GSLERRORNUMBER" for each of the nine fit parameters
+            fprintf(state->fitFile, " -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d -9999999999.%d", gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus, gslStatus);
+        }
     }
     else
     {
