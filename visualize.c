@@ -33,6 +33,12 @@ int visualizeResults(ProcessorState *state)
     uint8_t **dataBuffers = state->dataBuffers;
     double *times = (double*)dataBuffers[0];
 
+    if (times == NULL) {
+        storeImage(state, &image);
+        annotate("No data", 24, IMAGE_WIDTH / 2 - fontwidth(24)*strlen("No data")/2, IMAGE_HEIGHT + fontheight(24)/2, &image);
+        goto cleanup;
+    }
+
     if (state->plotT0 < 0) {
         state->plotT0 = times[0];
     }
@@ -214,59 +220,16 @@ int visualizeResults(ProcessorState *state)
         }
 
         if ((maxPlots > 0 && plotsMade % maxPlots == 0) || plotsMade == nPlots || plotYOffset > IMAGE_HEIGHT - 1 - plotdy ) {
+
             // Add annotations
-            int fsize = 15;
-            yText = topMargin;
-            char label[255];
-            snprintf(label, 255, "Swarm %s", state->args.satellite);
-            annotate(label, fsize, 5, yText, &image);
-            fsize = 12;
-            yText += fontheight(fsize);
-            snprintf(label, 255, "%04d-%02d-%02d", state->args.year, state->args.month, state->args.day);
-            annotate(label, fsize, 5, yText, &image);
-            fsize = 9;
-            yText += fontheight(fsize);
-            snprintf(label, 255, "Vix: %s", state->useEofR ? "eofr" : "legacy");
-            annotate(label, fsize, 5, yText, &image);
-            yText += fontheight(fsize);
-            char *potentialSource = "None";
-            switch (state->lpPotentialSource) {
-                case LP_POTENTIAL_U_SC:
-                    potentialSource = "U_SC";
-                    break;
-                case LP_POTENTIAL_LOWGAIN:
-                    potentialSource = "LG";
-                    break;
-                case LP_POTENTIAL_HIGHGAIN:
-                    potentialSource = "HG";
-                    break;
-                default:
-                    break;
-            }
-            snprintf(label, 255, "V_float: %s", potentialSource);
-            annotate(label, fsize, 5, yText, &image);
-
-
+            addAnnotations(state, &image, topMargin);
             // Write video frames
             if (state->exportVideo) {
                 for (int c = 0; c < 1.0 * VIDEO_FPS; c++) {
                     generateFrame(&image, frameCounter++);
                 }
             }
-            // Store image frame for potential later use
-            void *mem = realloc(state->frames, sizeof *state->frames * (state->nVideoFrames + 1));
-            if (mem == NULL) {
-                fprintf(stderr, "Unable to allocate memory for new image\n");
-                return TIICT_MEMORY;
-            }
-            state->frames = mem;
-            state->nVideoFrames++;
-            Image *f = &state->frames[state->nVideoFrames-1];
-            allocImage(f, image.width, image.height, image.bytesPerPixel);
-            memcpy(state->frames[state->nVideoFrames-1].pixels, image.pixels, image.numberOfBytes);
-
-            // Reset image to make new plots
-            memset(image.pixels, BACKGROUND_COLOR, image.numberOfBytes);
+            storeImage(state, &image);
             plotHeight = plotHeight0;
             plotYOffset = plotHeight + plotdy + topMargin;
         }
@@ -392,4 +355,61 @@ void drawFloatTimeSeries(Image *imageBuf, double *times, float *values, int firs
     }
 
     return;
+}
+
+void addAnnotations(ProcessorState *state, Image *image, int topMargin)
+{
+    // Add annotations
+    int fsize = 15;
+    int yText = topMargin;
+    char label[255];
+    snprintf(label, 255, "Swarm %s", state->args.satellite);
+    annotate(label, fsize, 5, yText, image);
+    fsize = 12;
+    yText += fontheight(fsize);
+    snprintf(label, 255, "%04d-%02d-%02d", state->args.year, state->args.month, state->args.day);
+    annotate(label, fsize, 5, yText, image);
+    fsize = 9;
+    yText += fontheight(fsize);
+    snprintf(label, 255, "Vix: %s", state->useEofR ? "eofr" : "legacy");
+    annotate(label, fsize, 5, yText, image);
+    yText += fontheight(fsize);
+    char *potentialSource = "None";
+    switch (state->lpPotentialSource) {
+        case LP_POTENTIAL_U_SC:
+            potentialSource = "U_SC";
+            break;
+        case LP_POTENTIAL_LOWGAIN:
+            potentialSource = "LG";
+            break;
+        case LP_POTENTIAL_HIGHGAIN:
+            potentialSource = "HG";
+            break;
+        default:
+            break;
+    }
+    snprintf(label, 255, "V_f algo: %s", potentialSource);
+    annotate(label, fsize, 5, yText, image);
+
+    return;
+}
+
+int storeImage(ProcessorState *state, Image *image)
+{
+    // Store image frame for potential later use
+    void *mem = realloc(state->frames, sizeof *state->frames * (state->nVideoFrames + 1));
+    if (mem == NULL) {
+        fprintf(stderr, "Unable to allocate memory for new image\n");
+        return TIICT_MEMORY;
+    }
+    state->frames = mem;
+    state->nVideoFrames++;
+    Image *f = &state->frames[state->nVideoFrames-1];
+    allocImage(f, image->width, image->height, image->bytesPerPixel);
+    memcpy(state->frames[state->nVideoFrames-1].pixels, image->pixels, image->numberOfBytes);
+
+    // Reset image to make new plots
+    memset(image->pixels, BACKGROUND_COLOR, image->numberOfBytes);
+
+    return TIICT_OK;
 }

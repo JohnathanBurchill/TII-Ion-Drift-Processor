@@ -18,6 +18,7 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+#include "SDL3/SDL_events.h"
 #include "export.h"
 #include "processing.h"
 #include "loadData.h"
@@ -166,41 +167,44 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 {
     int status = 0;
     AppState_t *as = (AppState_t *)appstate;
+    int argc = 0;
+    char **argv = NULL;
+    double *timesMs;
     ProcessorState *state = (ProcessorState *)as->state;
-    if (state == NULL) {
-        resetDisplay(as);
-        return SDL_APP_CONTINUE;
+    if (state != NULL) {
+        timesMs = (double*)state->dataBuffers[0];
+        if (timesMs != NULL) {
+            as->t0 = timesMs[0];
+            as->t1 = timesMs[state->nRecs - 1];
+        }
     }
-    int argc = state->args.argc;
-    char **argv = state->args.argv;
-    double *timesMs = (double*)state->dataBuffers[0];
-    if (timesMs == NULL) {
-        resetDisplay(as);
-        return SDL_APP_CONTINUE;
-    }
-    as->t0 = timesMs[0];
-    as->t1 = timesMs[state->nRecs - 1];
     double middleTime = 0.0;
     double timeRange = state->plotT1 - state->plotT0;
     double secondsToAdvance = 0.0;
 
-    if (event->type == SDL_EVENT_QUIT) {
+    if (event->type == SDL_EVENT_QUIT || (event->type == SDL_EVENT_KEY_UP && event->key.key == SDLK_Q)) {
         return SDL_APP_SUCCESS;  /* end the program, reporting success to the OS. */
     }
+
+    // Everything else requires state
+    if (state == NULL) {
+        return SDL_APP_CONTINUE;
+    }
+
     if (event->type == SDL_EVENT_KEY_UP) {
         switch (event->key.key) {
-//            case SDLK_A:
-//                state->args.satellite = "A";
-//                rerunProcessor(state);
-//                break;
-//            case SDLK_B:
-//                state->args.satellite = "B";
-//                rerunProcessor(state);
-//                break;
-//            case SDLK_C:
-//                state->args.satellite = "C";
-//                rerunProcessor(state);
-//                break;
+            case SDLK_A:
+                state->args.satellite = "A";
+                rerunProcessor(state);
+                break;
+            case SDLK_B:
+                state->args.satellite = "B";
+                rerunProcessor(state);
+                break;
+            case SDLK_C:
+                state->args.satellite = "C";
+                rerunProcessor(state);
+                break;
             case SDLK_E:
                 // Toggle use of eofr for along-track drift
                 state->useEofR = !state->useEofR;
@@ -332,9 +336,6 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
             case SDLK_X:
                 // Toggle playback rate
                 as->playbackRate = as->playbackRate > 1.0 ? 1.0 : 10.0;
-                break;
-            case SDLK_Q:
-                return SDL_APP_SUCCESS;
                 break;
             default:
                 break;
@@ -530,24 +531,27 @@ void rerunProcessor(ProcessorState *state)
     status = initProcessor(state);
     if (status != TIICT_OK) {
         shutdown(state);
-        return;
+        goto vis;
     }
     status = initLogFiles(state);
     if (status != TIICT_OK) {
         shutdown(state);
-        return;
+        goto vis;
     }
     status = loadTiiCalData(state);
     if (status != TIICT_OK) {
-        return;
+        shutdown(state);
+        goto vis;
     }
     status = loadLpCalData(state);
     if (status != TIICT_OK) {
         shutdown(state);
-        return;
+        goto vis;
     }
     calibrateFlows(state);
     calculateFields(state);
+
+vis:
     visualizeResults(state);
     updatePlots(state);
 
