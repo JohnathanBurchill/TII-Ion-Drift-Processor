@@ -402,6 +402,7 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
         free(state->frames);
     }
     free(state);
+    free(as);
 
     return;
 }
