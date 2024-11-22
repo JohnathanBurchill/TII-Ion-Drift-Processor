@@ -1431,8 +1431,6 @@ int shutdown(ProcessorState *state)
         state->dataBuffers[i] = NULL;
     }
 
-
-
     free(state->lpTimes);
     state->lpTimes = NULL;
     free(state->lpPhiScHighGain);
@@ -1483,7 +1481,6 @@ int shutdown(ProcessorState *state)
     state->nRecs = 0;
     state->nLpRecs = 0;
     state->memoryAllocated = 0;
-    state->nVideoFrames = 0;
 
     return TIICT_OK;
 }
