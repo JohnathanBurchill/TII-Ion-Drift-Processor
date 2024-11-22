@@ -2,7 +2,6 @@
 #include "loadData.h"
 #include "state.h"
 #include "errors.h"
-#include "settings.h"
 
 #include <stdio.h>
 #include <tii/utility.h>
@@ -20,6 +19,10 @@ int visualizeResults(ProcessorState *state)
     int frameCounter = 0;
     static int timesReached = 0;
 
+    int plotdy = 25;
+    int plotX0 = 100;
+    int topMargin = 10;
+
     Image image = {0};
     if (allocImage(&image, IMAGE_WIDTH, IMAGE_HEIGHT, 1) != DRAW_OK)
     {
@@ -30,12 +33,18 @@ int visualizeResults(ProcessorState *state)
     memset(image.pixels, BACKGROUND_COLOR, image.numberOfBytes);
 
     // Input data
+    if (state == NULL) {
+        annotate("No data", 24, IMAGE_WIDTH/2 - fontwidth(24)*strlen("No data")/2, IMAGE_HEIGHT/2 + fontheight(24)/2, &image);
+        goto cleanup;
+    }
+
     uint8_t **dataBuffers = state->dataBuffers;
     double *times = (double*)dataBuffers[0];
 
     if (times == NULL) {
+        addAnnotations(state, &image, topMargin);
+        annotate("No data", 24, IMAGE_WIDTH/2 - fontwidth(24)*strlen("No data")/2, IMAGE_HEIGHT/2 + fontheight(24)/2, &image);
         storeImage(state, &image);
-        annotate("No data", 24, IMAGE_WIDTH / 2 - fontwidth(24)*strlen("No data")/2, IMAGE_HEIGHT + fontheight(24)/2, &image);
         goto cleanup;
     }
 
@@ -88,12 +97,6 @@ int visualizeResults(ProcessorState *state)
     dotSize = 2; // full day
     sprintf(xlabel, "%s", "UT hours");
 
-    int plotdy = 25;
-
-    int plotX0 = 100;
-    int topMargin = 10;
-    int plotY0 = plotHeight0 + plotdy + topMargin;
-
     // Plots
 
     // parse plot command
@@ -108,6 +111,7 @@ int visualizeResults(ProcessorState *state)
     float yScale = 0.0;
     char yr0str[255];
     char yr1str[255];
+    int plotY0 = plotHeight0 + plotdy + topMargin;
     int plotYOffset = plotY0;
     int yText = topMargin;
     int plotsMade = 0;
@@ -271,19 +275,17 @@ void drawFloatTimeSeries(Image *imageBuf, double *times, float *values, int firs
     // time label string
     char timeFormat[EPOCHx_FORMAT_MAX];
     char timeString[EPOCHx_STRING_MAX];
-    snprintf(timeFormat, EPOCHx_FORMAT_MAX, "<hour.02>:<min.02>");
+    snprintf(timeFormat, EPOCHx_FORMAT_MAX, "<hour.02>:<min.02>:<sec.02>");
 
     double tickDeltaTSeconds = 0.0;
 
+
     if (timeRange < 10.0) {
         tickDeltaTSeconds = 1.0;
-        snprintf(timeFormat, EPOCHx_FORMAT_MAX, "<hour.02>:<min.02>:<sec.02>");
     } else if (timeRange < 30.0) {
         tickDeltaTSeconds = 5.0;
-        snprintf(timeFormat, EPOCHx_FORMAT_MAX, "<hour.02>:<min.02>:<sec.02>");
     } else if (timeRange < 60.0) {
         tickDeltaTSeconds = 10.0;
-        snprintf(timeFormat, EPOCHx_FORMAT_MAX, "<hour.02>:<min.02>:<sec.02>");
     } else if (timeRange < 60.0*10.0) {
         tickDeltaTSeconds = 60.0;
     } else if (timeRange < 60.0*60.0) {

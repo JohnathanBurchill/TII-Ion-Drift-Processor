@@ -90,6 +90,13 @@ void rerunProcessor(ProcessorState *state);
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
 
+    AppState_t *as = malloc(sizeof *as);
+    if (as == NULL) {
+        SDL_Log("Unable to allocate memory for App state");
+        return SDL_APP_FAILURE;
+    }
+    *appstate = (void*)as;
+
     ProcessorState *state = initState(argc, argv);
     if (state == NULL) {
         fprintf(stderr, "Could not allocate processor state.\n");
@@ -106,10 +113,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     state->visualizeResults = true;
     state->exportVideo = false;
 
-    int status = runProcessor(argc, argv, &state);
-    if (status != TIICT_OK) {
-        return SDL_APP_FAILURE;
-    }
+    runProcessor(argc, argv, &state);
 
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         SDL_Log("Couldn't initialize SDL: %s", SDL_GetError());
@@ -117,13 +121,6 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     }
 
     SDL_SetLogPriorities(SDL_LOG_PRIORITY_CRITICAL);
-
-    AppState_t *as = malloc(sizeof *as);
-    if (as == NULL) {
-        SDL_Log("Unable to allocate memory for App state");
-        return SDL_APP_FAILURE;
-    }
-    *appstate = (void*)as;
 
     if (!SDL_CreateWindowAndRenderer("examples/renderer/clear", IMAGE_WIDTH, IMAGE_HEIGHT, 0, &as->window, &as->plotRenderer)) {
         SDL_Log("Couldn't create window/renderer: %s", SDL_GetError());
@@ -348,18 +345,18 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 
 SDL_AppResult SDL_AppIterate(void *appstate)
 {
-    if (appstate == NULL) {
-        return SDL_APP_CONTINUE;
-    }
+    SDL_Surface *indexedSurface = NULL;
+    SDL_Texture *plotTexture = NULL;
+
     AppState_t *as = (AppState_t*)appstate;
     ProcessorState *state = as->state;
     if (state == NULL) {
-        resetDisplay(as);
-        return SDL_APP_CONTINUE;
+        visualizeResults(NULL);
+        goto updatedisplay;
     }
     if (state->nVideoFrames == 0) {
-        resetDisplay(as);
-        return SDL_APP_CONTINUE;
+        visualizeResults(state);
+        goto updatedisplay;
     }
 
     // Handle playback
@@ -374,13 +371,16 @@ SDL_AppResult SDL_AppIterate(void *appstate)
         }
     }
 
-    SDL_Surface *indexedSurface = SDL_CreateSurfaceFrom(IMAGE_WIDTH, IMAGE_HEIGHT, SDL_PIXELFORMAT_INDEX8, state->frames[as->plotPage].pixels, IMAGE_WIDTH);
+updatedisplay:
+
+    indexedSurface = SDL_CreateSurfaceFrom(IMAGE_WIDTH, IMAGE_HEIGHT, SDL_PIXELFORMAT_INDEX8, state->frames[as->plotPage].pixels, IMAGE_WIDTH);
     SDL_SetSurfacePalette(indexedSurface, as->colors);
 
-    SDL_Texture *plotTexture = SDL_CreateTextureFromSurface(as->plotRenderer, indexedSurface);
+    plotTexture = SDL_CreateTextureFromSurface(as->plotRenderer, indexedSurface);
     SDL_DestroySurface(indexedSurface);
     SDL_RenderTexture(as->plotRenderer, plotTexture, NULL, NULL);
     SDL_DestroyTexture(plotTexture);
+
     SDL_RenderPresent(as->plotRenderer);
 
     return SDL_APP_CONTINUE;
@@ -557,7 +557,6 @@ void rerunProcessor(ProcessorState *state)
 
 vis:
     visualizeResults(state);
-    updatePlots(state);
 
     return;
 }
