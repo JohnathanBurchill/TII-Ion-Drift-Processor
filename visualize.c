@@ -279,7 +279,6 @@ void drawFloatTimeSeries(Image *imageBuf, double *times, float *values, int firs
 
     double tickDeltaTSeconds = 0.0;
 
-
     if (timeRange < 10.0) {
         tickDeltaTSeconds = 1.0;
     } else if (timeRange < 30.0) {
