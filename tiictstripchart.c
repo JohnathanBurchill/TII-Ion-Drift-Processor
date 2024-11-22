@@ -389,6 +389,10 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 void SDL_AppQuit(void *appstate, SDL_AppResult result)
 {
     AppState_t *as = (AppState_t*)appstate;
+    if (as == NULL) {
+        return;
+    }
+
     ProcessorState *state = (ProcessorState*)as->state;
     shutdown(state);
     if (state->nVideoFrames > 0) {
