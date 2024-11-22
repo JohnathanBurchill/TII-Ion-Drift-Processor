@@ -493,10 +493,9 @@ void advancePlots(AppState_t *as, double amount, TimeUnit_enum units)
     double timeRange = as->state->plotT1 - as->state->plotT0;
     as->state->plotT0 += totalTime;
     as->state->plotT1 += totalTime;
-    // TODO check if we can process other days by updating date and calling runProcessor?
     if (as->state->plotT1 > as->t1) {
-        as->state->plotT1 = as->t1;
-        as->state->plotT0 = as->state->plotT1 - timeRange;
+        as->state->args.day++;
+        rerunProcessor(as->state);
     }
     updatePlots(as->state);
 
@@ -513,8 +512,9 @@ void rewindPlots(AppState_t *as, double amount, TimeUnit_enum units)
     // TODO check if we can process other days by updating date and calling runProcessor?
     // For now, limit to one day
     if (as->state->plotT0 < as->t0) {
-        as->state->plotT0 = as->t0;
-        as->state->plotT1 = as->state->plotT0 + timeRange;
+        as->state->args.day--;
+        rerunProcessor(as->state);
+
     }
     updatePlots(as->state);
     return;

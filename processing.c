@@ -1077,6 +1077,14 @@ int initProcessor(ProcessorState *state)
     };
     memcpy(state->fitargs, f, 4 * sizeof(offset_model_fit_arguments));
 
+    // Normalize date (where 32 Jan is 1 Feb)
+    double epoch = computeEPOCH(args->year, args->month, args->day, 0, 0, 0, 0.0);
+    long year, month, day, h, m, s, ms;
+    EPOCHbreakdown(epoch, &year, &month, &day, &h, &m, &s, &ms);
+    args->year = year;
+    args->month = month;
+    args->day = day;
+
     if (state->writeLogFiles) {
         status = initLogFiles(state);
         if (status != TIICT_OK) {
