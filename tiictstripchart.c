@@ -395,14 +395,13 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
 
     ProcessorState *state = (ProcessorState*)as->state;
     shutdown(state);
-    if (state->nVideoFrames > 0 && state->frames != NULL) {
+    if (state->nVideoFrames > 0) {
         for (int i = 0; i < state->nVideoFrames; i++) {
             free(state->frames[i].pixels);
         }
         free(state->frames);
     }
     free(state);
-    state = NULL;
 
     return;
 }
