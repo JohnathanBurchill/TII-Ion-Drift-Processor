@@ -22,13 +22,14 @@
 #include "export.h"
 #include "processing.h"
 #include "loadData.h"
+#include "tiigraphics/draw.h"
+#include "tiigraphics/fonts.h"
 #include "visualize.h"
 #include "state.h"
 #include "errors.h"
 
 #include "SDL3/SDL_error.h"
 #include "SDL3/SDL_init.h"
-#include "SDL3/SDL_keyboard.h"
 #include "SDL3/SDL_keycode.h"
 #include "SDL3/SDL_log.h"
 #include "SDL3/SDL_pixels.h"
@@ -63,6 +64,9 @@ typedef struct AppState {
     bool playing;
     int playbackDirection;
     double playbackRate;
+    Image *help;
+    Image *storedFrames;
+    int storedNVideoFrames;
 } AppState_t;
 
 typedef enum TimeUnit {
@@ -79,6 +83,7 @@ typedef enum TimeUnit {
     DECADES,
 } TimeUnit_enum;
 
+Image *helpImage(void);
 void resetVideoFrames(ProcessorState *state);
 void resetDisplay(AppState_t *as);
 double calculateDeltaT(AppState_t *as, TimeUnit_enum units, int sign);
@@ -96,6 +101,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         return SDL_APP_FAILURE;
     }
     *appstate = (void*)as;
+    memset(as, 0, sizeof *as);
 
     ProcessorState *state = initState(argc, argv);
     if (state == NULL) {
@@ -157,7 +163,56 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     as->playbackDirection = 1;
     as->playbackRate = 1.0;
 
+    as->help = helpImage();
+    if (as->help == NULL) {
+        return SDL_APP_FAILURE;
+    }
+    as->storedFrames = NULL;
+    as->storedNVideoFrames = 0;
+
+
     return SDL_APP_CONTINUE;  /* carry on with the program! */
+}
+
+Image *helpImage(void)
+{
+    int x = 50;
+    int y0 = 50;
+    int y = y0;
+    // font size
+    int fontSize = 15;
+    int fontHeight = fontheight(fontSize);
+
+    Image *help = malloc(sizeof *help);
+    int status = allocImage(help, IMAGE_WIDTH, IMAGE_HEIGHT, 1);
+    if (status != TIICT_OK) {
+        SDL_Log("Unable to allocate image");
+        return NULL;
+    }
+
+    // Reset image to make new plots
+    memset(help->pixels, BACKGROUND_COLOR, help->numberOfBytes);
+
+    annotate("F1 - help", fontSize, x, y, help);
+    y += fontHeight;
+    annotate(" Q - quit", fontSize, x, y, help);
+    y += fontHeight;
+    annotate(" A - Swarm A", fontSize, x, y, help);
+    y += fontHeight;
+    annotate(" B - Swarm B", fontSize, x, y, help);
+    y += fontHeight;
+    annotate(" C - Swarm C", fontSize, x, y, help);
+    y += fontHeight;
+    annotate(" 1 - LP PhiSc source: None", fontSize, x, y, help);
+    y += fontHeight;
+    annotate(" 2 - LP PhiSc source: U_SC", fontSize, x, y, help);
+    y += fontHeight;
+    annotate(" 3 - LP PhiSc source: Low Gain", fontSize, x, y, help);
+    y += fontHeight;
+    annotate(" 4 - LP PhiSc source: High Gain", fontSize, x, y, help);
+    y += fontHeight;
+
+    return help;
 }
 
 SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
@@ -186,6 +241,14 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
     // Everything else requires state
     if (state == NULL) {
         return SDL_APP_CONTINUE;
+    }
+
+    // Restore the display after a help request
+    if (as->storedFrames != NULL) {
+        state->frames = as->storedFrames;
+        state->nVideoFrames = as->storedNVideoFrames;
+        as->storedFrames = NULL;
+        as->storedNVideoFrames = 0;
     }
 
     if (event->type == SDL_EVENT_KEY_UP) {
@@ -334,6 +397,15 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
                 // Toggle playback rate
                 as->playbackRate = as->playbackRate > 1.0 ? 1.0 : 10.0;
                 break;
+
+            case SDLK_F1:
+                as->storedFrames = state->frames;
+                as->storedNVideoFrames = state->nVideoFrames;
+                state->frames = as->help;
+                state->nVideoFrames = 1;
+
+                break;
+
             default:
                 break;
         }
@@ -402,6 +474,7 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
         free(state->frames);
     }
     free(state);
+    free(as->help);
     free(as);
 
     return;
