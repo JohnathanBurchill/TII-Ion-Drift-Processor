@@ -404,8 +404,6 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
     free(state);
     state = NULL;
 
-    free(as);
-
     return;
 }
 
