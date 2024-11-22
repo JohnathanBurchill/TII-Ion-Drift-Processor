@@ -1158,8 +1158,9 @@ int parseArguments(ProcessorState *state)
     state->writeLogFiles = true;
 
     // Default automatically to first and last times for video export
-    state->plotT0 = -1;
-    state->plotT1 = -1;
+    double epoch = computeEPOCH(state->args.year, state->args.month, state->args.day, 0, 0, 0, 0);
+    state->plotT0 = epoch;
+    state->plotT1 = epoch + 86400 * 1000.0;
 
     state->nOptions = 0;
     for (int i = 1; i < argc; i++) {
