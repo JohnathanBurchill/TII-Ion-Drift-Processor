@@ -1191,7 +1191,7 @@ int parseArguments(ProcessorState *state)
     state->framesPerSecond = 15;
 
     state->plotCommand = "QDLat,-90,90,1" ";PhiSc,-5,0,1" ";Vixh,-4,4,0.001" ";Vixv,-4,4,0.001" ";Viy,-2,2,0.001" ";Viz,-2,2,0.001";
-    state->defaultPlotHeight = 55;
+    state->defaultPlotHeight = DEFAULT_PLOT_HEIGHT;
     state->maxPlotsPerScreen = 0;
     state->writeLogFiles = true;
 

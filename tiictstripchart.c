@@ -22,6 +22,7 @@
 #include "export.h"
 #include "processing.h"
 #include "loadData.h"
+#include "settings.h"
 #include "tiigraphics/draw.h"
 #include "tiigraphics/fonts.h"
 #include "visualize.h"
@@ -263,6 +264,8 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
     double middleTime = 0.0;
     double secondsToAdvance = 0.0;
 
+    int plotHeightDelta = 0;
+
     // Restore the display after a help request
     if (as->storedFrames != NULL) {
         state->frames = as->storedFrames;
@@ -321,24 +324,24 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
             case SDLK_EQUALS:
                 // Plus on regular keboard
                 if (SDL_GetModState() & SDL_KMOD_SHIFT) {
-                middleTime = (state->plotT0 + state->plotT1) / 2.0;
-                if (timeRange > 2.0 * 1000) {
-                    timeRange /= 2.0;
-                    state->plotT0 = middleTime - timeRange/2.0;
-                    state->plotT1 = middleTime + timeRange/2.0;
-                    updatePlots(state);
+                    middleTime = (state->plotT0 + state->plotT1) / 2.0;
+                    if (timeRange > 2.0 * 1000) {
+                        timeRange /= 2.0;
+                        state->plotT0 = middleTime - timeRange/2.0;
+                        state->plotT1 = middleTime + timeRange/2.0;
+                        updatePlots(state);
+                    }
                 }
                 break;
             case SDLK_MINUS:
-                    middleTime = (state->plotT0 + state->plotT1) / 2.0;
-                    timeRange *= 2.0;
-                    if (timeRange > 86400.0 * 1000.0) {
-                        timeRange = 86400.0 * 1000.0;
-                    }
-                    state->plotT0 = middleTime - timeRange/2.0;
-                    state->plotT1 = middleTime + timeRange/2.0;
-                    updatePlots(state);
+                middleTime = (state->plotT0 + state->plotT1) / 2.0;
+                timeRange *= 2.0;
+                if (timeRange > 86400.0 * 1000.0) {
+                    timeRange = 86400.0 * 1000.0;
                 }
+                state->plotT0 = middleTime - timeRange/2.0;
+                state->plotT1 = middleTime + timeRange/2.0;
+                updatePlots(state);
                 break;
             case SDLK_K:
                 if (as->plotPage > 0) {
@@ -468,6 +471,26 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
                 // Geoelectric potential
                 state->plotCommand = "Geopot,-200,200,1";
                 updatePlots(state);
+                break;
+            case SDLK_Z:
+                if (SDL_GetModState() & SDL_KMOD_SHIFT) {
+                    if (state->defaultPlotHeight > DEFAULT_PLOT_HEIGHT) {
+                        state->defaultPlotHeight -= 30;
+                        updatePlots(state);
+                    }
+                }
+                else {
+                    if (state->defaultPlotHeight < state->frameHeight - 70) {
+                        state->defaultPlotHeight += 30;
+                        updatePlots(state);
+                    }
+                }
+                if (as->plotPage > state->nVideoFrames - 1) {
+                    as->plotPage = state->nVideoFrames - 1;
+                }
+                if (as->plotPage < 0) {
+                    as->plotPage = 0;
+                }
                 break;
             default:
                 break;
