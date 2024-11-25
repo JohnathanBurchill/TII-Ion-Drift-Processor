@@ -108,7 +108,8 @@ int visualizeResults(ProcessorState *state)
     int nParams = 0;
     float yr0 = 0.0;
     float yr1 = 0.0;
-    float yScale = 0.0;
+    float valueScale = 0.0;
+    float valueOffset = 0.0;
     char yr0str[255];
     char yr1str[255];
     int plotY0 = plotHeight0 + plotdy + topMargin;
@@ -169,7 +170,8 @@ int visualizeResults(ProcessorState *state)
         snprintf(yr0str, 255, "%s", params[1]);
         yr1 = atof(params[2]);
         snprintf(yr1str, 255, "%s", params[2]);
-        yScale = atof(params[3]);
+        valueScale = atof(params[3]);
+        valueOffset = 0.0;
 
         int oldPlotHeight = plotHeight;
         if (nParams == 5) {
@@ -186,28 +188,130 @@ int visualizeResults(ProcessorState *state)
         } else if (strcmp("MLT", params[0]) == 0) {
             parameter = v->mlt;
             parameterLabel = "MLT";
-        } else if (strcmp("PhiSc", params[0]) == 0) {
-            if (state->usePotentials) {
-                parameter = v->potentials;
-            }
-            else {
-                // Draw zeros
-                parameter = v->mlt;
-                yScale = 0.0;
-            }
-            parameterLabel = "U_SC";
+        } else if (strcmp("Lat", params[0]) == 0) {
+            parameter = v->latitude;
+            parameterLabel = "Lat";
+        } else if (strcmp("Lon", params[0]) == 0) {
+            parameter = v->longitude;
+            parameterLabel = "Lon";
+        } else if (strcmp("Radius", params[0]) == 0) {
+            parameter = v->radius;
+            parameterLabel = "Radius";
+        } else if (strcmp("Alt", params[0]) == 0) {
+            parameter = v->radius;
+            parameterLabel = "Alt";
+            valueOffset = 6372000.0;
+        } else if (strcmp("mxh", params[0]) == 0) {
+            parameter = v->mxh;
+            parameterLabel = "mxh";
+        } else if (strcmp("myh", params[0]) == 0) {
+            parameter = v->myh;
+            parameterLabel = "myh";
+        } else if (strcmp("mxv", params[0]) == 0) {
+            parameter = v->mxv;
+            parameterLabel = "mxv";
+        } else if (strcmp("myv", params[0]) == 0) {
+            parameter = v->myv;
+            parameterLabel = "myv";
+        } else if (strcmp("Vmcph", params[0]) == 0) {
+            parameter = v->vmcph;
+            parameterLabel = "Vmcp H";
+        } else if (strcmp("Vmcpv", params[0]) == 0) {
+            parameter = v->vmcpv;
+            parameterLabel = "Vmcp V";
+        } else if (strcmp("Vbiash", params[0]) == 0) {
+            parameter = v->vbiash;
+            parameterLabel = "Vbias H";
+        } else if (strcmp("Vbiasv", params[0]) == 0) {
+            parameter = v->vbiasv;
+            parameterLabel = "Vbias V";
+        } else if (strcmp("Vfp", params[0]) == 0) {
+            parameter = v->vfp;
+            parameterLabel = "Vfp";
+        } else if (strcmp("Vsatx", params[0]) == 0) {
+            parameter = v->vsatx;
+            parameterLabel = "Vsat X";
+        } else if (strcmp("Vsaty", params[0]) == 0) {
+            parameter = v->vsaty;
+            parameterLabel = "Vsat Y";
+        } else if (strcmp("Vsatz", params[0]) == 0) {
+            parameter = v->vsatz;
+            parameterLabel = "Vsat Z";
+        } else if (strcmp("EnhRaw", params[0]) == 0) {
+            parameter = v->enhRaw;
+            parameterLabel = "En H raw";
+        } else if (strcmp("EnvRaw", params[0]) == 0) {
+            parameter = v->envRaw;
+            parameterLabel = "En V raw";
+        } else if (strcmp("Enh", params[0]) == 0) {
+            parameter = v->enh;
+            parameterLabel = "En H";
+        } else if (strcmp("Env", params[0]) == 0) {
+            parameter = v->env;
+            parameterLabel = "En V";
         } else if (strcmp("Vixh", params[0]) == 0) {
             parameter = v->vixh;
             parameterLabel = "Vixh";
+        } else if (strcmp("Vixherror", params[0]) == 0) {
+            parameter = v->vixherror;
+            parameterLabel = "Vixh error";
         } else if (strcmp("Vixv", params[0]) == 0) {
             parameter = v->vixv;
             parameterLabel = "Vixv";
+        } else if (strcmp("Vixverror", params[0]) == 0) {
+            parameter = v->vixverror;
+            parameterLabel = "Vixv error";
         } else if (strcmp("Viy", params[0]) == 0) {
             parameter = v->viy;
             parameterLabel = "Viy";
+        } else if (strcmp("Viyerror", params[0]) == 0) {
+            parameter = v->viyerror;
+            parameterLabel = "Viyerror";
         } else if (strcmp("Viz", params[0]) == 0) {
             parameter = v->viz;
             parameterLabel = "Viz";
+        } else if (strcmp("Vizerror", params[0]) == 0) {
+            parameter = v->vizerror;
+            parameterLabel = "Vizerror";
+        } else if (strcmp("VSatN", params[0]) == 0) {
+            parameter = v->vsatn;
+            parameterLabel = "Vsat N";
+        } else if (strcmp("VSatE", params[0]) == 0) {
+            parameter = v->vsate;
+            parameterLabel = "Vsat E";
+        } else if (strcmp("VSatC", params[0]) == 0) {
+            parameter = v->vsatc;
+            parameterLabel = "Vsat C";
+        } else if (strcmp("BN", params[0]) == 0) {
+            parameter = v->bn;
+            parameterLabel = "B N";
+        } else if (strcmp("BE", params[0]) == 0) {
+            parameter = v->be;
+            parameterLabel = "B E";
+        } else if (strcmp("BC", params[0]) == 0) {
+            parameter = v->bc;
+            parameterLabel = "B C";
+        } else if (strcmp("Vicrx", params[0]) == 0) {
+            parameter = v->vicrx;
+            parameterLabel = "Vicr X";
+        } else if (strcmp("Vicry", params[0]) == 0) {
+            parameter = v->vicry;
+            parameterLabel = "Vicr Y";
+        } else if (strcmp("Vicrz", params[0]) == 0) {
+            parameter = v->vicrz;
+            parameterLabel = "Vicr Z";
+        } else if (strcmp("Geopot", params[0]) == 0) {
+            parameter = v->geoelectricPotential;
+            parameterLabel = "Geopot";
+        } else if (strcmp("GeopotDiff", params[0]) == 0) {
+            parameter = v->geoelectricPotentialDifference;
+            parameterLabel = "Geopot diff.";
+        } else if (strcmp("Geopotmaxslope", params[0]) == 0) {
+            parameter = v->maxAbsGeoelectricPotentialBaselineSlope;
+            parameterLabel = "Geopot max slope";
+        } else if (strcmp("Geopotmaxslopedet", params[0]) == 0) {
+            parameter = v->maxAbsGeoelectricPotentialDetrendedBaselineSlope;
+            parameterLabel = "Geopot detrend max slope";
         } else if (strcmp("Exh", params[0]) == 0) {
             parameter = v->ectxh;
             parameterLabel = "Exh";
@@ -226,12 +330,76 @@ int visualizeResults(ProcessorState *state)
         } else if (strcmp("Ezv", params[0]) == 0) {
             parameter = v->ectzv;
             parameterLabel = "Ezv";
+        } else if (strcmp("Bx", params[0]) == 0) {
+            parameter = v->bctx;
+            parameterLabel = "B X";
+        } else if (strcmp("By", params[0]) == 0) {
+            parameter = v->bcty;
+            parameterLabel = "B Y";
+        } else if (strcmp("Bz", params[0]) == 0) {
+            parameter = v->bctz;
+            parameterLabel = "B Z";
+        } else if (strcmp("xhatn", params[0]) == 0) {
+            parameter = v->xhat;
+            parameterLabel = "xhat N";
+            tupleLength = 3;
+            tupleIndex = 0;
+        } else if (strcmp("xhate", params[0]) == 0) {
+            parameter = v->xhat;
+            parameterLabel = "xhat E";
+            tupleLength = 3;
+            tupleIndex = 1;
+        } else if (strcmp("xhatc", params[0]) == 0) {
+            parameter = v->xhat;
+            parameterLabel = "xhat C";
+            tupleLength = 3;
+            tupleIndex = 2;
+        } else if (strcmp("yhatn", params[0]) == 0) {
+            parameter = v->yhat;
+            parameterLabel = "yhat N";
+            tupleLength = 3;
+            tupleIndex = 0;
+        } else if (strcmp("yhate", params[0]) == 0) {
+            parameter = v->yhat;
+            parameterLabel = "yhat E";
+            tupleLength = 3;
+            tupleIndex = 1;
+        } else if (strcmp("yhatc", params[0]) == 0) {
+            parameter = v->yhat;
+            parameterLabel = "yhat C";
+            tupleLength = 3;
+            tupleIndex = 2;
+        } else if (strcmp("zhatn", params[0]) == 0) {
+            parameter = v->zhat;
+            parameterLabel = "zhat N";
+            tupleLength = 3;
+            tupleIndex = 0;
+        } else if (strcmp("zhate", params[0]) == 0) {
+            parameter = v->zhat;
+            parameterLabel = "zhat E";
+            tupleLength = 3;
+            tupleIndex = 1;
+        } else if (strcmp("zhatc", params[0]) == 0) {
+            parameter = v->zhat;
+            parameterLabel = "zhat C";
+            tupleLength = 3;
+            tupleIndex = 2;
+        } else if (strcmp("PhiSc", params[0]) == 0) {
+            if (state->usePotentials) {
+                parameter = v->potentials;
+            }
+            else {
+                // Draw zeros
+                parameter = v->mlt;
+                valueScale = 0.0;
+            }
+            parameterLabel = "U_SC";
         } else {
             gotParameter = false;
         }
 
         if (gotParameter) {
-            drawFloatTimeSeries(&image, v->timestamp, parameter, firstIndex, lastIndex, stride, yScale, yr0, yr1, plotX0, plotYOffset, plotWidth, plotHeight, xLabel, parameterLabel, MAX_COLOR_VALUE + 1, yr0str, yr1str, false, dotSize, 12, true, tupleLength, tupleIndex, 0);
+            drawFloatTimeSeries(&image, v->timestamp, parameter, firstIndex, lastIndex, stride, valueScale, valueOffset, yr0, yr1, plotX0, plotYOffset, plotWidth, plotHeight, xLabel, parameterLabel, MAX_COLOR_VALUE + 1, yr0str, yr1str, false, dotSize, 12, true, tupleLength, tupleIndex, 0);
             plotYOffset += plotHeight + plotdy;
             plotsMade++;
         }
@@ -278,7 +446,7 @@ cleanup:
     return TIICT_OK;
 }
 
-void drawFloatTimeSeries(Image *imageBuf, double *times, float *values, int firstInd, int lastInd, int stride, float valueScale, float minValue, float maxValue, int plotX0, int plotY0, int plotWidth, int plotHeight, const char *xLabel, const char *yLabel, int colorIndex, const char *minValueStr, const char *maxValueStr, bool log10Scale, int dotSize, int fontSize, bool axes, int tupleLength, int tupleIndex, int orientation)
+void drawFloatTimeSeries(Image *imageBuf, double *times, float *values, int firstInd, int lastInd, int stride, float valueScale, float valueOffset, float minValue, float maxValue, int plotX0, int plotY0, int plotWidth, int plotHeight, const char *xLabel, const char *yLabel, int colorIndex, const char *minValueStr, const char *maxValueStr, bool log10Scale, int dotSize, int fontSize, bool axes, int tupleLength, int tupleIndex, int orientation)
 {
     int x0, y0;
     int x, y;
@@ -338,7 +506,7 @@ void drawFloatTimeSeries(Image *imageBuf, double *times, float *values, int firs
         for (int i = firstInd; i < lastInd; i+=stride)
         {
             x0 = rescaleAsInteger(times[i]/1000.0, t0, t1, plotX0, plotX0 + plotWidth);
-            tmpVal = values[i*tupleLength + tupleIndex]*valueScale;
+            tmpVal = (values[i*tupleLength + tupleIndex] - valueOffset) * valueScale;
             if (log10Scale)
             {
                 if (tmpVal > 0)

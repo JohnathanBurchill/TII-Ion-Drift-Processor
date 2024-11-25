@@ -441,7 +441,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
                 break;
             case SDLK_F4:
                 // electric field
-                state->plotCommand = "Exh,-100,100,1" ";Eyh,-100,100,1" ";Ezh,-100,100,1";
+                state->plotCommand = "QDLat,-90,90,1" ";MLT,0,24,1" ";Exh,-100,100,1" ";Eyh,-100,100,1" ";Ezh,-100,100,1";
                 updatePlots(state);
                 break;
             case SDLK_F5:
@@ -451,7 +451,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
                 break;
             case SDLK_F6:
                 // Satellite position
-                state->plotCommand = "Lat,-90,90,1";
+                state->plotCommand = "Lat,-90,90,1" ";Lon,-180,180,1" ";Radius,6400,7000,0.001" ";Alt,400,550,0.001";
                 updatePlots(state);
                 break;
             case SDLK_F7:
