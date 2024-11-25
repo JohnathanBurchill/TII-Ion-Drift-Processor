@@ -431,35 +431,40 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 
             case SDLK_F2:
                 // ion drift
-                state->plotCommand = "Vixh,-2,2,0.001;Vixv,-2,2,0.001;Viy,-2,2,0.001;Viz,-2,2,0.001";
+                state->plotCommand = "QDLat,-90,90,1" ";PhiSc,-5,0,1" ";Vixh,-4,4,0.001" ";Vixv,-4,4,0.001" ";Viy,-2,2,0.001" ";Viz,-2,2,0.001";
                 updatePlots(state);
                 break;
             case SDLK_F3:
-                // electric field
-                state->plotCommand = "Exh,-100,100,0.001";
+                // ion drift
+                state->plotCommand = "Vixh,-2,2,0.001" ";Vixv,-2,2,0.001" ";Viy,-2,2,0.001" ";Viz,-2,2,0.001";
                 updatePlots(state);
                 break;
             case SDLK_F4:
+                // electric field
+                state->plotCommand = "Exh,-100,100,1" ";Eyh,-100,100,1" ";Ezh,-100,100,1";
+                updatePlots(state);
+                break;
+            case SDLK_F5:
                 // magnetic field
                 state->plotCommand = "Bx,-65000,65000,1e9";
                 updatePlots(state);
                 break;
-            case SDLK_F5:
+            case SDLK_F6:
                 // Satellite position
                 state->plotCommand = "Lat,-90,90,1";
                 updatePlots(state);
                 break;
-            case SDLK_F6:
+            case SDLK_F7:
                 // Satellite velocity
                 state->plotCommand = "VsatN,-8,8,0.001";
                 updatePlots(state);
                 break;
-            case SDLK_F7:
+            case SDLK_F8:
                 // Satellite floating potential
                 state->plotCommand = "PhiSc,-8,1,1";
                 updatePlots(state);
                 break;
-            case SDLK_F8:
+            case SDLK_F9:
                 // Geoelectric potential
                 state->plotCommand = "Geopot,-200,200,1";
                 updatePlots(state);
