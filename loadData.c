@@ -19,7 +19,9 @@
 */
 
 #include "loadData.h"
+#include "settings.h"
 #include "errors.h"
+#include "state.h"
 #include "utilities.h"
 #include "processing.h"
 
@@ -93,11 +95,7 @@ int getLpInputFilename(const char satelliteLetter, long year, long month, long d
 int loadLpCalData(ProcessorState *state)
 {
     // Get LP floating potentials
-    state->lpTimes = NULL;
-    state->lpPhiScHighGain = NULL;
-    state->lpPhiScLowGain = NULL;
-    state->lpPhiSc = NULL;
-    state->nLpRecs = 0;
+    // Free memory, since this can be called multiple times in interactive mode
 
     int status = TIICT_OK;
     // Only used for version 0401 or greater, as earlier versions of calibration files did not include potential estimates
@@ -106,17 +104,17 @@ int loadLpCalData(ProcessorState *state)
     status = getLpData(state);
     if (status == TIICT_OK)
     {
-        if (state->nLpRecs < LP_MIN_NUMBER_OF_POTENTIALS)
+        if (state->vars16hz.nLpRecs < LP_MIN_NUMBER_OF_POTENTIALS)
         {
             if (state->writeLogFiles) {
-                fprintf(state->processingLogFile, "%sNot enough (%lu) LP potentials imported.\n", infoHeader, state->nLpRecs);
+                fprintf(state->processingLogFile, "%sNot enough (%lu) LP potentials imported.\n", infoHeader, state->vars16hz.nLpRecs);
             }
             status =  TIICT_NO_LP_HM_DATA;
         }
         else
         {
             if (state->writeLogFiles) {
-                fprintf(state->processingLogFile, "%sLoaded %lu LP potentials, and interpolated them to the TII times.\n", infoHeader, state->nLpRecs);
+                fprintf(state->processingLogFile, "%sLoaded %lu LP potentials, and interpolated them to the TII times.\n", infoHeader, state->vars16hz.nLpRecs);
             }
         }
     }
@@ -127,6 +125,10 @@ int loadLpCalData(ProcessorState *state)
 
 int getLpData(ProcessorState *state)
 {
+    freeVariable(state->vars16hz.lpPhiSc);
+    freeVariable(state->vars16hz.lpPhiScLowGain);
+    freeVariable(state->vars16hz.lpPhiScHighGain);
+    state->vars16hz.nLpRecs = 0;
 
     // Get data from previous day, requested date, and next day
     int y = state->args.year;
@@ -164,7 +166,7 @@ int getLpData(ProcessorState *state)
             fprintf(state->processingLogFile, "%sLoading LP data from %s\n", infoHeader, lpFile);
         }
 
-        status = loadLpInputs(lpFile, &lpTimes2Hz, &lpVsHg, &lpVsLg, &lpVs, &state->nLpRecs);
+        status = loadLpInputs(lpFile, &lpTimes2Hz, &lpVsHg, &lpVsLg, &lpVs, &state->vars16hz.nLpRecs);
         if (status == TIICT_MEMORY)
         {
             if (state->writeLogFiles) {
@@ -176,7 +178,7 @@ int getLpData(ProcessorState *state)
         date.tm_mday = date.tm_mday + 1;
 
     }
-    if (state->nLpRecs == 0)
+    if (state->vars16hz.nLpRecs == 0)
     {
         if (state->writeLogFiles) {
             fprintf(state->processingLogFile, "%sNo LP records found. Skipping processing.", infoHeader);
@@ -185,25 +187,24 @@ int getLpData(ProcessorState *state)
     }
 
     // interpolate LP data to TII times
-    state->lpPhiScHighGain = malloc(sizeof(float) * state->nRecs);
-    state->lpPhiScLowGain = malloc(sizeof(float) * state->nRecs);
-    state->lpPhiSc = malloc(sizeof(float) * state->nRecs);
-    if (state->lpPhiScHighGain == NULL || state->lpPhiScLowGain == NULL || state->lpPhiSc == NULL)
+    state->vars16hz.lpPhiScHighGain = malloc(sizeof(float) * state->vars16hz.nRecs);
+    state->vars16hz.lpPhiScLowGain = malloc(sizeof(float) * state->vars16hz.nRecs);
+    state->vars16hz.lpPhiSc = malloc(sizeof(float) * state->vars16hz.nRecs);
+    if (state->vars16hz.lpPhiScHighGain == NULL || state->vars16hz.lpPhiScLowGain == NULL || state->vars16hz.lpPhiSc == NULL)
     {
         if (state->writeLogFiles) {
             fprintf(state->processingLogFile, "%sUnable to allocate memory for LP interpolation. Skipping processing.", infoHeader);
         }
         return TIICT_MEMORY;
     }
-    bzero(state->lpPhiScHighGain, sizeof(float) * state->nRecs);
-    bzero(state->lpPhiScLowGain, sizeof(float) * state->nRecs);
-    bzero(state->lpPhiSc, sizeof(float) * state->nRecs);
+    bzero(state->vars16hz.lpPhiScHighGain, sizeof(float) * state->vars16hz.nRecs);
+    bzero(state->vars16hz.lpPhiScLowGain, sizeof(float) * state->vars16hz.nRecs);
+    bzero(state->vars16hz.lpPhiSc, sizeof(float) * state->vars16hz.nRecs);
 
-    double *tiiTime = (double*)state->dataBuffers[0];
-
-    interpolate(lpTimes2Hz, lpVsHg, state->nLpRecs, tiiTime, state->nRecs, state->lpPhiScHighGain);
-    interpolate(lpTimes2Hz, lpVsLg, state->nLpRecs, tiiTime, state->nRecs, state->lpPhiScLowGain);
-    interpolate(lpTimes2Hz, lpVs, state->nLpRecs, tiiTime, state->nRecs, state->lpPhiSc);
+    double *tiiTime = state->vars16hz.timestamp;
+    interpolate(lpTimes2Hz, lpVsHg, state->vars16hz.nLpRecs, tiiTime, state->vars16hz.nRecs, state->vars16hz.lpPhiScHighGain);
+    interpolate(lpTimes2Hz, lpVsLg, state->vars16hz.nLpRecs, tiiTime, state->vars16hz.nRecs, state->vars16hz.lpPhiScLowGain);
+    interpolate(lpTimes2Hz, lpVs, state->vars16hz.nLpRecs, tiiTime, state->vars16hz.nRecs, state->vars16hz.lpPhiSc);
 
     free(lpTimes2Hz);
     free(lpVsHg);
@@ -329,12 +330,45 @@ int loadLpInputs(const char *cdfFile, double **lpTime, double **lpPhiScHighGain,
 
 }
 
-int loadTiiCalData(ProcessorState *state)
+int loadCalData(ProcessorState *state)
 {
     // Store processing date
     int year = state->args.year;
     int month = state->args.month;
     int day = state->args.day;
+
+    ProcessorVariables_t *v = &state->vars16hz;
+    CalibrationVariable_t variables[] = {
+        {"epoch", (void**)&v->timestamp, 0},
+        {"Latitude", (void**)&v->latitude, 0},
+        {"Longitude", (void**)&v->longitude, 0},
+        {"Radius", (void**)&v->radius, 0},
+        {"Radius", (void**)&v->radius, 0},
+        {"QDLat", (void**)&v->qdlat, 0},
+        {"MLT", (void**)&v->mlt, 0},
+        {"1st Moment - H", (void**)&v->mxh, 0},
+        {"1st Moment - H", (void**)&v->myh, 1},
+        {"1st Moment - V", (void**)&v->mxv, 0},
+        {"1st Moment - V", (void**)&v->myv, 1},
+        {"Det_H__vX", (void**)&v->vsatx, 0},
+        {"Det_H__vX", (void**)&v->vsaty, 1},
+        {"Det_H__vX", (void**)&v->vsatz, 2},
+        {"Det H CorVx", (void**)&v->vicrx, 0},
+        {"Det H CorVx", (void**)&v->vicry, 1},
+        {"Det H CorVx", (void**)&v->vicrz, 2},
+        {"Sat_Vel_N", (void**)&v->vsatn, 0},
+        {"Sat_Vel_N", (void**)&v->vsate, 1},
+        {"Sat_Vel_N", (void**)&v->vsatc, 2},
+        {"B-North", (void**)&v->bn, 0},
+        {"B-North", (void**)&v->be, 1},
+        {"B-North", (void**)&v->bc, 2},
+        {"MCP_Voltage_H", (void**)&v->vmcph, 0},
+        {"MCP_Voltage_V", (void**)&v->vmcpv, 0},
+        {"Bias_Grid_H", (void**)&v->vbiash, 0},
+        {"Bias_Grid_V", (void**)&v->vbiasv, 0},
+        {"Faceplate_Volt_Mon_H", (void**)&v->vfp, 0},
+    };
+    const int nVariables = sizeof(variables) / sizeof(CalibrationVariable_t);
 
     // Get data for prior, requested, and following days
     for (int8_t i = -1; i < 2; i++)
@@ -346,25 +380,30 @@ int loadTiiCalData(ProcessorState *state)
             fprintf(state->processingLogFile, "%sLoading calibration data for %04d%02d%02d\n", infoHeader, state->args.year, state->args.month, state->args.day);
         }
 
-        loadTiiCalDataFromDate(i, state);
+        loadCalDataFromDate(i, state, variables, nVariables);
     }
+
     // Reset processing date
     state->args.year = year;
     state->args.month = month;
     state->args.day = day;
     if (state->writeLogFiles) {
-        fprintf(state->processingLogFile, "%sNumber of records: %ld\n", infoHeader, state->nRecs);
-        fprintf(state->processingLogFile, "%sLoaded %ld bytes (%ld MB) of calibration data.\n", infoHeader, state->memoryAllocated, state->memoryAllocated / 1024 / 1024);
+        fprintf(state->processingLogFile, "%sNumber of records: %ld\n", infoHeader, state->vars16hz.nRecs);
+        fprintf(state->processingLogFile, "%sLoaded %ld bytes (%ld MB) of calibration data.\n", infoHeader, state->vars16hz.memoryAllocated, state->vars16hz.memoryAllocated / 1024 / 1024);
         fflush(state->processingLogFile);
     }
 
-    if (state->nRecs < 16*SECONDS_OF_DATA_REQUIRED_FOR_PROCESSING)
+    if (state->vars16hz.nRecs < 16*SECONDS_OF_DATA_REQUIRED_FOR_PROCESSING) {
         return TIICT_NOT_ENOUGH_CALIBRATION_RECORDS;
+    }
+
+    // Ensure all 16 Hz variables have sufficient memory
+    reallocVariables(&state->vars16hz, state->vars16hz.nRecs);
 
     return TIICT_OK;
 }
 
-void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state)
+void loadCalDataFromDate(const DayType dayType, ProcessorState *state, CalibrationVariable_t *variables, int nVariables)
 {
     // c time manipulation: see  https://fresh2refresh.com/c-programming/c-time-related-functions/
     struct tm timestructure = {0};
@@ -383,16 +422,18 @@ void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state)
     state->args.year = timestructure.tm_year + 1900;
     state->args.month = timestructure.tm_mon + 1;
     state->args.day = timestructure.tm_mday;
-    setCalibrationFileName(state, state->args.year, state->args.month, state->args.day);
+
+    setCalibrationFileName(state, state->args.year, state->args.month, state->args.day, CAL_FILE_TII);
+    char *calibrationFileName = state->tiiCalibrationFileName;
     if (state->writeLogFiles) {
-        fprintf(state->processingLogFile, "%s from %s\n", infoHeader, state->calibrationFileName);
+        fprintf(state->processingLogFile, "%s from %s\n", infoHeader, calibrationFileName);
     }
 
     // Open the CDF file with validation
     CDFsetValidate(VALIDATEFILEon);
     CDFid calCdfId;
     CDFstatus status;
-    status = CDFopenCDF(state->calibrationFileName, &calCdfId);
+    status = CDFopenCDF(calibrationFileName, &calCdfId);
     if (status != CDF_OK)
     {
         // Not necessarily an error. For example, some dates will have not calibration data.
@@ -428,7 +469,8 @@ void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state)
         closeCdf(calCdfId);
         return;
     }
-    long nRecs, calibrationMemorySize = 0;
+    long nRecs = 0;
+    long calibrationMemorySize = 0;
     status = CDFgetzVarAllocRecords(calCdfId, CDFgetVarNum(calCdfId, "epoch"), &nRecs);
     if (status != CDF_OK)
     {
@@ -517,7 +559,6 @@ void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state)
     if ((dayType == REQUESTED_DAY && nRecs < (16*SECONDS_OF_DATA_REQUIRED_FOR_PROCESSING)) || ((dayType == PREVIOUS_DAY || dayType == NEXT_DAY) && nRecs < (16*SECONDS_OF_BOUNDARY_DATA_REQUIRED_FOR_PROCESSING)))
     {
         // Not enough to do anything useful
-        // TODO: maybe increase this threshold to require a larger number of points each day?
         if (state->writeLogFiles) {
             fprintf(state->processingLogFile, "%sFewer than %.0f s of data meet constraints. Skipping this date.\n", infoHeader, (float)SECONDS_OF_DATA_REQUIRED_FOR_PROCESSING);
         }
@@ -525,108 +566,17 @@ void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state)
         return;
     }
 
-
-    // Variables
-    char* variables[] = {
-        "epoch",                // index 0
-        "1st Moment - H",       // 1
-        "1st Moment - V",       // 2
-        "Det_H__vX",            // 3
-        "MLT",                  // 4
-        "QDLat",                // 5
-        "QDLon",                // 6
-        "Latitude",             // 7
-        "Longitude",            // 8
-        "Radius",               // 9
-        "Det H CorVx",          // 10
-        "Sat_Vel_N",            // 11
-        "B-North",              // 12
-        "MCP_Voltage_H",        // 13
-        "MCP_Voltage_V",        // 14
-        "Bias_Grid_H",          // 15
-        "Bias_Grid_V",          // 16
-        "Faceplate_Volt_Mon_H"  // 17
-        };
-
-    uint8_t nVars = numzVars;
-    if (nVars != NUM_CAL_VARIABLES)
-    {
-        if (state->writeLogFiles) {
-            fprintf(state->processingLogFile, "%sError: number of calibration variables should be %d. Got %ld. Skipping this date.\n", infoHeader, (uint8_t) NUM_CAL_VARIABLES, numzVars);
-        }
-        closeCdf(calCdfId);
-        return;
-    }
-    if (state->writeLogFiles) {
-        fprintf(state->processingLogFile, "%sChecking calibration file variables...", infoHeader);
-    }
-    for (uint8_t i = 0; i<nVars; i++)
-    {
-        // fprintf(state->processingLogFile, "%s%20s ", infoHeader, variables[i]);
-        status = CDFconfirmzVarExistence(calCdfId, variables[i]);
-        if (status != CDF_OK)
-        {
-
+    for (int i = 0; i < nVariables; i++) {
+        status = loadCdfVariable(state, calCdfId, &variables[i], startRecord, stopRecord, &calibrationMemorySize);
+        if (status != TIICT_OK) {
             if (state->writeLogFiles) {
-                fprintf(state->processingLogFile, "%sError reading variable %s. Skipping this date.\n", infoHeader, variables[i]);
-            }
-            closeCdf(calCdfId);
-            return;
-        }
-        else
-        {
-            // fprintf(state->processingLogFile, "%s OK\n", infoHeader);
-        }
-    }
-    if (state->writeLogFiles) {
-        fprintf(state->processingLogFile, "%sOK\n", infoHeader);
-    }
-
-    long varNum, numValues, numVarBytes;
-    long numBytesPrev, numBytesToAdd, numBytesNew;
-    void *newMem = NULL;
-
-    for (uint8_t i = 0; i < nVars; i++)
-    {
-        varNum = CDFgetVarNum(calCdfId, variables[i]);
-        if (varNum < CDF_OK)
-        {
-            printErrorMessage(varNum);
-            if (state->writeLogFiles) {
-                fprintf(state->processingLogFile, "%sError reading variable ID for %s. Skipping this date.\n", infoHeader, variables[i]);
-            }
-            closeCdf(calCdfId);
-            return;
-        }
-        status = CDFgetzVarNumDims(calCdfId, varNum, &numDims);
-        status = CDFgetzVarDimSizes(calCdfId, varNum, dimSizes);
-        status = CDFgetzVarDataType(calCdfId, varNum, &dataType);
-        // Calculate new size of memory to allocate
-        status = CDFgetDataTypeSize(dataType, &numVarBytes);
-        numValues = 1;
-        for (uint8_t j = 0; j < numDims; j++)
-        {
-            numValues *= dimSizes[j];
-        }
-        numBytesPrev = numValues * (state->nRecs) * numVarBytes;
-        numBytesToAdd = numValues * nRecs * numVarBytes;
-        numBytesNew = numBytesPrev + numBytesToAdd;
-        calibrationMemorySize += numBytesNew;
-        newMem = realloc(state->dataBuffers[i], (size_t) numBytesNew);
-        if (newMem == NULL)
-            return;
-        state->dataBuffers[i] = (uint8_t*) newMem;
-        status = CDFgetzVarRangeRecordsByVarID(calCdfId, varNum, startRecord, stopRecord, state->dataBuffers[i] + numBytesPrev);
-        if (status != CDF_OK)
-        {
-
-            if (state->writeLogFiles) {
-                fprintf(state->processingLogFile, "%sError loading data for %s. Skipping this date.\n", infoHeader, variables[i]);
+                fprintf(state->processingLogFile, "%sError reading input variable %s.\n", infoHeader, variables[i].name);
             }
             closeCdf(calCdfId);
             return;
         }
     }
+
     // close CDF
     closeCdf(calCdfId);
     // Number of records obtained for this date
@@ -647,37 +597,121 @@ void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state)
         }
     }
     // Update number of records found and memory allocated
-    state->nRecs += nRecs;
-    state->memoryAllocated = calibrationMemorySize;
+    state->vars16hz.nRecs += nRecs;
+    state->vars16hz.memoryAllocated = calibrationMemorySize;
 
     return;
 }
 
-void setCalibrationFileName(ProcessorState *state, int year, int month, int day)
+int loadCdfVariable(ProcessorState *state, CDFid calCdfId, CalibrationVariable_t *variable, long startRecord, long stopRecord, long *calibrationMemorySize)
+{
+    int status = TIICT_OK;
+    if (variable == NULL) {
+        return TIICT_ARGS_BAD;
+    }
+
+    // Check CDF info
+    long varNum = CDFgetVarNum(calCdfId, variable->name);
+    if (varNum < CDF_OK)
+    {
+        printErrorMessage(varNum);
+        if (state->writeLogFiles) {
+            fprintf(state->processingLogFile, "%sVariable %s not found.\n", infoHeader, variable->name);
+        }
+        return TIICT_CDF_READ;
+    }
+
+    long dimensionsPerRecord = 0;
+    status = CDFgetzVarNumDims(calCdfId, varNum, &dimensionsPerRecord);
+    long dimensionSizes[CDF_MAX_DIMS];
+    status = CDFgetzVarDimSizes(calCdfId, varNum, dimensionSizes);
+    long valuesPerRecord = 1;
+    for (uint8_t j = 0; j < dimensionsPerRecord; j++)
+    {
+        valuesPerRecord *= dimensionSizes[j];
+    }
+
+    // Calculate size of memory to allocate for loading
+    long dataType = 0;
+    status = CDFgetzVarDataType(calCdfId, varNum, &dataType);
+    long bytesPerValue = 0;
+    status = CDFgetDataTypeSize(dataType, &bytesPerValue);
+
+    long nRecords = stopRecord - startRecord + 1;
+    long nBytesToLoad = nRecords * valuesPerRecord * bytesPerValue;
+    void *mem = malloc(nBytesToLoad);
+    if (mem == NULL) {
+        return TIICT_MEMORY;
+    }
+    status = CDFgetzVarRangeRecordsByVarID(calCdfId, varNum, startRecord, stopRecord, mem);
+    if (status != CDF_OK)
+    {
+        return TIICT_CDF_READ;
+    }
+
+    long nRecordsAlreadyLoaded = state->vars16hz.nRecs;
+    long nBytesAlreadyLoaded = nRecordsAlreadyLoaded * valuesPerRecord * bytesPerValue;
+    long nBytesToAdd = nRecords * bytesPerValue;
+    calibrationMemorySize += nBytesToAdd;
+    long nBytesNew = nBytesAlreadyLoaded + nBytesToAdd;
+    status = reallocVariable(variable->memoryPointer, (size_t) nBytesNew);
+    if (status != TIICT_OK) {
+        return status;
+    }
+
+    for (int i = 0; i < nRecords; i++) {
+        switch(dataType) {
+            case CDF_REAL8:
+            case CDF_EPOCH:
+                ((double*)*variable->memoryPointer)[nRecordsAlreadyLoaded + i] = ((double*)mem)[i*valuesPerRecord + variable->recordValueOffset];
+                break;
+            default:
+                // EfiCalCdfs have only epoch and real4 types
+                ((float*)*variable->memoryPointer)[nRecordsAlreadyLoaded + i] = ((float*)mem)[i*valuesPerRecord + variable->recordValueOffset];
+                break;
+        }
+    }
+
+    free(mem);
+
+    return TIICT_OK;
+}
+
+void setCalibrationFileName(ProcessorState *state, int year, int month, int day, CalibrationFileType_enum fileType)
 {
     Arguments *a = &state->args;
-    snprintf(state->calibrationFileName, CDF_PATHNAME_LEN, "%s/%s/%04d/Swarm_%s/%02d/TiiClbr%s_Swarm_%s_%04d_%02d_%02d.cdf", a->calDir, a->calVersion, year, a->satellite, month, a->calVersion, a->satellite, year, month, day);
+    switch (fileType) {
+        case CAL_FILE_TII:
+            snprintf(state->tiiCalibrationFileName, CDF_PATHNAME_LEN, "%s/%s/%04d/Swarm_%s/%02d/TiiClbr%s_Swarm_%s_%04d_%02d_%02d.cdf", a->calDir, a->calVersion, year, a->satellite, month, a->calVersion, a->satellite, year, month, day);
+            break;
+        case CAL_FILE_LP:
+            // TODO Optimize this to not have to check for latest LP file version
+            getLpInputFilename(state->args.satellite[0], year, month, day, state->args.lpDir, state->lpCalibrationFileName);
+            break;
+        default:
+            break;
+    }
 
     return;
 }
 
 int checkCalDataAvailability(ProcessorState *state)
 {
-    setCalibrationFileName(state, state->args.year, state->args.month, state->args.day);
-    if (access(state->calibrationFileName, F_OK) != 0)
+    setCalibrationFileName(state, state->args.year, state->args.month, state->args.day, CAL_FILE_TII);
+    if (access(state->tiiCalibrationFileName, F_OK) != 0)
     {
         if (state->writeLogFiles) {
-            fprintf(state->processingLogFile, "%sCalibration file %s not found. Skipping this date.\n", infoHeader, state->calibrationFileName);
+            fprintf(state->processingLogFile, "%sCalibration file %s not found. Skipping this date.\n", infoHeader, state->tiiCalibrationFileName);
         }
         return TIICT_NO_CAL_FILE;
     }
     CDFid calCdfId;
     CDFstatus status;
-    status = CDFopenCDF(state->calibrationFileName, &calCdfId);
+    status = CDFopenCDF(state->tiiCalibrationFileName, &calCdfId);
     if (status != CDF_OK)
     {
         if (state->writeLogFiles) {
-            fprintf(state->processingLogFile, "%sUnable to open %s. Skipping this date.\n", infoHeader, state->calibrationFileName);
+            fprintf(state->processingLogFile, "%sUnable to open %s. Skipping this date.\n", infoHeader, state->tiiCalibrationFileName);
         }
         return TIICT_CDF_READ;
     }
@@ -711,4 +745,175 @@ int checkCalDataAvailability(ProcessorState *state)
     return TIICT_OK;
 
 }
+
+void freeVariable(void *var)
+{
+    free(var);
+    var = NULL;
+
+    return;
+}
+
+void freeVariables(ProcessorVariables_t *vars)
+{
+    freeVariable(vars->timestamp);
+    freeVariable(vars->latitude);
+    freeVariable(vars->longitude);
+    freeVariable(vars->radius);
+    freeVariable(vars->qdlat);
+    freeVariable(vars->mlt);
+    freeVariable(vars->mxh);
+    freeVariable(vars->myh);
+    freeVariable(vars->mxv);
+    freeVariable(vars->myv);
+    freeVariable(vars->vsatx);
+    freeVariable(vars->vsaty);
+    freeVariable(vars->vsatz);
+    freeVariable(vars->enhRaw);
+    freeVariable(vars->envRaw);
+    freeVariable(vars->enh);
+    freeVariable(vars->env);
+    freeVariable(vars->vixh);
+    freeVariable(vars->vixherror);
+    freeVariable(vars->vixv);
+    freeVariable(vars->vixverror);
+    freeVariable(vars->viy);
+    freeVariable(vars->viyerror);
+    freeVariable(vars->viz);
+    freeVariable(vars->vizerror);
+    freeVariable(vars->vsatn);
+    freeVariable(vars->vsate);
+    freeVariable(vars->vsatc);
+    freeVariable(vars->ectxh);
+    freeVariable(vars->ectyh);
+    freeVariable(vars->ectzh);
+    freeVariable(vars->ectxv);
+    freeVariable(vars->ectyv);
+    freeVariable(vars->ectzv);
+    freeVariable(vars->bctx);
+    freeVariable(vars->bcty);
+    freeVariable(vars->bctz);
+    freeVariable(vars->bn);
+    freeVariable(vars->be);
+    freeVariable(vars->bc);
+    freeVariable(vars->vicrx);
+    freeVariable(vars->vicry);
+    freeVariable(vars->vicrz);
+    freeVariable(vars->flags);
+    freeVariable(vars->fitInfo);
+    freeVariable(vars->geoelectricPotential);
+    freeVariable(vars->geoelectricPotentialDifference);
+    freeVariable(vars->maxAbsGeoelectricPotentialBaselineSlope);
+    freeVariable(vars->ehxAdjusted);
+    freeVariable(vars->ehxAdjustmentParameter);
+    freeVariable(vars->geoelectricPotentialDetrended);
+    freeVariable(vars->maxAbsGeoelectricPotentialDetrendedBaselineSlope);
+    freeVariable(vars->orbitRegion);
+    freeVariable(vars->lpTimes);
+    freeVariable(vars->lpPhiScHighGain);
+    freeVariable(vars->lpPhiScLowGain);
+    freeVariable(vars->lpPhiSc);
+    freeVariable(vars->potentials);
+    freeVariable(vars->xhat);
+    freeVariable(vars->yhat);
+    freeVariable(vars->zhat);
+    freeVariable(vars->geoelectricPotential);
+    freeVariable(vars->maxAbsGeoelectricPotentialBaselineSlope);
+    freeVariable(vars->geoelectricPotentialDifference);
+    freeVariable(vars->geoelectricPotentialDetrended);
+    freeVariable(vars->maxAbsGeoelectricPotentialDetrendedBaselineSlope);
+    freeVariable(vars->ehxAdjusted);
+    freeVariable(vars->ehxAdjustmentParameter);
+
+    return;
+}
+
+int reallocVariable(void **var, size_t newSize)
+{
+
+    if (var == NULL) {
+        return TIICT_ARGS_BAD;
+    }
+    void *mem = realloc(*var, newSize * sizeof **var);
+    if (mem == NULL) {
+        return TIICT_MEMORY;
+    }
+    *var = mem;
+
+    return TIICT_OK;
+}
+
+int reallocVariables(ProcessorVariables_t *vars, size_t newSize)
+{
+    int status = TIICT_OK;
+    status |= reallocVariable((void*)&vars->timestamp, newSize);
+    status |= reallocVariable((void*)&vars->latitude, newSize);
+    status |= reallocVariable((void*)&vars->longitude, newSize);
+    status |= reallocVariable((void*)&vars->radius, newSize);
+    status |= reallocVariable((void*)&vars->qdlat, newSize);
+    status |= reallocVariable((void*)&vars->mlt, newSize);
+    status |= reallocVariable((void*)&vars->mxh, newSize);
+    status |= reallocVariable((void*)&vars->myh, newSize);
+    status |= reallocVariable((void*)&vars->mxv, newSize);
+    status |= reallocVariable((void*)&vars->myv, newSize);
+    status |= reallocVariable((void*)&vars->vmcph, newSize);
+    status |= reallocVariable((void*)&vars->vmcpv, newSize);
+    status |= reallocVariable((void*)&vars->vbiash, newSize);
+    status |= reallocVariable((void*)&vars->vbiasv, newSize);
+    status |= reallocVariable((void*)&vars->vfp, newSize);
+    status |= reallocVariable((void*)&vars->vsatx, newSize);
+    status |= reallocVariable((void*)&vars->vsaty, newSize);
+    status |= reallocVariable((void*)&vars->vsatz, newSize);
+    status |= reallocVariable((void*)&vars->enhRaw, newSize);
+    status |= reallocVariable((void*)&vars->envRaw, newSize);
+    status |= reallocVariable((void*)&vars->enh, newSize);
+    status |= reallocVariable((void*)&vars->env, newSize);
+    status |= reallocVariable((void*)&vars->vixh, newSize);
+    status |= reallocVariable((void*)&vars->vixherror, newSize);
+    status |= reallocVariable((void*)&vars->vixv, newSize);
+    status |= reallocVariable((void*)&vars->vixverror, newSize);
+    status |= reallocVariable((void*)&vars->viy, newSize);
+    status |= reallocVariable((void*)&vars->viyerror, newSize);
+    status |= reallocVariable((void*)&vars->viz, newSize);
+    status |= reallocVariable((void*)&vars->vizerror, newSize);
+    status |= reallocVariable((void*)&vars->vsatn, newSize);
+    status |= reallocVariable((void*)&vars->vsate, newSize);
+    status |= reallocVariable((void*)&vars->vsatc, newSize);
+    status |= reallocVariable((void*)&vars->bn, newSize);
+    status |= reallocVariable((void*)&vars->be, newSize);
+    status |= reallocVariable((void*)&vars->bc, newSize);
+    status |= reallocVariable((void*)&vars->vicrx, newSize);
+    status |= reallocVariable((void*)&vars->vicry, newSize);
+    status |= reallocVariable((void*)&vars->vicrz, newSize);
+    status |= reallocVariable((void*)&vars->ectxh, newSize);
+    status |= reallocVariable((void*)&vars->ectyh, newSize);
+    status |= reallocVariable((void*)&vars->ectzh, newSize);
+    status |= reallocVariable((void*)&vars->ectxv, newSize);
+    status |= reallocVariable((void*)&vars->ectyv, newSize);
+    status |= reallocVariable((void*)&vars->ectzv, newSize);
+    status |= reallocVariable((void*)&vars->bctx, newSize);
+    status |= reallocVariable((void*)&vars->bcty, newSize);
+    status |= reallocVariable((void*)&vars->bctz, newSize);
+    status |= reallocVariable((void*)&vars->flags, newSize);
+    status |= reallocVariable((void*)&vars->fitInfo, newSize);
+    status |= reallocVariable((void*)&vars->geoelectricPotential, newSize);
+    status |= reallocVariable((void*)&vars->geoelectricPotentialDifference, newSize);
+    status |= reallocVariable((void*)&vars->maxAbsGeoelectricPotentialBaselineSlope, newSize);
+    status |= reallocVariable((void*)&vars->ehxAdjusted, newSize);
+    status |= reallocVariable((void*)&vars->ehxAdjustmentParameter, newSize);
+    status |= reallocVariable((void*)&vars->geoelectricPotentialDetrended, newSize);
+    status |= reallocVariable((void*)&vars->maxAbsGeoelectricPotentialDetrendedBaselineSlope, newSize);
+    status |= reallocVariable((void*)&vars->orbitRegion, newSize);
+    status |= reallocVariable((void*)&vars->lpTimes, newSize);
+    status |= reallocVariable((void*)&vars->lpPhiScHighGain, newSize);
+    status |= reallocVariable((void*)&vars->lpPhiScLowGain, newSize);
+    status |= reallocVariable((void*)&vars->lpPhiSc, newSize);
+    status |= reallocVariable((void*)&vars->potentials, newSize);
+    status |= reallocVariable((void*)&vars->xhat, newSize * 3);
+    status |= reallocVariable((void*)&vars->yhat, newSize * 3);
+    status |= reallocVariable((void*)&vars->zhat, newSize * 3);
+
+    return status;
+}
+
 

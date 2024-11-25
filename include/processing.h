@@ -34,7 +34,7 @@ enum FITINFO_BIT_MASKS {
     FITINFO_DRIFT_MAGNITUDE_EXCEEDED = (1 << 4)
 };
 
-int initQualityData(ProcessorState *state);
+int initQualityData(ProcessorVariables_t *var);
 int calibrateFlows(ProcessorState *state);
 
 int removeOffsetsAndSetFlags(ProcessorState *state, int (*processRegion)(ProcessorState*));
@@ -44,9 +44,9 @@ void updateDataQualityFlags(const char *satellite, uint8_t sensorIndex, uint8_t 
 
 float madThreshold(char satellite, int sensorIndex);
 
-int initFields(ProcessorState *state);
+int initFields(ProcessorVariables_t *var);
 int calculateFields(ProcessorState *state);
-int integrateField(ProcessorState *state, float *sourceField, int sourceStride, float scaleFactor, float *targetPotential, long startInd, long stopInd, bool vsDistance, bool positive, bool absoluteValue, bool removeMedianFromStart, float *medianDifference, float *firstSlope, float *lastSlope);
+int integrateField(ProcessorState *state, float *sourceField, float scaleFactor, float *targetPotential, long startInd, long stopInd, bool vsDistance, bool positive, bool absoluteValue, bool removeMedianFromStart, float *medianDifference, float *firstSlope, float *lastSlope);
 int regionMetrics(ProcessorState *state, long startInd, long stopInd, float *parameter, float *median, float *slope);
 
 void interpolate(double *times, double *values, size_t nVals, double *requestedTimes, long nRequestedValues, float *newValues);
@@ -65,7 +65,8 @@ int checkResult(int status, ProcessorState *state);
 void closeFiles(ProcessorState *state);
 int shutdown(ProcessorState *state);
 
-int velocityBackgroundRemoval(ProcessorState *state);
+
+int backgroundRemoval(ProcessorState *state);
 void geoelectricPotentialBackgroundRemoval(ProcessorState *state);
 int geoelectricPotentialEstimator(ProcessorState *state);
 

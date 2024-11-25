@@ -32,7 +32,7 @@
 #define MAX_ALLOWED_CDF_GAP_SECONDS 600.0 // CDF export split into separate files at gaps exceeding 10 minutes
 #define NUM_CAL_VARIABLES 18
 #define NUM_EXPORT_VARIABLES 40
-#define NUM_BUFFER_VARIABLES 39
+#define NUM_BUFFER_VARIABLES 61
 
 #define MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT 8
 #define GSL_FIT_MAXIMUM_ITERATIONS 500

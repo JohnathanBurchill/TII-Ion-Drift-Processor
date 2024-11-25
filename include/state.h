@@ -21,7 +21,6 @@
 #ifndef _STATE_H
 #define _STATE_H
 
-#include "settings.h"
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -29,6 +28,12 @@
 #include <gsl/gsl_multifit.h>
 
 #include <tiigraphics/draw.h>
+
+typedef enum MeasurementType {
+    VELOCITY_MEASUREMENT = 0,
+    ENERGY_MEASUREMENT,
+} MeasurementType_enum;
+
 
 typedef struct offset_model_fit_arguments {
     const uint8_t regionNumber;
@@ -84,6 +89,90 @@ typedef struct BackgroundRemovalWorkspace
 
 } BackgroundRemovalWorkspace_t;
 
+typedef struct ProcessorVariables {
+
+    long memoryAllocated;
+    long nRecs;
+
+    // Exported variables
+    // If changing this list, check freeing of memory and downsampling
+    // algorithm
+    double *timestamp;
+    float *latitude;
+    float *longitude;
+    float *radius;
+    float *qdlat;
+    float *mlt;
+    float *mxh;
+    float *myh;
+    float *mxv;
+    float *myv;
+    float *vmcph;
+    float *vmcpv;
+    float *vbiash;
+    float *vbiasv;
+    float *vfp;
+    float *vsatx;
+    float *vsaty;
+    float *vsatz;
+    float *enhRaw;
+    float *envRaw;
+    float *enh;
+    float *env;
+    float *vixh;
+    float *vixherror;
+    float *vixv;
+    float *vixverror;
+    float *viy;
+    float *viyerror;
+    float *viz;
+    float *vizerror;
+    float *vsatn;
+    float *vsate;
+    float *vsatc;
+    float *bn;
+    float *be;
+    float *bc;
+    float *vicrx;
+    float *vicry;
+    float *vicrz;
+    float *geoelectricPotential;
+    float *geoelectricPotentialDifference;
+    float *maxAbsGeoelectricPotentialBaselineSlope;
+    float *ehxAdjusted;
+    float *ehxAdjustmentParameter;
+    float *geoelectricPotentialDetrended;
+    float *maxAbsGeoelectricPotentialDetrendedBaselineSlope;
+    uint8_t *orbitRegion;
+    uint16_t *flags;
+    uint32_t *fitInfo;
+
+    // LP
+    int lpPotentialSource;
+    size_t nLpRecs;
+    double *lpTimes;
+    float *lpPhiScHighGain;
+    float *lpPhiScLowGain;
+    float *lpPhiSc;
+    float *potentials;
+
+    // Internal variables
+    float *xhat;
+    float *yhat;
+    float *zhat;
+    float *ectxh;
+    float *ectyh;
+    float *ectzh;
+    float *ectxv;
+    float *ectyv;
+    float *ectzv;
+    float *bctx;
+    float *bcty;
+    float *bctz;
+
+
+} ProcessorVariables_t;
+
 typedef struct ProcessorState {
 
     int returnStatus;
@@ -99,47 +188,23 @@ typedef struct ProcessorState {
     char processingDateString[32];
 
     // Calibration CDF data
-    char calibrationFileName[CDF_PATHNAME_LEN];
-    uint8_t * dataBuffers[NUM_CAL_VARIABLES];
-    long nRecs;
-    long memoryAllocated;
+    char tiiCalibrationFileName[CDF_PATHNAME_LEN];
+    char lpCalibrationFileName[CDF_PATHNAME_LEN];
+    // 16 Hz
+    ProcessorVariables_t vars16hz;
+    // 2 Hz
+    ProcessorVariables_t vars2hz;
+    // Pointer to variables in use
+    ProcessorVariables_t *vars;
 
-    // LP data for floating potential
-    double *lpTimes;
-    float *lpPhiScHighGain;
-    float *lpPhiScLowGain;
-    float *lpPhiSc;
-    size_t nLpRecs;
-    float *potentials;
-    int lpPotentialSource;
-    bool usePotentials;
     bool useEofR;
-
-    // Additional data
-    float *viErrors;
-    uint16_t *flags;
-    uint32_t *fitInfo;
-    uint8_t *region;
-
-    float *xhat;
-    float *yhat;
-    float *zhat;
-    float *ectFieldH;
-    float *ectFieldV;
-    float *bctField;
-
-    float *geoPotential;
-    float *maxAbsGeopotentialSlope;
-    float *geoPotentialDifference;
-    float *geoPotentialDetrended;
-    float *maxAbsGeopotentialDetrendedSlope;
-    float *exAdjusted;
-    float *exAdjustmentParameter;
+    bool usePotentials;
 
     // Offset removal options
     uint8_t interval;
     bool setFlags;
     BackgroundRemovalWorkspace_t bgws;
+    MeasurementType_enum measurementType;
 
     bool export2Hz;
     bool export16Hz;
@@ -157,8 +222,10 @@ typedef struct ProcessorState {
     double plotT0;
     double plotT1;
     Image *frames;
+    int frameWidth;
+    int frameHeight;
+    int framesPerSecond;
     int nVideoFrames;
-
 
 } ProcessorState;
 

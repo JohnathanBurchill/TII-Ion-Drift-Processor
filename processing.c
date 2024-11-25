@@ -22,7 +22,6 @@
 
 #include "state.h"
 #include "settings.h"
-#include "indexing.h"
 #include "errors.h"
 #include "loadData.h"
 #include "export.h"
@@ -44,31 +43,34 @@
 
 char infoHeader[50] = {0};
 
-int initQualityData(ProcessorState *state)
+int initQualityData(ProcessorVariables_t *var)
 {
     // Quality flag and fitInfo flag initialized to zero
-    state->flags = malloc(state->nRecs * sizeof *state->flags);
-    state->fitInfo = malloc(state->nRecs * sizeof *state->fitInfo);
-    state->region = malloc(state->nRecs * sizeof *state->region);
+    var->flags = malloc(var->nRecs * sizeof *var->flags);
+    var->fitInfo = malloc(var->nRecs * sizeof *var->fitInfo);
+    var->orbitRegion = malloc(var->nRecs * sizeof *var->orbitRegion);
     // Error estimates from Mean Absolute Deviation (MAD): default is -42. :)
-    state->viErrors = malloc(state->nRecs * sizeof *state->viErrors * 4);
-    if (state->flags == NULL || state->fitInfo == NULL || state->viErrors == NULL)
+    var->vixherror = malloc(var->nRecs * sizeof *var->vixherror);
+    var->vixverror = malloc(var->nRecs * sizeof *var->vixverror);
+    var->viyerror = malloc(var->nRecs * sizeof *var->viyerror);
+    var->vizerror = malloc(var->nRecs * sizeof *var->vizerror);
+    if (var->flags == NULL || var->fitInfo == NULL || var->vixherror == NULL || var->vixverror == NULL || var->viyerror == NULL || var->vizerror == NULL)
     {
         return TIICT_MEMORY;
     }
-    for (long ind = 0; ind < state->nRecs; ind++)
+    for (long ind = 0; ind < var->nRecs; ind++)
     {
-        state->viErrors[4*ind+0] = DEFAULT_VI_ERROR;
-        state->viErrors[4*ind+1] = DEFAULT_VI_ERROR;
-        state->viErrors[4*ind+2] = DEFAULT_VI_ERROR;
-        state->viErrors[4*ind+3] = DEFAULT_VI_ERROR;
-        state->flags[ind] = 0;
-        state->region[ind] = 255; // Invalid or incomplete region
+        var->vixherror[ind] = DEFAULT_VI_ERROR;
+        var->vixverror[ind] = DEFAULT_VI_ERROR;
+        var->viyerror[ind] = DEFAULT_VI_ERROR;
+        var->vizerror[ind] = DEFAULT_VI_ERROR;
+        var->flags[ind] = 0;
+        var->orbitRegion[ind] = 255; // Invalid or incomplete region
         // FITINFO_OFFSET_NOT_REMOVED = 1 and FITINFO_INCOMPLETE_REGION = 1 are the defaults for fitInfo
         // Set for each velocity component
         for (uint8_t k = 0; k < 4; k++)
         {
-            state->fitInfo[ind] |= ((FITINFO_OFFSET_NOT_REMOVED | FITINFO_INCOMPLETE_REGION)) << (k * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT);
+            var->fitInfo[ind] |= ((FITINFO_OFFSET_NOT_REMOVED | FITINFO_INCOMPLETE_REGION)) << (k * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT);
         }
     }
 
@@ -78,14 +80,13 @@ int initQualityData(ProcessorState *state)
 int calibrateFlows(ProcessorState *state)
 {
     // Allocate memory for quality parameters
-    int status = initQualityData(state);
+    int status = initQualityData(&state->vars16hz);
     if (status != TIICT_OK)
         return status;
 
     // Do the calibration
-    uint8_t **dataBuffers = state->dataBuffers;
-    double *pEpoch = (double*) dataBuffers[0];
-    long long timeIndex = 0;
+    double *pEpoch = state->vars16hz.timestamp;
+    long long i = 0;
 
     // Strategy is to perform calculations in place in memory without allocating space unecessarily.
     // Update
@@ -94,24 +95,22 @@ int calibrateFlows(ProcessorState *state)
     //  2) bias voltage to nearest of -100 V, -62 V or left alone if too different from those values
     //  3) apply Level 1 calibration with bias dependence
     float value, innerDomeBias;
-    float vMcpH = 0.0;
-    float vMcpV = 0.0;
 
     // TII calibration file times have already been adjusted for sample lag
 
     // Choose a potential estimate (lpPhiSc, lpPhiScHighGain, or lpPhiScLowGain)
-    switch (state->lpPotentialSource) {
+    switch (state->vars16hz.lpPotentialSource) {
         case LP_POTENTIAL_HIGHGAIN:
-            state->potentials = state->lpPhiScHighGain;
+            state->vars16hz.potentials = state->vars16hz.lpPhiScHighGain;
             break;
         case LP_POTENTIAL_LOWGAIN:
-            state->potentials = state->lpPhiScLowGain;
+            state->vars16hz.potentials = state->vars16hz.lpPhiScLowGain;
             break;
         case LP_POTENTIAL_U_SC:
-            state->potentials = state->lpPhiSc;
+            state->vars16hz.potentials = state->vars16hz.lpPhiSc;
             break;
         default:
-            state->potentials = NULL;
+            state->vars16hz.potentials = NULL;
             break;
     }
 
@@ -133,34 +132,40 @@ int calibrateFlows(ProcessorState *state)
     detectorCoordinates(state->args.satellite[0], V_SENSOR, &xcv, &ycv);
 
     // Estimate raw velocities
-    for (long timeIndex = 0; timeIndex < state->nRecs; timeIndex++)
+    ProcessorVariables_t *v = &state->vars16hz;
+    for (long i = 0; i < v->nRecs; i++)
     {
         // Bias Voltage
         // TODO: need a more accurate replacement: i.e., early in mission the voltage was ~-60 V, not -62.
-        if (VBIASH() < -95.0)
-            *ADDR(15, 0, 1) = -100.;
-        else if(VBIASH() > -65. && VBIASH() < -55.0)
-            *ADDR(15, 0, 1) = -62.0;
-        if (VBIASV() < -95.0)
-            *ADDR(16, 0, 1) = -100.;
-        else if(VBIASV() > -65. && VBIASV() < -55.0)
-            *ADDR(16, 0, 1) = -62.0;
+        //
+        if (v->vbiash[i] < -95.0) {
+            v->vbiash[i] = -100.0;
+        }
+        else if(v->vbiash[i] > -65. && v->vbiash[i] < -55.0) {
+            v->vbiash[i] = -62.0;
+        }
+        if (v->vbiasv[i] < -95.0) {
+            v->vbiasv[i] = -100.0;
+        }
+        else if(v->vbiasv[i] > -65. && v->vbiasv[i] < -55.0) {
+            v->vbiasv[i] = -62.0;
+        }
 
         // VSatXYZ to m/s
-        *ADDR(3, 0, 3) *= 1000.0;
-        *ADDR(3, 1, 3) *= 1000.0;
-        *ADDR(3, 2, 3) *= 1000.0;
+        v->vsatx[i] *= 1000.0;
+        v->vsaty[i] *= 1000.0;
+        v->vsatz[i] *= 1000.0;
 
         // VCorot to m/s
-        *ADDR(10, 0, 3) *= 1000.0;
-        *ADDR(10, 1, 3) *= 1000.0;
-        *ADDR(10, 2, 3) *= 1000.0;
+        v->vicrx[i] *= 1000.0;
+        v->vicry[i] *= 1000.0;
+        v->vicrz[i] *= 1000.0;
 
         // Apply level1 calibration with bias dependence
         // Assumes H and V sensors have same bias, which is okay
         // since we set it to a set number due to known noise levels in monitors.
         // Just use H sensor here
-        innerDomeBias = VBIASH() - VFP();
+        innerDomeBias = v->vbiash[i] - v->vfp[i];
 
         // Get scaling parameter
         switch(state->args.satellite[0])
@@ -188,7 +193,7 @@ int calibrateFlows(ProcessorState *state)
                     shx *= 450.5;
                     shy = 450.5; // Calibration 20210624, inner dome bias at -62 V.
                     svx *= 451.0;
-		    svy = 525.0; // Calibration 20210624, inner dome bias at -62 V.
+        		    svy = 525.0; // Calibration 20210624, inner dome bias at -62 V.
                 }
                 break;
             case 'C': // 20191126 slew experiment, plus simulations
@@ -209,8 +214,8 @@ int calibrateFlows(ProcessorState *state)
         // Change sign to get flow directions correct, then apply scaling
         // and subtract satellite velocity
 
-        *ADDR(1, 1, 2) = -1.0 * (MYH() - ych) * shy - VSATY();
-        *ADDR(2, 1, 2) = -1.0 * (MYV() - ycv) * svy - VSATZ();
+        v->viy[i] = -1.0 * (v->myh[i] - ych) * shy - v->vsaty[i];
+        v->viz[i] = -1.0 * (v->myv[i] - ycv) * svy - v->vsatz[i];
 
         // Along-track flows should take into account satellite potential
         // by first converting flow to energy (eofr)
@@ -223,28 +228,23 @@ int calibrateFlows(ProcessorState *state)
             // Add in the satellite potential
             // Then remove offsets from this
             // Then convert to flow velocity, adding ram energy of O+ before taking sqare root.
-            vMcpH = VMCPH();
-            vMcpV = VMCPV();
+            // Use eofr estimate, no correction for variations in satellite potential
+            v->enh[i] = v->enhRaw[i] = eofr(v->mxh[i] - xch, innerDomeBias, v->vmcph[i]);
+            v->env[i] = v->envRaw[i] = eofr(v->mxv[i] - xcv, innerDomeBias, v->vmcpv[i]);
             if (state->usePotentials)
             {
-                // Reserved method for scenario that satellite potential can be estimated reliably
-                // i.e. without significant noise levels, discontinuities, and transients
-                *ADDR(1, 0, 2) = eofr(MXH() - xch, innerDomeBias, vMcpH) + state->potentials[timeIndex];
-                *ADDR(2, 0, 2) = eofr(MXV() - xcv, innerDomeBias, vMcpV) + state->potentials[timeIndex];
-            }
-            else
-            {
-                // Use eofr estimate, no correction for variations in satellite potential
-                *ADDR(1, 0, 2) = eofr(MXH() - xch, innerDomeBias, vMcpH);
-                *ADDR(2, 0, 2) = eofr(MXV() - xcv, innerDomeBias, vMcpV);
+                // TODO include emf?
+                v->enh[i] += v->potentials[i];
+                v->env[i] += v->potentials[i];
             }
         }
         else
         {
             // Old way, estimates a proxy based on image moments
             // no potential correction, and this is our offset-biased flow estimate
-            *ADDR(1, 0, 2) = -1.0 * (MXH() - 32.5) * shx - VSATX();
-            *ADDR(2, 0, 2) = -1.0 * (MXV() - 32.5) * svx - VSATX();
+            v->vixh[i] = -1.0 * (v->mxh[i] - 32.5) * shx - v->vsatx[i];
+            v->vixv[i] = -1.0 * (v->mxv[i] - 32.5) * svx - v->vsatx[i];
+            v->enhRaw[i] = v->envRaw[i] = v->enh[i] = v->env[i] = 0.0;
         }
 
     }
@@ -258,7 +258,7 @@ int calibrateFlows(ProcessorState *state)
     state->setFlags = true;
     // Linear offset model
     state->bgws.fitDegree = 2;
-    status = removeOffsetsAndSetFlags(state, velocityBackgroundRemoval);
+    status = removeOffsetsAndSetFlags(state, backgroundRemoval);
     if (status != TIICT_OK)
         return status;
 
@@ -269,18 +269,14 @@ int calibrateFlows(ProcessorState *state)
     float factor = 0.5 * mass / q;
     if (state->useEofR)
     {
-        for (long timeIndex = 0; timeIndex < state->nRecs; timeIndex++)
+        for (long i = 0; i < v->nRecs; i++)
         {
-            backgroundRamEnergyeV = factor * VSATX() * VSATX();
+            backgroundRamEnergyeV = factor * v->vsatx[i] * v->vsatx[i];
             // Calculate vix assuming pure O+
             // Positive, is flow towards satellite, in direction of sensor x axis.
-            vixh = sqrtf((MXH() + backgroundRamEnergyeV) / factor);
-            vixv = sqrtf((MXV() + backgroundRamEnergyeV) / factor);
-            // then calculate vi. Note that VSATX is positive toward direction of motion
-            // HX
-            *ADDR(1, 0, 2) = VSATX() - vixh;
-            // HV
-            *ADDR(2, 0, 2) = VSATX() - vixv;
+            // Then calculate vi. Note that VSATX is positive toward direction of motion
+            v->vixh[i] = v->vsatx[i] - sqrtf((v->enh[i] + backgroundRamEnergyeV) / factor);
+            v->vixv[i] = v->vsatx[i] - sqrtf((v->env[i] + backgroundRamEnergyeV) / factor);
         }
     }
 
@@ -321,12 +317,11 @@ int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, int (*processRegi
 {
     // Robust linear least squares from GSL: https://www.gnu.org/software/gsl/doc/html/lls.html#examples
     int status = TIICT_OK;
-    long long timeIndex = 0;
-    uint8_t **dataBuffers = state->dataBuffers;
     uint16_t minDataPointsNeeded = 80;
-    float previousQDLat = QDLAT();
+    ProcessorVariables_t *v = &state->vars16hz;
+    float previousQDLat = v->qdlat[0];
     bool regionBegin = false;
-    state->bgws.epoch0 = TIME();
+    state->bgws.epoch0 = v->timestamp[0];
     double seconds, fitTime;
     int gslStatus;
     bool gotFirstModelData = false;
@@ -360,27 +355,27 @@ int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, int (*processRegi
     else
         currentregion = 0; // Equator
 
-    for (timeIndex = 0; timeIndex < state->nRecs; timeIndex++)
+    for (int i = 0; i < v->nRecs; i++)
     {
-        seconds = (TIME() - state->bgws.epoch0) / 1000.;
-        if ((firstDirection == 1 && QDLAT() >= fitargs->lat1 && previousQDLat < fitargs->lat1) || (firstDirection == -1 && QDLAT() <= fitargs->lat1 && previousQDLat > fitargs->lat1))
+        seconds = (v->timestamp[i] - state->bgws.epoch0) / 1000.;
+        if ((firstDirection == 1 && v->qdlat[i] >= fitargs->lat1 && previousQDLat < fitargs->lat1) || (firstDirection == -1 && v->qdlat[i] <= fitargs->lat1 && previousQDLat > fitargs->lat1))
         {
             // Start a new region search
             regionBegin = true; // Found start of region to remove offset from
             gotFirstModelData = false;
             gotStartOfSecondModelData = false;
             gotSecondModelData = false;
-            state->bgws.beginIndex0 = timeIndex;
-            state->bgws.tregion11 = TIME();
+            state->bgws.beginIndex0 = i;
+            state->bgws.tregion11 = v->timestamp[i];
 
         }
-        else if (regionBegin && ((firstDirection == 1 && QDLAT() >= fitargs->lat2 && previousQDLat < fitargs->lat2) || (firstDirection == -1 && QDLAT() <= fitargs->lat2 && previousQDLat > fitargs->lat2)))
+        else if (regionBegin && ((firstDirection == 1 && v->qdlat[i] >= fitargs->lat2 && previousQDLat < fitargs->lat2) || (firstDirection == -1 && v->qdlat[i] <= fitargs->lat2 && previousQDLat > fitargs->lat2)))
         {
-            if ((TIME() - state->bgws.tregion11)/1000. < (5400. / 2.)) // Should be within 1/2 an orbit of start of segment
+            if ((v->timestamp[i] - state->bgws.tregion11)/1000. < (5400. / 2.)) // Should be within 1/2 an orbit of start of segment
             {
                 gotFirstModelData = true;
-                state->bgws.beginIndex1 = timeIndex;
-                state->bgws.tregion12 = TIME();
+                state->bgws.beginIndex1 = i;
+                state->bgws.tregion12 = v->timestamp[i];
             }
             else
             {
@@ -391,13 +386,13 @@ int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, int (*processRegi
                 regionBegin = false;
             }
         }
-        else if (gotFirstModelData && ((secondDirection == -1 && QDLAT() <= fitargs->lat3 && previousQDLat > fitargs->lat3) || (secondDirection == 1 && QDLAT() >= fitargs->lat3 && previousQDLat < fitargs->lat3)))
+        else if (gotFirstModelData && ((secondDirection == -1 && v->qdlat[i] <= fitargs->lat3 && previousQDLat > fitargs->lat3) || (secondDirection == 1 && v->qdlat[i] >= fitargs->lat3 && previousQDLat < fitargs->lat3)))
         {
-            if ((TIME() - state->bgws.tregion12)/1000. < (5400. / 2.)) // Should be within 1/2 an orbit of start of segment
+            if ((v->timestamp[i] - state->bgws.tregion12)/1000. < (5400. / 2.)) // Should be within 1/2 an orbit of start of segment
             {
                 gotStartOfSecondModelData = true;
-                state->bgws.endIndex0 = timeIndex;
-                state->bgws.tregion21 = TIME();
+                state->bgws.endIndex0 = i;
+                state->bgws.tregion21 = v->timestamp[i];
             }
             else
             {
@@ -408,13 +403,13 @@ int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, int (*processRegi
                 regionBegin = false;
             }
         }
-        else if (gotStartOfSecondModelData && ((secondDirection == -1 && QDLAT() <= fitargs->lat4 && previousQDLat > fitargs->lat4) || (secondDirection == 1 && QDLAT() >= fitargs->lat4 && previousQDLat < fitargs->lat4)))
+        else if (gotStartOfSecondModelData && ((secondDirection == -1 && v->qdlat[i] <= fitargs->lat4 && previousQDLat > fitargs->lat4) || (secondDirection == 1 && v->qdlat[i] >= fitargs->lat4 && previousQDLat < fitargs->lat4)))
         {
-            if ((TIME() - state->bgws.tregion21)/1000. < (5400. / 2.)) // Should be within 1/2 an orbit of start of segment
+            if ((v->timestamp[i] - state->bgws.tregion21)/1000. < (5400. / 2.)) // Should be within 1/2 an orbit of start of segment
             {
                 // We have a complete region - remove linear offset model
-                state->bgws.endIndex1 = timeIndex;
-                state->bgws.tregion22 = TIME();
+                state->bgws.endIndex1 = i;
+                state->bgws.tregion22 = v->timestamp[i];
                 gotSecondModelData = true;
             }
             else
@@ -447,18 +442,18 @@ int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, int (*processRegi
 
                 // Load times into the model data buffer
                 state->bgws.modelDataIndex = 0;
-                for (timeIndex = state->bgws.beginIndex0; timeIndex < state->bgws.beginIndex1; timeIndex++)
+                for (i = state->bgws.beginIndex0; i < state->bgws.beginIndex1; i++)
                 {
-                    fitTime = (TIME() - state->bgws.epoch0)/1000.;
+                    fitTime = (v->timestamp[i] - state->bgws.epoch0)/1000.;
                     gsl_matrix_set(state->bgws.modelTimesMatrix, state->bgws.modelDataIndex, 0, 1.0);
                     gsl_matrix_set(state->bgws.modelTimes1Matrix, state->bgws.modelDataIndex, 0, 1.0);
                     gsl_matrix_set(state->bgws.modelTimesMatrix, state->bgws.modelDataIndex, 1, fitTime); // seconds from start of file
                     gsl_matrix_set(state->bgws.modelTimes1Matrix, state->bgws.modelDataIndex++, 1, fitTime); // seconds from start of file
                 }
                 state->bgws.modelDataMidPoint = state->bgws.modelDataIndex;
-                for (timeIndex = state->bgws.endIndex0; timeIndex < state->bgws.endIndex1; timeIndex++)
+                for (i = state->bgws.endIndex0; i < state->bgws.endIndex1; i++)
                 {
-                    fitTime = (TIME() - state->bgws.epoch0)/1000.;
+                    fitTime = (v->timestamp[i] - state->bgws.epoch0)/1000.;
                     gsl_matrix_set(state->bgws.modelTimes2Matrix, state->bgws.modelDataIndex - state->bgws.modelDataMidPoint, 0, 1.0);
                     gsl_matrix_set(state->bgws.modelTimesMatrix, state->bgws.modelDataIndex, 0, 1.0);
                     gsl_matrix_set(state->bgws.modelTimes2Matrix, state->bgws.modelDataIndex - state->bgws.modelDataMidPoint, 1, fitTime);
@@ -495,18 +490,18 @@ int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, int (*processRegi
             gotFirstModelData = false;
             gotStartOfSecondModelData = false;
             gotSecondModelData = false;
-            if (timeIndex == state->nRecs)
+            if (i == v->nRecs)
             {
                 break;
             }
             else
             {
-                timeIndex++;
+                i++;
             }
 
         }
 
-        previousQDLat = QDLAT();
+        previousQDLat = v->qdlat[i];
 
     }
 
@@ -514,7 +509,7 @@ int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, int (*processRegi
 
 }
 
-void updateDataQualityFlags(const char *satellite, uint8_t sensorIndex, uint8_t regionNumber, float driftValue, float mad, long timeIndex, uint16_t *flags, uint32_t *fitInfo)
+void updateDataQualityFlags(const char *satellite, uint8_t sensorIndex, uint8_t regionNumber, float driftValue, float mad, long i, uint16_t *flags, uint32_t *fitInfo)
 {
     // Swarm C flags all zero for now
     // Flag is zero if drift magnitude is greater than FLAGS_MAXIMUM_DRIFT_VALUE
@@ -524,16 +519,16 @@ void updateDataQualityFlags(const char *satellite, uint8_t sensorIndex, uint8_t 
     // Currently quality flag is set to 1 only for Swarm A and B viy at middle-to-high latitudes (region 0 or region 2)
     if (satellite[0] != 'C' && sensorIndex == 2 && (regionNumber == 0 || regionNumber == 2) && madOK && magOK)
     {
-        flags[timeIndex] |= flagMask;
+        flags[i] |= flagMask;
     }
     // Set calibration info flag. Only set to one if baseline offset was subtracted
     if (!madOK)
     {
-        fitInfo[timeIndex] |= (FITINFO_MAD_EXCEEDED << (sensorIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
+        fitInfo[i] |= (FITINFO_MAD_EXCEEDED << (sensorIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
     }
     if (!magOK)
     {
-        fitInfo[timeIndex] |= (FITINFO_DRIFT_MAGNITUDE_EXCEEDED << (sensorIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
+        fitInfo[i] |= (FITINFO_DRIFT_MAGNITUDE_EXCEEDED << (sensorIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
     }
 
     return;
@@ -552,89 +547,93 @@ float madThreshold(char satellite, int sensorIndex)
     return 100.0 * sqrtf(8.0);
 }
 
-int initFields(ProcessorState *state)
+int initFields(ProcessorVariables_t *var)
 {
     // Set up new memory
-    state->xhat = malloc(state->nRecs * (sizeof *state->xhat) * 3);
-    state->yhat = malloc(state->nRecs * (sizeof *state->yhat) * 3);
-    state->zhat = malloc(state->nRecs * (sizeof *state->zhat) * 3);
-    state->ectFieldH = malloc(state->nRecs * (sizeof *state->ectFieldH) * 3);
-    state->ectFieldV = malloc(state->nRecs * (sizeof *state->ectFieldV) * 3);
-    state->bctField = malloc(state->nRecs * (sizeof *state->bctField) * 3);
-    state->geoPotential = malloc(state->nRecs * sizeof *state->geoPotential);
-    state->geoPotentialDifference = malloc(state->nRecs * sizeof *state->geoPotentialDifference);
-    state->exAdjusted= malloc(state->nRecs * sizeof *state->exAdjusted);
-    state->exAdjustmentParameter= malloc(state->nRecs * sizeof *state->exAdjustmentParameter);
-    state->maxAbsGeopotentialSlope= malloc(state->nRecs * sizeof *state->maxAbsGeopotentialSlope);
-    state->geoPotentialDetrended = malloc(state->nRecs * sizeof *state->geoPotentialDetrended);
-    state->maxAbsGeopotentialDetrendedSlope= malloc(state->nRecs * sizeof *state->maxAbsGeopotentialDetrendedSlope);
+    var->xhat = malloc(var->nRecs * (sizeof *var->xhat) * 3);
+    var->yhat = malloc(var->nRecs * (sizeof *var->yhat) * 3);
+    var->zhat = malloc(var->nRecs * (sizeof *var->zhat) * 3);
+    var->ectxh = malloc(var->nRecs * sizeof *var->ectxh);
+    var->ectyh = malloc(var->nRecs * sizeof *var->ectyh);
+    var->ectzh = malloc(var->nRecs * sizeof *var->ectzh);
+    var->ectxv = malloc(var->nRecs * sizeof *var->ectxv);
+    var->ectyv = malloc(var->nRecs * sizeof *var->ectyv);
+    var->ectzv = malloc(var->nRecs * sizeof *var->ectzv);
+    var->bctx = malloc(var->nRecs * sizeof *var->bctx);
+    var->bcty = malloc(var->nRecs * sizeof *var->bcty);
+    var->bctz = malloc(var->nRecs * sizeof *var->bctz);
+    var->geoelectricPotential = malloc(var->nRecs * sizeof *var->geoelectricPotential);
+    var->geoelectricPotentialDifference = malloc(var->nRecs * sizeof *var->geoelectricPotentialDifference);
+    var->ehxAdjusted = malloc(var->nRecs * sizeof *var->ehxAdjusted);
+    var->ehxAdjustmentParameter= malloc(var->nRecs * sizeof *var->ehxAdjustmentParameter);
+    var->maxAbsGeoelectricPotentialBaselineSlope = malloc(var->nRecs * sizeof *var->maxAbsGeoelectricPotentialBaselineSlope);
+    var->geoelectricPotentialDetrended = malloc(var->nRecs * sizeof *var->geoelectricPotentialDetrended);
+    var->maxAbsGeoelectricPotentialDetrendedBaselineSlope = malloc(var->nRecs * sizeof *var->maxAbsGeoelectricPotentialDetrendedBaselineSlope);
 
-    if (state->xhat == NULL || state->yhat == NULL || state->zhat == NULL || state->ectFieldH == NULL || state->ectFieldV == NULL || state->bctField == NULL || state->geoPotential == NULL || state->maxAbsGeopotentialSlope == NULL)
+    if (var->xhat == NULL || var->yhat == NULL || var->zhat == NULL || var->ectxh == NULL || var->ectyh == NULL || var->ectzh == NULL
+        || var->ectxv == NULL || var->ectyv == NULL || var->ectzv == NULL || var->bctx == NULL || var->bctx == NULL || var->bctx == NULL
+        || var->geoelectricPotential == NULL || var->maxAbsGeoelectricPotentialBaselineSlope == NULL
+        || var->maxAbsGeoelectricPotentialDetrendedBaselineSlope == NULL) {
         return TIICT_MEMORY;
+    }
 
     return TIICT_OK;
 }
 
 int calculateFields(ProcessorState *state)
 {
+    ProcessorVariables_t *v = &state->vars16hz;
+
     // Init memory for fields
-    int status = initFields(state);
+    int status = initFields(v);
     if (status != TIICT_OK)
         return status;
 
     // Calculate fields
     long long ind;
-    uint8_t **dataBuffers = state->dataBuffers;
-    float *xhat = state->xhat;
-    float *yhat = state->yhat;
-    float *zhat = state->zhat;
-    float *ectFieldH = state->ectFieldH;
-    float *ectFieldV = state->ectFieldV;
-    float *bctField = state->bctField;
 
-    long timeIndex = 0;
-    float magVsat = sqrtf(VSATN()*VSATN() + VSATE()*VSATE() + VSATC() * VSATC());
+    float magVsat = sqrtf(v->vsatn[0]*v->vsatn[0] + v->vsate[0]*v->vsate[0] + v->vsatc[0] * v->vsatc[0]);
 
-    for (timeIndex = 0; timeIndex < state->nRecs; timeIndex++)
+    for (int i = 0; i < v->nRecs; i++)
     {
         // Calculate xhat, yhat, zhat
         // xhat parallel to satellite velocity
-        magVsat = sqrtf(VSATN()*VSATN() + VSATE()*VSATE() + VSATC() * VSATC());
-        ind = 3*timeIndex;
-        xhat[ind + 0] = VSATN() / magVsat;
-        xhat[ind + 1] = VSATE() / magVsat;
-        xhat[ind + 2] = VSATC() / magVsat;
+        magVsat = sqrtf(v->vsatn[i]*v->vsatn[i] + v->vsate[i]*v->vsate[i] + v->vsatc[i] * v->vsatc[i]);
+        ind = 3*i;
+        v->xhat[ind + 0] = v->vsatn[i] / magVsat;
+        v->xhat[ind + 1] = v->vsate[i] / magVsat;
+        v->xhat[ind + 2] = v->vsatc[i] / magVsat;
         // yhat is xhat cross {0, 0, -1}
-        yhat[ind + 0] = -xhat[ind + 1];
-        yhat[ind + 1] = xhat[ind + 0];
-        yhat[ind + 2] = 0.0;
-        float magyhat = sqrtf(yhat[ind + 0] * yhat[ind + 0] + yhat[ind + 1] * yhat[ind + 1] + yhat[ind + 2] * yhat[ind + 2]);
-        yhat[ind + 0] /= magyhat;
-        yhat[ind + 1] /= magyhat;
-        yhat[ind + 2] /= magyhat;
+        v->yhat[ind + 0] = -v->xhat[ind + 1];
+        v->yhat[ind + 1] = v->xhat[ind + 0];
+        v->yhat[ind + 2] = 0.0;
+        float magyhat = sqrtf(v->yhat[ind + 0] * v->yhat[ind + 0] + v->yhat[ind + 1] * v->yhat[ind + 1] + v->yhat[ind + 2] * v->yhat[ind + 2]);
+        v->yhat[ind + 0] /= magyhat;
+        v->yhat[ind + 1] /= magyhat;
+        v->yhat[ind + 2] /= magyhat;
         // zhat is the cross-product of x into y
-        zhat[ind+0] = xhat[ind+1] * yhat[ind+2] - xhat[ind+2] * yhat[ind+1];
-        zhat[ind+1] = -1.0 * xhat[ind+0] * yhat[ind+2] + xhat[ind+2] * yhat[ind+0];
-        zhat[ind+2] = xhat[ind+0] * yhat[ind+1] - xhat[ind+1] * yhat[ind+0];
-        float magzhat = sqrtf(zhat[ind + 0] * zhat[ind + 0] + zhat[ind + 1] * zhat[ind + 1] + zhat[ind + 2] * zhat[ind + 2]);
-        zhat[ind + 0] /= magzhat;
-        zhat[ind + 1] /= magzhat;
-        zhat[ind + 2] /= magzhat;
+        v->zhat[ind+0] = v->xhat[ind+1] * v->yhat[ind+2] - v->xhat[ind+2] * v->yhat[ind+1];
+        v->zhat[ind+1] = -1.0 * v->xhat[ind+0] * v->yhat[ind+2] + v->xhat[ind+2] * v->yhat[ind+0];
+        v->zhat[ind+2] = v->xhat[ind+0] * v->yhat[ind+1] - v->xhat[ind+1] * v->yhat[ind+0];
+        float magzhat = sqrtf(v->zhat[ind + 0] * v->zhat[ind + 0] + v->zhat[ind + 1] * v->zhat[ind + 1] + v->zhat[ind + 2] * v->zhat[ind + 2]);
+        v->zhat[ind + 0] /= magzhat;
+        v->zhat[ind + 1] /= magzhat;
+        v->zhat[ind + 2] /= magzhat;
 
         // B field in cross-track frame, nT:
-        bctField[ind + 0] = BN() * xhat[ind + 0] + BE() * xhat[ind + 1] + BC() * xhat[ind + 2];
-        bctField[ind + 1] = BN() * yhat[ind + 0] + BE() * yhat[ind + 1] + BC() * yhat[ind + 2];
-        bctField[ind + 2] = BN() * zhat[ind + 0] + BE() * zhat[ind + 1] + BC() * zhat[ind + 2];
+        v->bctx[ind] = v->bn[i] * v->xhat[ind + 0] + v->be[i] * v->xhat[ind + 1] + v->bc[i] * v->xhat[ind + 2];
+        v->bcty[ind] = v->bn[i] * v->yhat[ind + 0] + v->be[i] * v->yhat[ind + 1] + v->bc[i] * v->yhat[ind + 2];
+        v->bctz[ind] = v->bn[i] * v->zhat[ind + 0] + v->be[i] * v->zhat[ind + 1] + v->bc[i] * v->zhat[ind + 2];
 
         // E field from H sensor X, in cross-track frame, mV/m:
-        ectFieldH[ind + 0] = -1.0 * (MYH() * bctField[ind + 2] - MYV() * bctField[ind + 1]) / 1000000000.0 * 1000.0;
-        ectFieldH[ind + 1] = -1.0 * (-1.0 * MXH() * bctField[ind + 2] + MYV() * bctField[ind + 0]) / 1000000000.0 * 1000.0;
-        ectFieldH[ind + 2] = -1.0 * (MXH() * bctField[ind + 1] - MYH() * bctField[ind + 0]) / 1000000000.0 * 1000.0;
+        v->ectxh[ind] = -1.0 * (v->myh[i] * v->bctz[ind] - v->myv[i] * v->bcty[ind]) / 1000000000.0 * 1000.0;
+        v->ectyh[ind] = -1.0 * (-1.0 * v->mxh[i] * v->bctz[ind] + v->myv[i] * v->bctx[ind]) / 1000000000.0 * 1000.0;
+        v->ectzh[ind] = -1.0 * (v->mxh[i] * v->bcty[ind] - v->myh[i] * v->bctx[ind]) / 1000000000.0 * 1000.0;
 
         // E field from V sensor X, in cross-track frame, mV/m:
-        ectFieldV[ind + 0] = -1.0 * (MYH() * bctField[ind + 2] - MYV() * bctField[ind + 1]) / 1000000000.0 * 1000.0;
-        ectFieldV[ind + 1] = -1.0 * (-1.0 * MXV() * bctField[ind + 2] + MYV() * bctField[ind + 0]) / 1000000000.0 * 1000.0;
-        ectFieldV[ind + 2] = -1.0 * (MXV() * bctField[ind + 1] - MYH() * bctField[ind + 0]) / 1000000000.0 * 1000.0;
+        v->ectxv[ind] = -1.0 * (v->myh[i] * v->bctz[ind] - v->myv[i] * v->bcty[ind]) / 1000000000.0 * 1000.0;
+        v->ectyv[ind] = -1.0 * (-1.0 * v->mxv[i] * v->bctz[ind] + v->myv[i] * v->bctx[ind]) / 1000000000.0 * 1000.0;
+        v->ectzv[ind] = -1.0 * (v->mxv[i] * v->bcty[ind] - v->myh[i] * v->bctx[ind]) / 1000000000.0 * 1000.0;
 
     }
 
@@ -652,32 +651,33 @@ int calculateFields(ProcessorState *state)
 
 }
 
-int integrateField(ProcessorState *state, float *sourceField, int sourceStride, float scaleFactor, float *targetPotential, long startInd, long stopInd, bool vsDistance, bool positive, bool absoluteValue, bool removeMedianFromStart, float *medianDifference, float *firstSlope, float *lastSlope)
+int integrateField(ProcessorState *state, float *sourceField, float scaleFactor, float *targetPotential, long startInd, long stopInd, bool vsDistance, bool positive, bool absoluteValue, bool removeMedianFromStart, float *medianDifference, float *firstSlope, float *lastSlope)
 {
     int status = TIICT_OK;
-    long timeIndex = startInd;
-    uint8_t **dataBuffers = state->dataBuffers;
+
+    ProcessorVariables_t *v = &state->vars16hz;
+
     float previousField = 0.0;
-    double previousTime = TIME();
-    double currentTime = TIME();
+    double previousTime = v->timestamp[startInd];
+    double currentTime = v->timestamp[startInd];
     double deltaTime = 0.0;
     targetPotential[startInd] = 0.0;
-    float magVsat = sqrtf(VSATN()*VSATN() + VSATE()*VSATE() + VSATC() * VSATC());
+    float magVsat = sqrtf(v->vsatn[startInd]*v->vsatn[startInd] + v->vsate[startInd]*v->vsate[startInd] + v->vsatc[startInd] * v->vsatc[startInd]);
     float previousMagVsat = magVsat;
 
     float signfactor = positive ? 1.0 : -1.0;
     float distanceFactor = 0.0;
     float nextContribution = 0.0;
-    for (timeIndex = startInd + 1; timeIndex < stopInd; timeIndex++)
+    for (int i = startInd + 1; i < stopInd; i++)
     {
-        currentTime = TIME();
+        currentTime = v->timestamp[i];
         deltaTime = (currentTime - previousTime) / 1000.0; // seconds
-        magVsat = sqrtf(VSATN()*VSATN() + VSATE()*VSATE() + VSATC() * VSATC());
-        previousField = sourceField[sourceStride*(timeIndex-1)] * scaleFactor;
+        magVsat = sqrtf(v->vsatn[i]*v->vsatn[i] + v->vsate[i]*v->vsate[i] + v->vsatc[i] * v->vsatc[i]);
+        previousField = sourceField[(i-1)] * scaleFactor;
         nextContribution = signfactor * (absoluteValue ? fabsf(previousField) : previousField) * deltaTime;
         if (vsDistance)
             nextContribution *= magVsat;
-        targetPotential[timeIndex] = targetPotential[timeIndex-1] + nextContribution;
+        targetPotential[i] = targetPotential[i-1] + nextContribution;
         previousTime = currentTime;
         previousMagVsat = magVsat;
     }
@@ -694,9 +694,9 @@ int integrateField(ProcessorState *state, float *sourceField, int sourceStride, 
 
     if (removeMedianFromStart)
     {
-        for (timeIndex = startInd; timeIndex < stopInd; timeIndex++)
+        for (int i = startInd; i < stopInd; i++)
         {
-            targetPotential[timeIndex] -= firstMedian;
+            targetPotential[i] -= firstMedian;
         }
     }
     if (medianDifference != NULL)
@@ -709,9 +709,9 @@ int integrateField(ProcessorState *state, float *sourceField, int sourceStride, 
 
 int regionMetrics(ProcessorState *state, long startInd, long stopInd, float *parameter, float *median, float *slope)
 {
-    long timeIndex = startInd;
-    uint8_t ** dataBuffers = state->dataBuffers;
-    double t0 = TIME();
+    ProcessorVariables_t *v = &state->vars16hz;
+
+    double t0 = v->timestamp[startInd];
     size_t n = stopInd - startInd + 1;
 
     // GSL median sorts buffer, so use a working buffer
@@ -727,14 +727,14 @@ int regionMetrics(ProcessorState *state, long startInd, long stopInd, float *par
     double fitDistance = 0.0;
     double vMag = 0.0;
     long ind = 0;
-    for (timeIndex = startInd; timeIndex < stopInd; timeIndex++)
+    for (int i = startInd; i < stopInd; i++)
     {
-        ind = timeIndex - startInd;
-        vMag = sqrtf(VSATN()*VSATN() + VSATE()*VSATE() + VSATC() * VSATC());
-        fitDistance = (TIME() - t0)/1000. * (double)vMag;
+        ind = i - startInd;
+        vMag = sqrtf(v->vsatn[i]*v->vsatn[i] + v->vsate[i]*v->vsate[i] + v->vsatc[i] * v->vsatc[i]);
+        fitDistance = (v->timestamp[i] - t0)/1000. * (double)vMag;
         gsl_matrix_set(distanceMatrix, ind, 0, 1.0);
         gsl_matrix_set(distanceMatrix, ind, 1, fitDistance);
-        gsl_vector_set(values, ind, (double)parameter[timeIndex]);
+        gsl_vector_set(values, ind, (double)parameter[i]);
     }
 
     if (slope != NULL)
@@ -742,8 +742,7 @@ int regionMetrics(ProcessorState *state, long startInd, long stopInd, float *par
         int gslStatus = gsl_multifit_robust(distanceMatrix, values, fitCoefficients, cov, gslFitWorkspace);
         if (gslStatus != GSL_SUCCESS)
         {
-            timeIndex = stopInd;
-            double t1 = TIME();
+            double t1 = v->timestamp[stopInd];
             fprintf(stderr, "%sregionMetrics: unable to estimate linear fit between epochs %lf and %lf\n", infoHeader, t0, t1);
         }
         *slope = (float)gsl_vector_get(fitCoefficients, 1);
@@ -805,161 +804,203 @@ void interpolate(double *times, double *values, size_t nVals, double *requestedT
 
 bool downSampleHalfSecond(ProcessorState *state, long *index, long storageIndex, double t0, long maxIndex)
 {
-    long timeIndex = *index;
-    uint8_t **dataBuffers = state->dataBuffers;
+    long i = *index;
     uint8_t nSamples = 0;
     double timeBuf = 0.0;
+    uint8_t orbitRegionBuf = 0;
     uint16_t flagBuf = 65535;
     uint32_t fitInfoBuf = 0;
-    float floatBuf[NUM_BUFFER_VARIABLES]; // Time, flags, and fitInfo are handled separately; need one extra working buffer each for lattitude and longitude averages
     float theta, phi, x, y, z;
     bool downSampled = false;
 
-    float *viErrors = state->viErrors;
-    float *ectFieldH = state->ectFieldH;
-    float *ectFieldV = state->ectFieldV;
-    float *bctField = state->bctField;
-    float *potentials = state->potentials;
-    float *geoPotential = state->geoPotential;
-    float *geoPotentialDifference = state->geoPotentialDifference;
-    float *maxAbsGeopotentialSlope = state->maxAbsGeopotentialSlope;
-    float *geoPotentialDetrended = state->geoPotentialDetrended;
-    float *maxAbsGeopotentialDetrendedSlope = state->maxAbsGeopotentialDetrendedSlope;
-    float *exAdjusted = state->exAdjusted;
-    float *exAdjustmentParameter= state->exAdjustmentParameter;
-    uint8_t *region = state->region;
-    uint16_t *flags = state->flags;
-    uint32_t *fitInfo = state->fitInfo;
+    float floatBuf[100];
+    memset(floatBuf, 0, 100 * sizeof *floatBuf);
 
-    for (uint8_t b = 0; b < NUM_BUFFER_VARIABLES; b++)
+    ProcessorVariables_t *v16 = &state->vars16hz;
+    ProcessorVariables_t *v2 = &state->vars2hz;
+    // TODO allocate memory for vars2hz
+
+    int k = 0;
+
+    while (((v16->timestamp[i]/1000. - t0) < 0.5) && (i <= maxIndex))
     {
-        floatBuf[b] = 0.0;
-    }
-
-
-    while (((TIME()/1000. - t0) < 0.5) && (timeIndex <= maxIndex))
-    {
-        timeBuf += TIME();
+        k = 0;
+        timeBuf += v16->timestamp[i];
         // Handle lat and lon and mlt in cartesian coordinates
         // For spherical coordinates
-        theta = M_PI / 2.0 - LAT() * M_PI / 180.0;
-        phi = LON() * M_PI / 180.0;
-        floatBuf[0] += cosf(phi) * sinf(theta);
-        floatBuf[1] += sinf(phi) * sinf(theta);
-        floatBuf[2] += cosf(theta);
-        floatBuf[3] += RADIUS();
+        theta = M_PI / 2.0 - v16->latitude[i] * M_PI / 180.0;
+        phi = v16->longitude[i] * M_PI / 180.0;
+        floatBuf[k++] += cosf(phi) * sinf(theta);
+        floatBuf[k++] += sinf(phi) * sinf(theta);
+        floatBuf[k++] += cosf(theta);
+        floatBuf[k++] += v16->radius[i];
         // For magnetic coordinates
-        theta = M_PI / 2.0 - QDLAT() * M_PI / 180.0;
-        phi = MLT() / 24.0 * 2.0 * M_PI;
-        floatBuf[4] += cosf(phi) * sinf(theta);
-        floatBuf[5] += sinf(phi) * sinf(theta);
-        floatBuf[6] += cosf(theta);
-        floatBuf[7] += MXH();
-        floatBuf[8] += viErrors[timeIndex * 4 + 0];
-        floatBuf[9] += MXV();
-        floatBuf[10] += viErrors[timeIndex * 4 + 2];
-        floatBuf[11] += MYH();
-        floatBuf[12] += viErrors[timeIndex * 4 + 1];
-        floatBuf[13] += MYV();
-        floatBuf[14] += viErrors[timeIndex * 4 + 3];
-        floatBuf[15] += VSATN();
-        floatBuf[16] += VSATE();
-        floatBuf[17] += VSATC();
-        floatBuf[18] += ectFieldH[timeIndex * 3 + 0]; // EH xyz
-        floatBuf[19] += ectFieldH[timeIndex * 3 + 1];
-        floatBuf[20] += ectFieldH[timeIndex * 3 + 2];
-        floatBuf[21] += ectFieldV[timeIndex * 3 + 0]; // EV xyz
-        floatBuf[22] += ectFieldV[timeIndex * 3 + 1];
-        floatBuf[23] += ectFieldV[timeIndex * 3 + 2];
-        floatBuf[24] += bctField[timeIndex * 3 + 0]; // Bxyz
-        floatBuf[25] += bctField[timeIndex * 3 + 1];
-        floatBuf[26] += bctField[timeIndex * 3 + 2];
-        floatBuf[27] += VCORX();
-        floatBuf[28] += VCORY();
-        floatBuf[29] += VCORZ();
-        if (state->usePotentials)
-            floatBuf[30] += potentials[timeIndex];
-
-        floatBuf[31] += geoPotential[timeIndex];
+        theta = M_PI / 2.0 - v16->qdlat[i] * M_PI / 180.0;
+        phi = v16->mlt[i] / 24.0 * 2.0 * M_PI;
+        floatBuf[k++] += cosf(phi) * sinf(theta);
+        floatBuf[k++] += sinf(phi) * sinf(theta);
+        floatBuf[k++] += cosf(theta);
+        floatBuf[k++] += v16->mxh[i];
+        floatBuf[k++] += v16->myh[i];
+        floatBuf[k++] += v16->mxv[i];
+        floatBuf[k++] += v16->myv[i];
+        floatBuf[k++] += v16->vmcph[i];
+        floatBuf[k++] += v16->vmcpv[i];
+        floatBuf[k++] += v16->vbiash[i];
+        floatBuf[k++] += v16->vbiasv[i];
+        floatBuf[k++] += v16->vfp[i];
+        floatBuf[k++] += v16->vsatx[i];
+        floatBuf[k++] += v16->vsaty[i];
+        floatBuf[k++] += v16->vsatz[i];
+        floatBuf[k++] += v16->enhRaw[i];
+        floatBuf[k++] += v16->envRaw[i];
+        floatBuf[k++] += v16->enh[i];
+        floatBuf[k++] += v16->env[i];
+        floatBuf[k++] += v16->vixh[i];
+        floatBuf[k++] += v16->vixherror[i];
+        floatBuf[k++] += v16->vixv[i];
+        floatBuf[k++] += v16->vixverror[i];
+        floatBuf[k++] += v16->viy[i];
+        floatBuf[k++] += v16->viyerror[i];
+        floatBuf[k++] += v16->viz[i];
+        floatBuf[k++] += v16->vizerror[i];
+        floatBuf[k++] += v16->vsatn[i];
+        floatBuf[k++] += v16->vsate[i];
+        floatBuf[k++] += v16->vsatc[i];
+        floatBuf[k++] += v16->ectxh[i]; // EH xyz
+        floatBuf[k++] += v16->ectyh[i];
+        floatBuf[k++] += v16->ectzh[i];
+        floatBuf[k++] += v16->ectxv[i]; // EV xyz
+        floatBuf[k++] += v16->ectyv[i];
+        floatBuf[k++] += v16->ectzv[i];
+        floatBuf[k++] += v16->bctx[i]; // Bxyz
+        floatBuf[k++] += v16->bcty[i];
+        floatBuf[k++] += v16->bctz[i];
+        floatBuf[k++] += v16->bn[i];
+        floatBuf[k++] += v16->be[i];
+        floatBuf[k++] += v16->bc[i];
+        floatBuf[k++] += v16->vicrx[i];
+        floatBuf[k++] += v16->vicry[i];
+        floatBuf[k++] += v16->vicrz[i];
+        floatBuf[k++] += v16->geoelectricPotential[i];
+        floatBuf[k++] += v16->geoelectricPotentialDifference[i];
         // Take the largest of each 8-sample interval
-        if (floatBuf[32] < maxAbsGeopotentialSlope[timeIndex])
-            floatBuf[32] = maxAbsGeopotentialSlope[timeIndex];
-        floatBuf[33] += geoPotentialDetrended[timeIndex];
+        if (floatBuf[k] < v16->maxAbsGeoelectricPotentialBaselineSlope[i]) {
+            floatBuf[k++] = v16->maxAbsGeoelectricPotentialBaselineSlope[i];
+        }
+        floatBuf[k++] += v16->ehxAdjusted[i];
+        // Latest value since this is constant over a pass
+        floatBuf[k++] = v16->ehxAdjustmentParameter[i];
         // Take the largest of each 8-sample interval
-        if (floatBuf[34] < maxAbsGeopotentialDetrendedSlope[timeIndex])
-            floatBuf[34] = maxAbsGeopotentialDetrendedSlope[timeIndex];
+        floatBuf[k++] += v16->geoelectricPotentialDetrended[i];
+        if (floatBuf[k] < v16->maxAbsGeoelectricPotentialDetrendedBaselineSlope[i]) {
+            floatBuf[k++] = v16->maxAbsGeoelectricPotentialDetrendedBaselineSlope[i];
+        }
         // Take latest region in the half-second interval
-        floatBuf[35] = region[timeIndex];
-        floatBuf[36] = geoPotentialDifference[timeIndex];
-        floatBuf[37] += exAdjusted[timeIndex];
-        // Latest value
-        floatBuf[38] = exAdjustmentParameter[timeIndex];
+        orbitRegionBuf = v16->orbitRegion[i];
 
-        flagBuf &= flags[timeIndex];
-        fitInfoBuf |= fitInfo[timeIndex];
+        flagBuf &= v16->flags[i];
+        fitInfoBuf |= v16->fitInfo[i];
+
+        if (state->usePotentials) {
+            floatBuf[k++] += v16->lpPhiScHighGain[i];
+            floatBuf[k++] += v16->lpPhiScLowGain[i];
+            floatBuf[k++] += v16->lpPhiSc[i];
+            floatBuf[k++] += v16->potentials[i];
+        }
+
+        // Ignoring xhat, yhat, zhat
+
+
         nSamples++;
-        timeIndex++;
+        i++;
     }
     if (nSamples == 8)
     {
+        k = 0;
         // do the averaging and store result in original array
-        *((double*)dataBuffers[0] + (storageIndex)) = timeBuf / 8.0; // Average time
-        x = floatBuf[0] / 8.0;
-        y = floatBuf[1] / 8.0;
-        z = floatBuf[2] / 8.0;
-        *((float*)dataBuffers[7] + (storageIndex)) = atan2f(z, sqrtf(x*x + y*y)) * 180.0 / M_PI; // Lat
-        *((float*)dataBuffers[8] + (storageIndex)) = fmodf(atan2f(y, x) * 180.0 / M_PI, 360.0); // Lon
-        *((float*)dataBuffers[9] + (storageIndex)) = floatBuf[3] / 8.0; // radius
-        x = floatBuf[4] / 8.0;
-        y = floatBuf[5] / 8.0;
-        z = floatBuf[6] / 8.0;
-        *((float*)dataBuffers[5] + (storageIndex)) = atan2f(z, sqrtf(x*x + y*y)) * 180.0 / M_PI; // QD Lat
-        *((float*)dataBuffers[4] + (storageIndex)) = fmodf(atan2f(y, x) * 180.0 / M_PI + 360.0, 360.0) / 360. * 24.0; // MLT
-        *((float*)dataBuffers[1] + (2*storageIndex) + 0) = floatBuf[7] / 8.0; // VxH
-        viErrors[storageIndex * 4 + 0] = floatBuf[8] / 8.0 / sqrtf(8.0); // VxH error scaled for 2 Hz
-        *((float*)dataBuffers[2] + (2*storageIndex) + 0) = floatBuf[9] / 8.0; // VxV
-        viErrors[storageIndex * 4 + 2] = floatBuf[10] / 8.0 / sqrtf(8.0); // VxV error scaled for 2 Hz
-        *((float*)dataBuffers[1] + (2*storageIndex) + 1) = floatBuf[11] / 8.0; // VyH
-        viErrors[storageIndex * 4 + 1] = floatBuf[12] / 8.0 / sqrtf(8.0); // VyH error scaled for 2 Hz
-        *((float*)dataBuffers[2] + (2*storageIndex) + 1) = floatBuf[13] / 8.0; // VyV
-        viErrors[storageIndex * 4 + 3] = floatBuf[14] / 8.0 / sqrtf(8.0); // VyV error scaled for 2 Hz
-        *((float*)dataBuffers[11] + (3*storageIndex) + 0) = floatBuf[15] / 8.0; // VSatN
-        *((float*)dataBuffers[11] + (3*storageIndex) + 1) = floatBuf[16] / 8.0; // VSatE
-        *((float*)dataBuffers[11] + (3*storageIndex) + 2) = floatBuf[17] / 8.0; // VSatC
-        ectFieldH[storageIndex * 3 + 0] = floatBuf[18] / 8.0; // EHxyz
-        ectFieldH[storageIndex * 3 + 1] = floatBuf[19] / 8.0;
-        ectFieldH[storageIndex * 3 + 2] = floatBuf[20] / 8.0;
-        ectFieldV[storageIndex * 3 + 0] = floatBuf[21] / 8.0; // EVxyz
-        ectFieldV[storageIndex * 3 + 1] = floatBuf[22] / 8.0;
-        ectFieldV[storageIndex * 3 + 2] = floatBuf[23] / 8.0;
-        bctField[storageIndex * 3 + 0] = floatBuf[24] / 8.0; // Bxyz
-        bctField[storageIndex * 3 + 1] = floatBuf[25] / 8.0;
-        bctField[storageIndex * 3 + 2] = floatBuf[26] / 8.0;
-        *((float*)dataBuffers[10] + (3*storageIndex) + 0) = floatBuf[27] / 8.0; // Vicrxyz
-        *((float*)dataBuffers[10] + (3*storageIndex) + 1) = floatBuf[28] / 8.0;
-        *((float*)dataBuffers[10] + (3*storageIndex) + 2) = floatBuf[29] / 8.0;
-        if (state->usePotentials)
-            potentials[storageIndex] = floatBuf[30] / 8.0; // Floating potential U_SC
-        geoPotential[storageIndex] = floatBuf[31] / 8.0; // Geoelectric potential H sensor
-        maxAbsGeopotentialSlope[storageIndex] = floatBuf[32]; // Take the maximum value
-        geoPotentialDetrended[storageIndex] = floatBuf[33] / 8.0; // Geoelectric potential H sensor
-        maxAbsGeopotentialDetrendedSlope[storageIndex] = floatBuf[34]; // Take the maximum value
-        region[storageIndex] = floatBuf[35]; // Latest region in the sample
-        geoPotentialDifference[storageIndex] = floatBuf[36]; // Latest sample in the region
-        exAdjusted[storageIndex] = floatBuf[37] / 8.0;
-        exAdjustmentParameter[storageIndex] = floatBuf[38]; // Latest sample in the region
+        v2->timestamp[storageIndex] = timeBuf / 8.0; // Average time
+        x = floatBuf[k++] / 8.0;
+        y = floatBuf[k++] / 8.0;
+        z = floatBuf[k++] / 8.0;
+        v2->latitude[storageIndex] = atan2f(z, sqrtf(x*x + y*y)) * 180.0 / M_PI; // Lat
+        v2->longitude[storageIndex] = fmodf(atan2f(y, x) * 180.0 / M_PI, 360.0); // Lon
+        v2->radius[storageIndex] = floatBuf[k++] / 8.0; // radius
+        x = floatBuf[k++] / 8.0;
+        y = floatBuf[k++] / 8.0;
+        z = floatBuf[k++] / 8.0;
+        v2->qdlat[storageIndex] = atan2f(z, sqrtf(x*x + y*y)) * 180.0 / M_PI; // QD Lat
+        v2->mlt[storageIndex] = fmodf(atan2f(y, x) * 180.0 / M_PI + 360.0, 360.0) / 360. * 24.0; // MLT
+        v2->mxh[storageIndex] = floatBuf[k++] / 8.0;
+        v2->myh[storageIndex] = floatBuf[k++] / 8.0;
+        v2->mxv[storageIndex] = floatBuf[k++] / 8.0;
+        v2->myv[storageIndex] = floatBuf[k++] / 8.0;
+        v2->vmcph[storageIndex] = floatBuf[k++] / 8.0;
+        v2->vmcpv[storageIndex] = floatBuf[k++] / 8.0;
+        v2->vbiash[storageIndex] = floatBuf[k++] / 8.0;
+        v2->vbiasv[storageIndex] = floatBuf[k++] / 8.0;
+        v2->vfp[storageIndex] = floatBuf[k++] / 8.0;
+        v2->vsatx[storageIndex] = floatBuf[k++] / 8.0;
+        v2->vsaty[storageIndex] = floatBuf[k++] / 8.0;
+        v2->vsatz[storageIndex] = floatBuf[k++] / 8.0;
+        v2->enhRaw[storageIndex] = floatBuf[k++] / 8.0;
+        v2->envRaw[storageIndex] = floatBuf[k++] / 8.0;
+        v2->enh[storageIndex] = floatBuf[k++] / 8.0;
+        v2->env[storageIndex] = floatBuf[k++] / 8.0;
+        v2->vixh[storageIndex] = floatBuf[k++] / 8.0;
+        v2->vixherror[storageIndex] = floatBuf[k++] / 8.0 / sqrtf(8.0);
+        v2->vixv[storageIndex] = floatBuf[k++] / 8.0;
+        v2->vixverror[storageIndex] = floatBuf[k++] / 8.0 / sqrtf(8.0);
+        v2->viy[storageIndex] = floatBuf[k++] / 8.0;
+        v2->viyerror[storageIndex] = floatBuf[k++] / 8.0 / sqrtf(8.0);
+        v2->viz[storageIndex] = floatBuf[k++] / 8.0;
+        v2->vizerror[storageIndex] = floatBuf[k++] / 8.0 / sqrtf(8.0);
+        v2->vsatn[storageIndex] = floatBuf[k++] / 8.0;
+        v2->vsate[storageIndex] = floatBuf[k++] / 8.0;
+        v2->vsatc[storageIndex] = floatBuf[k++] / 8.0;
+        v2->ectxh[storageIndex] = floatBuf[k++] / 8.0;
+        v2->ectyh[storageIndex] = floatBuf[k++] / 8.0;
+        v2->ectzh[storageIndex] = floatBuf[k++] / 8.0;
+        v2->ectxv[storageIndex] = floatBuf[k++] / 8.0;
+        v2->ectyv[storageIndex] = floatBuf[k++] / 8.0;
+        v2->ectzv[storageIndex] = floatBuf[k++] / 8.0;
+        v2->bctx[storageIndex] = floatBuf[k++] / 8.0;
+        v2->bcty[storageIndex] = floatBuf[k++] / 8.0;
+        v2->bctz[storageIndex] = floatBuf[k++] / 8.0;
+        v2->bn[storageIndex] = floatBuf[k++] / 8.0;
+        v2->be[storageIndex] = floatBuf[k++] / 8.0;
+        v2->bc[storageIndex] = floatBuf[k++] / 8.0;
+        v2->vicrx[storageIndex] = floatBuf[k++] / 8.0;
+        v2->vicry[storageIndex] = floatBuf[k++] / 8.0;
+        v2->vicrz[storageIndex] = floatBuf[k++] / 8.0;
+        v2->geoelectricPotential[storageIndex] = floatBuf[k++] / 8.0;
+        v2->geoelectricPotentialDifference[storageIndex] = floatBuf[k++] / 8.0;
+        v2->maxAbsGeoelectricPotentialBaselineSlope[storageIndex] = floatBuf[k++];
+        v2->ehxAdjusted[storageIndex] = floatBuf[k++] / 8.0;
+        v2->ehxAdjustmentParameter[storageIndex] = floatBuf[k++];
+        v2->geoelectricPotentialDetrended[storageIndex] = floatBuf[k++] / 8.0;
+        v2->maxAbsGeoelectricPotentialDetrendedBaselineSlope[storageIndex] = floatBuf[k++];
+        v2->orbitRegion[storageIndex] = orbitRegionBuf;
         // Flags set to 0 at 16 Hz based on magnitude of flow,
         // are not reset at 2 Hz, to ensure integrity of 2 Hz measurements
         // One can review 16 Hz measurements to examine details of flow where even a
         // single sample of the eight has a magnitude greater than 8 km/s
-        flags[storageIndex] = flagBuf;
-        fitInfo[storageIndex] = fitInfoBuf;
+        v2->flags[storageIndex] = flagBuf;
+        v2->fitInfo[storageIndex] = fitInfoBuf;
+
+        if (state->usePotentials) {
+            v2->lpPhiScHighGain[storageIndex] = floatBuf[k++] / 8.0;
+            v2->lpPhiScLowGain[storageIndex] = floatBuf[k++] / 8.0;
+            v2->lpPhiSc[storageIndex] = floatBuf[k++] / 8.0;
+            v2->potentials[storageIndex] = floatBuf[k++] / 8.0;
+        }
+
 
         downSampled = true;
 
     }
 
-    *index = timeIndex;
+    *index = i;
     return downSampled;
 
 }
@@ -981,7 +1022,7 @@ int runProcessor(int argc, char *argv[], ProcessorState **result)
         goto cleanup;
     }
 
-    status = loadTiiCalData(state);
+    status = loadCalData(state);
     if (status != TIICT_OK) {
         goto cleanup;
     }
@@ -1009,6 +1050,7 @@ int runProcessor(int argc, char *argv[], ProcessorState **result)
     }
 
     if (state->visualizeResults) {
+        state->vars = &state->vars16hz;
         status = visualizeResults(state);
         if (status != TIICT_OK) {
             goto cleanup;
@@ -1116,15 +1158,6 @@ int initProcessor(ProcessorState *state)
     if (status != TIICT_OK)
         return status;
 
-    // The calibration data memory pointers
-    for (uint8_t i = 0; i < NUM_CAL_VARIABLES; i++)
-    {
-        state->dataBuffers[i] = NULL;
-    }
-    state->nRecs = 0;
-    state->nLpRecs = 0;
-    state->memoryAllocated = 0;
-
     // Turn off GSL failsafe error handler. We typically check the GSL return codes.
     gsl_set_error_handler_off();
     return TIICT_OK;
@@ -1140,7 +1173,8 @@ int parseArguments(ProcessorState *state)
     state->useEofR = true;
     // LP estimates of satellite potential are disabled by default
     state->usePotentials = false;
-    state->lpPotentialSource = LP_POTENTIAL_NONE;
+    state->vars16hz.lpPotentialSource = LP_POTENTIAL_NONE;
+    state->vars2hz.lpPotentialSource = LP_POTENTIAL_NONE;
     state->frames = NULL;
 
     state->export2Hz = true;
@@ -1152,6 +1186,10 @@ int parseArguments(ProcessorState *state)
     state->videoFilename[0] = '\0';
     state->printVideoFilename = false;
     state->visualizeResults = false;
+    state->frameWidth = 960;
+    state->frameHeight = 540;
+    state->framesPerSecond = 15;
+
     state->plotCommand = "QDLat,-90,90,1" ";PhiSc,-5,0,1" ";Vixh,-4,4,0.001" ";Vixv,-4,4,0.001" ";Viy,-2,2,0.001" ";Viz,-2,2,0.001";
     state->defaultPlotHeight = 55;
     state->maxPlotsPerScreen = 0;
@@ -1191,6 +1229,30 @@ int parseArguments(ProcessorState *state)
         else if (strcmp("--visualize", argv[i]) == 0) {
             state->nOptions++;
             state->visualizeResults = true;
+        }
+        else if (strncmp("--frame-width=", argv[i], 14) == 0) {
+            state->nOptions++;
+            if (strlen(argv[i]) < 15) {
+                fprintf(stderr, "Unable to parse %s\n", argv[i]);
+                return TIICT_ARGS_BAD;
+            }
+            state->frameWidth = atoi(argv[i] + 14);
+        }
+        else if (strncmp("--frame-height=", argv[i], 15) == 0) {
+            state->nOptions++;
+            if (strlen(argv[i]) < 16) {
+                fprintf(stderr, "Unable to parse %s\n", argv[i]);
+                return TIICT_ARGS_BAD;
+            }
+            state->frameHeight = atoi(argv[i] + 15);
+        }
+        else if (strncmp("--fps=", argv[i], 6) == 0) {
+            state->nOptions++;
+            if (strlen(argv[i]) < 7) {
+                fprintf(stderr, "Unable to parse %s\n", argv[i]);
+                return TIICT_ARGS_BAD;
+            }
+            state->framesPerSecond = atoi(argv[i] + 6);
         }
         else if (strncmp("--plots=", argv[i], 8) == 0) {
             state->nOptions++;
@@ -1264,29 +1326,30 @@ int parseArguments(ProcessorState *state)
             switch (source) {
                 case 'H':
                 case 'h':
-                    state->lpPotentialSource = LP_POTENTIAL_HIGHGAIN;
+                    state->vars16hz.lpPotentialSource = LP_POTENTIAL_HIGHGAIN;
                     state->usePotentials = true;
                     break;
                 case 'L':
                 case 'l':
-                    state->lpPotentialSource = LP_POTENTIAL_LOWGAIN;
+                    state->vars16hz.lpPotentialSource = LP_POTENTIAL_LOWGAIN;
                     state->usePotentials = true;
                     break;
                 case 'U':
                 case 'u':
-                    state->lpPotentialSource = LP_POTENTIAL_U_SC;
+                    state->vars16hz.lpPotentialSource = LP_POTENTIAL_U_SC;
                     state->usePotentials = true;
                     break;
                 case 'N':
                 case 'n':
-                    state->lpPotentialSource = LP_POTENTIAL_NONE;
+                    state->vars16hz.lpPotentialSource = LP_POTENTIAL_NONE;
                     state->usePotentials = false;
                     break;
                 default:
-                    state->lpPotentialSource = LP_POTENTIAL_UNKNOWN;
+                    state->vars16hz.lpPotentialSource = LP_POTENTIAL_UNKNOWN;
                     state->usePotentials = false;
                     break;
             }
+            state->vars2hz.lpPotentialSource = state->vars16hz.lpPotentialSource;
         }
         else if (strcmp("--help", argv[i]) == 0) {
             cmdUsage(argv[0]);
@@ -1423,76 +1486,34 @@ void closeFiles(ProcessorState *state)
 int shutdown(ProcessorState *state)
 {
     if (state == NULL)
-        return(EXIT_FAILURE);
+        return(TIICT_ARGS_BAD);
 
     // Free the memory
-    for (uint8_t i = 0; i < NUM_CAL_VARIABLES; i++) {
-        free(state->dataBuffers[i]);
-        state->dataBuffers[i] = NULL;
+    if (state->vars16hz.memoryAllocated) {
+        freeVariables(&state->vars16hz);
+        state->vars16hz.memoryAllocated = 0;
+        state->vars16hz.nRecs = 0;
+        state->vars16hz.nLpRecs = 0;
+    }
+    if (state->vars2hz.memoryAllocated) {
+        freeVariables(&state->vars2hz);
+        state->vars2hz.memoryAllocated = 0;
+        state->vars2hz.nRecs = 0;
+        state->vars2hz.nLpRecs = 0;
     }
 
-
-
-    free(state->lpTimes);
-    state->lpTimes = NULL;
-    free(state->lpPhiScHighGain);
-    state->lpPhiScHighGain = NULL;
-    free(state->lpPhiScLowGain);
-    state->lpPhiScLowGain = NULL;
-    free(state->lpPhiSc);
-    state->lpPhiSc = NULL;
-    state->potentials = NULL;
-    free(state->xhat);
-    state->xhat = NULL;
-    free(state->yhat);
-    state->yhat = NULL;
-    free(state->zhat);
-    state->zhat = NULL;
-    free(state->ectFieldH);
-    state->ectFieldH = NULL;
-    free(state->ectFieldV);
-    state->ectFieldV = NULL;
-    free(state->bctField);
-    state->bctField = NULL;
-    free(state->geoPotential);
-    state->geoPotential = NULL;
-    free(state->geoPotentialDifference);
-    state->geoPotentialDifference = NULL;
-    free(state->maxAbsGeopotentialSlope);
-    state->maxAbsGeopotentialSlope = NULL;
-    free(state->exAdjusted);
-    state->exAdjusted = NULL;
-    free(state->exAdjustmentParameter);
-    state->exAdjustmentParameter = NULL;
-    free(state->geoPotentialDetrended);
-    state->geoPotentialDetrended = NULL;
-    free(state->maxAbsGeopotentialDetrendedSlope);
-    state->maxAbsGeopotentialDetrendedSlope = NULL;
-    free(state->viErrors);
-    state->viErrors = NULL;
-    free(state->flags);
-    state->flags = NULL;
-    free(state->fitInfo);
-    state->fitInfo = NULL;
-    free(state->region);
-    state->region = NULL;
-
+    for (int i = 0; i < state->nVideoFrames; i++) {
+        free(state->frames[i].pixels);
+    }
     free(state->frames);
     state->frames = NULL;
-
-    state->nRecs = 0;
-    state->nLpRecs = 0;
-    state->memoryAllocated = 0;
     state->nVideoFrames = 0;
 
     return TIICT_OK;
 }
 
-int velocityBackgroundRemoval(ProcessorState *state)
+int backgroundRemoval(ProcessorState *state)
 {
-    long long timeIndex = 0;
-    uint8_t **dataBuffers = state->dataBuffers;
-
     int gslStatus = GSL_SUCCESS;
 
     // Buffers for mid-latitude linear fit data
@@ -1506,9 +1527,60 @@ int velocityBackgroundRemoval(ProcessorState *state)
 
     offset_model_fit_arguments *fitargs = &state->fitargs[state->interval];
 
+    ProcessorVariables_t *v = &state->vars16hz;
+
+    float *param = NULL;
+    float *paramErrors = NULL;
     // Load values into model data buffer once each for HX, HY, VX, VY
+
     for (uint8_t k = 0; k < 4; k++)
     {
+        if (state->measurementType == VELOCITY_MEASUREMENT) {
+            switch (k) {
+                case 0:
+                    param = v->vixh;
+                    paramErrors = v->vixherror;
+                    break;
+                case 1:
+                    param = v->viy;
+                    paramErrors = v->viyerror;
+                    break;
+                case 2:
+                    param = v->vixv;
+                    paramErrors = v->vixverror;
+                    break;
+                case 3:
+                    param = v->viz;
+                    paramErrors = v->vizerror;
+                    break;
+                default:
+                    break;
+            }
+        }
+        else {
+            // TODO estimate energy errors
+            switch (k) {
+                case 0:
+                    param = v->enhRaw;
+                    paramErrors = NULL;
+                    break;
+                case 1:
+                    param = v->envRaw;
+                    paramErrors = NULL;
+                    break;
+                case 2:
+                    param = v->enh;
+                    paramErrors = NULL;
+                    break;
+                case 3:
+                    param = v->env;
+                    paramErrors = NULL;
+                    break;
+                default:
+                    break;
+            }
+        }
+
         uint8_t flagIndex = k; // Defined flags as bit 0 -> HX, bit 1 -> VX, bit 2-> HY and bit 3-> VY. Data are stored in memory differently.
         if (flagIndex == 1)
             flagIndex = 2;
@@ -1516,16 +1588,16 @@ int velocityBackgroundRemoval(ProcessorState *state)
             flagIndex = 1;
 
         ws->modelDataIndex = 0;
-        for (timeIndex = ws->beginIndex0; timeIndex < ws->beginIndex1; timeIndex++)
+        for (int i = ws->beginIndex0; i < ws->beginIndex1; i++)
         {
-            gsl_vector_set(ws->model1Values, ws->modelDataIndex, *ADDR(1 + k / 2, k % 2, 2));
-            gsl_vector_set(ws->modelValues, ws->modelDataIndex++, *ADDR(1 + k / 2, k % 2, 2));
+            gsl_vector_set(ws->model1Values, ws->modelDataIndex, param[i]);
+            gsl_vector_set(ws->modelValues, ws->modelDataIndex++, param[i]);
         }
         ws->modelDataMidPoint = ws->modelDataIndex;
-        for (timeIndex = ws->endIndex0; timeIndex < ws->endIndex1; timeIndex++)
+        for (int i = ws->endIndex0; i < ws->endIndex1; i++)
         {
-            gsl_vector_set(ws->model2Values, ws->modelDataIndex - ws->modelDataMidPoint, *ADDR(1 + k / 2, k % 2, 2));
-            gsl_vector_set(ws->modelValues, ws->modelDataIndex++, *ADDR(1 + k / 2, k % 2, 2));
+            gsl_vector_set(ws->model2Values, ws->modelDataIndex - ws->modelDataMidPoint, param[i]);
+            gsl_vector_set(ws->modelValues, ws->modelDataIndex++, param[i]);
         }
         // Robust linear model fit and removal
         gslFitWorkspace = gsl_multifit_robust_alloc(fitType, ws->numModelPoints, ws->fitDegree);
@@ -1546,11 +1618,11 @@ int velocityBackgroundRemoval(ProcessorState *state)
             }
             if (state->setFlags)
             {
-                for (timeIndex = ws->beginIndex0; timeIndex < ws->endIndex1; timeIndex++)
+                for (int i = ws->beginIndex0; i < ws->endIndex1; i++)
                 {
                     // Got a complete region, but had a fit error
-                    state->fitInfo[timeIndex] &= ~(FITINFO_INCOMPLETE_REGION << (flagIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
-                    state->fitInfo[timeIndex] |= (FITINFO_GSL_FIT_ERROR << (flagIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
+                    v->fitInfo[i] &= ~(FITINFO_INCOMPLETE_REGION << (flagIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
+                    v->fitInfo[i] |= (FITINFO_GSL_FIT_ERROR << (flagIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
                 }
             }
         }
@@ -1570,23 +1642,25 @@ int velocityBackgroundRemoval(ProcessorState *state)
                 fprintf(state->fitFile, " %f %f %f %f %f %f %f %f %f", c0, c1, stats.adj_Rsq, stats.rmse, median1, median2, mad, mad1, mad2);
             }
             // Remove the offsets and assign flags for this region
-            for (timeIndex = ws->beginIndex0; timeIndex < ws->endIndex1; timeIndex++)
+            for (int i = ws->beginIndex0; i < ws->endIndex1; i++)
             {
                 // remove offset
-                *ADDR(1 + k / 2, k % 2, 2) -= (((TIME() - ws->epoch0)/1000.0) * c1 + c0);
-                driftValue = *ADDR(1 + k / 2, k % 2, 2);
+                param[i] -= (((v->timestamp[i] - ws->epoch0)/1000.0) * c1 + c0);
+                driftValue = param[i];
                 // Assign error estimate
                 // TODO: use interpolated MADs derived start and end of pass?
-                state->viErrors[4*timeIndex + k] = mad;
+                if (paramErrors != NULL) {
+                    paramErrors[i] = mad;
+                }
                 // Set offset-removed flag (most significant bit), and complete region found
                 // Having a complete region can be determined from offset removed and gsl error flags, but
                 // the extra bit will make it logically straightforward to find incomplete regions.
                 // Toggle off the "offset not removed" and "incomplete region" flag bits
                 if (state->setFlags)
                 {
-                    state->fitInfo[timeIndex] &= ~((FITINFO_OFFSET_NOT_REMOVED | FITINFO_INCOMPLETE_REGION) << (flagIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
+                    v->fitInfo[i] &= ~((FITINFO_OFFSET_NOT_REMOVED | FITINFO_INCOMPLETE_REGION) << (flagIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
                     // Update quality and calibration flags based on thresholds
-                    updateDataQualityFlags(state->args.satellite, flagIndex, fitargs->regionNumber, driftValue, mad, timeIndex, state->flags, state->fitInfo);
+                    updateDataQualityFlags(state->args.satellite, flagIndex, fitargs->regionNumber, driftValue, mad, i, v->flags, v->fitInfo);
                 }
             }
         }
@@ -1600,8 +1674,6 @@ int velocityBackgroundRemoval(ProcessorState *state)
 
 void geoelectricPotentialBackgroundRemoval(ProcessorState *state)
 {
-    long long timeIndex = 0;
-    uint8_t **dataBuffers = state->dataBuffers;
 
     int gslStatus = GSL_SUCCESS;
 
@@ -1625,22 +1697,24 @@ void geoelectricPotentialBackgroundRemoval(ProcessorState *state)
     ws->modelDataIndex = 0;
     vmag1 = 0.0;
     vmag2 = 0.0;
-    for (timeIndex = ws->beginIndex0; timeIndex < ws->beginIndex1; timeIndex++)
+
+    ProcessorVariables_t *v = &state->vars16hz;
+    for (int i = ws->beginIndex0; i < ws->beginIndex1; i++)
     {
-        gsl_vector_set(ws->model1Values, ws->modelDataIndex, state->geoPotential[timeIndex]);
-        gsl_vector_set(ws->modelValues, ws->modelDataIndex++, state->geoPotential[timeIndex]);
-        vmag1 += sqrtf(VSATN()*VSATN() + VSATE()*VSATE() + VSATC() * VSATC());
+        gsl_vector_set(ws->model1Values, ws->modelDataIndex, v->geoelectricPotential[i]);
+        gsl_vector_set(ws->modelValues, ws->modelDataIndex++, v->geoelectricPotential[i]);
+        vmag1 += sqrtf(v->vsatn[i]*v->vsatn[i] + v->vsate[i]*v->vsate[i] + v->vsatc[i] * v->vsatc[i]);
     }
     if (ws->numModel1Points > 0)
         vmag1 /= (float)ws->numModel1Points;
     else
         vmag1 = 0.0;
     ws->modelDataMidPoint = ws->modelDataIndex;
-    for (timeIndex = ws->endIndex0; timeIndex < ws->endIndex1; timeIndex++)
+    for (int i = ws->endIndex0; i < ws->endIndex1; i++)
     {
-        gsl_vector_set(ws->model2Values, ws->modelDataIndex - ws->modelDataMidPoint, state->geoPotential[timeIndex]);
-        gsl_vector_set(ws->modelValues, ws->modelDataIndex++, state->geoPotential[timeIndex]);
-        vmag2 += sqrtf(VSATN()*VSATN() + VSATE()*VSATE() + VSATC() * VSATC());
+        gsl_vector_set(ws->model2Values, ws->modelDataIndex - ws->modelDataMidPoint, v->geoelectricPotential[i]);
+        gsl_vector_set(ws->modelValues, ws->modelDataIndex++, v->geoelectricPotential[i]);
+        vmag2 += sqrtf(v->vsatn[i]*v->vsatn[i] + v->vsate[i]*v->vsate[i] + v->vsatc[i] * v->vsatc[i]);
     }
     if (ws->numModel2Points > 0)
         vmag2 /= (float)ws->numModel2Points;
@@ -1688,25 +1762,25 @@ void geoelectricPotentialBackgroundRemoval(ProcessorState *state)
         else
             slope2 = 999999999.0;
         // Remove the offsets and estimate max abs mean ex at mid-latitude
-        for (timeIndex = ws->beginIndex0; timeIndex < ws->endIndex1; timeIndex++)
+        for (int i = ws->beginIndex0; i < ws->endIndex1; i++)
         {
             // Define median1 of first region as zero potential
-            state->maxAbsGeopotentialSlope[timeIndex] = slope1 > slope2 ? slope1 : slope2;
+            v->maxAbsGeoelectricPotentialBaselineSlope[i] = slope1 > slope2 ? slope1 : slope2;
             // linear detrend
-            state->geoPotentialDetrended[timeIndex] = state->geoPotential[timeIndex] - (((TIME() - ws->epoch0)/1000.0) * c1 + c0);
-            state->geoPotential[timeIndex] -= median1;
+            v->geoelectricPotentialDetrended[i] = v->geoelectricPotential[i] - (((v->timestamp[i] - ws->epoch0)/1000.0) * c1 + c0);
+            v->geoelectricPotential[i] -= median1;
             // Remove median of start region
-            state->geoPotentialDifference[timeIndex] = median2 - median1;
+            v->geoelectricPotentialDifference[i] = median2 - median1;
         }
 
         // Now estimate detrended slopes
         for (int i = ws->beginIndex0; i < ws->endIndex0; i++)
         {
-            gsl_vector_set(ws->model1Values, i-ws->beginIndex0, state->geoPotentialDetrended[i]);
+            gsl_vector_set(ws->model1Values, i-ws->beginIndex0, v->geoelectricPotentialDetrended[i]);
         }
         for (int i = ws->beginIndex1; i < ws->endIndex1; i++)
         {
-            gsl_vector_set(ws->model2Values, i-ws->beginIndex1, state->geoPotentialDetrended[i]);
+            gsl_vector_set(ws->model2Values, i-ws->beginIndex1, v->geoelectricPotentialDetrended[i]);
         }
         gslStatus = gsl_multifit_robust(ws->modelTimes1Matrix, ws->model1Values, ws->fitCoefficients, cov, gslFitWorkspace1);
         if (gslStatus == GSL_SUCCESS && vmag1 > 0)
@@ -1719,9 +1793,9 @@ void geoelectricPotentialBackgroundRemoval(ProcessorState *state)
         else
             slope2 = 999999999.0;
         // Remove the offsets and estimate max abs mean ex at mid-latitude
-        for (timeIndex = ws->beginIndex0; timeIndex < ws->endIndex1; timeIndex++)
+        for (int i = ws->beginIndex0; i < ws->endIndex1; i++)
         {
-            state->maxAbsGeopotentialDetrendedSlope[timeIndex] = slope1 > slope2 ? slope1 : slope2;
+            v->maxAbsGeoelectricPotentialDetrendedBaselineSlope[i] = slope1 > slope2 ? slope1 : slope2;
         }
     }
     gsl_multifit_robust_free(gslFitWorkspace);
@@ -1736,12 +1810,14 @@ void geoelectricPotentialBackgroundRemoval(ProcessorState *state)
 int geoelectricPotentialEstimator(ProcessorState *state)
 {
     int status = TIICT_OK;
-    long timeIndex = state->bgws.beginIndex0;
-    uint8_t **dataBuffers = state->dataBuffers;
-    double previousTime = TIME();
-    double currentTime = TIME();
+
+    ProcessorVariables_t *v = &state->vars16hz;
+
+    long i = state->bgws.beginIndex0;
+    double previousTime = v->timestamp[i];
+    double currentTime = v->timestamp[i];
     double deltaTime = 0.0;
-    state->geoPotential[timeIndex] = 0.0;
+    v->geoelectricPotential[i] = 0.0;
 
     float deltaPhi1 =0.0;
     float deltaPhi2 =0.0;
@@ -1753,37 +1829,37 @@ int geoelectricPotentialEstimator(ProcessorState *state)
     // 0 northern ascending, 1 equatorial descending
     // 2 southern descending, 3 equatorial ascending
     offset_model_fit_arguments *fitargs = &state->fitargs[state->interval];
-    for (timeIndex = bInd0; timeIndex < eInd1; timeIndex++)
+    for (i = bInd0; i < eInd1; i++)
     {
-        state->region[timeIndex] = fitargs->regionNumber;
+        v->orbitRegion[i] = fitargs->regionNumber;
     }
 
     float s1 = 0.0;
     float s2 = 0.0;
     float s1p = 0.0;
     float s2p = 0.0;
-    status = integrateField(state, state->ectFieldH, 3, 1/1000.0, state->geoPotential, bInd0, eInd1, true, false, false, true, &deltaPhi1, &s1, &s2);
+    status = integrateField(state, v->ectxh, 1/1000.0, v->geoelectricPotential, bInd0, eInd1, true, false, false, true, &deltaPhi1, &s1, &s2);
     if (status != TIICT_OK)
         return status;
-    status = integrateField(state, state->ectFieldH, 3, 1/1000.0, state->geoPotentialDetrended, bInd0, eInd1, true, true, false, true, &deltaPhi2, NULL, NULL);
+    status = integrateField(state, v->ectxh, 1/1000.0, v->geoelectricPotentialDetrended, bInd0, eInd1, true, true, false, true, &deltaPhi2, NULL, NULL);
 
     if (status != TIICT_OK)
         return status;
-    status = integrateField(state, state->ectFieldH, 3, 1/1000.0, state->exAdjusted, bInd0, eInd1, true, true, true, true, &deltaPhi3, NULL, NULL);
+    status = integrateField(state, v->ectxh, 1/1000.0, v->ehxAdjusted, bInd0, eInd1, true, true, true, true, &deltaPhi3, NULL, NULL);
     if (status != TIICT_OK)
         return status;
 
     // Zhu et al. (2020) DMSP rescaling factor
     float c = - deltaPhi2 / deltaPhi3;
-    for (timeIndex = bInd0; timeIndex < eInd1; timeIndex++)
+    for (i = bInd0; i < eInd1; i++)
     {
-        state->exAdjusted[timeIndex] = state->ectFieldH[3*timeIndex] + c * fabsf(state->ectFieldH[3*timeIndex]);
-        state->exAdjustmentParameter[timeIndex] = c;
-        state->geoPotentialDifference[timeIndex] = deltaPhi1;
+        v->ehxAdjusted[i] = v->ectxh[i] + c * fabsf(v->ectxh[i]);
+        v->ehxAdjustmentParameter[i] = c;
+        v->geoelectricPotentialDifference[i] = deltaPhi1;
     }
 
     // Calculated adjusted geopotential
-    status = integrateField(state, state->exAdjusted, 1, 1/1000.0, state->geoPotentialDetrended, bInd0, eInd1, true, false, false, true, NULL, &s1p, &s2p);
+    status = integrateField(state, v->ehxAdjusted, 1/1000.0, v->geoelectricPotentialDetrended, bInd0, eInd1, true, false, false, true, NULL, &s1p, &s2p);
     if (status != TIICT_OK)
         return status;
 
@@ -1791,10 +1867,10 @@ int geoelectricPotentialEstimator(ProcessorState *state)
     s2 = fabsf(s2);
     s1p = fabsf(s1p);
     s2p = fabsf(s2p);
-    for (timeIndex = bInd0; timeIndex < eInd1; timeIndex++)
+    for (i = bInd0; i < eInd1; i++)
     {
-        state->maxAbsGeopotentialSlope[timeIndex] = 1000.0 * (s1 > s2 ? s1 : s2);
-        state->maxAbsGeopotentialDetrendedSlope[timeIndex] = 1000.0 * (s1p > s2p ? s1p : s2p);
+        v->maxAbsGeoelectricPotentialBaselineSlope[i] = 1000.0 * (s1 > s2 ? s1 : s2);
+        v->maxAbsGeoelectricPotentialDetrendedBaselineSlope[i] = 1000.0 * (s1p > s2p ? s1p : s2p);
     }
 
     return status;

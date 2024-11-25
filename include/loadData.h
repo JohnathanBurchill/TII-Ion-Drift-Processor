@@ -23,6 +23,11 @@
 
 #include "state.h"
 
+typedef enum CalibrationFileType {
+    CAL_FILE_TII = 0,
+    CAL_FILE_LP = 1,
+} CalibrationFileType_enum;
+
 typedef enum DayType {
     PREVIOUS_DAY = -1,
     REQUESTED_DAY = 0,
@@ -37,16 +42,27 @@ enum LpPotentialSource {
     LP_POTENTIAL_UNKNOWN = 4,
 };
 
+typedef struct CalibrationVariable {
+    char *name;
+    void **memoryPointer;
+    long recordValueOffset;
+} CalibrationVariable_t;
+
 
 int getLpInputFilename(const char satelliteLetter, long year, long month, long day, const char *path, char *filename);
 int loadLpCalData(ProcessorState *state);
 int getLpData(ProcessorState *state);
 int loadLpInputs(const char *cdfFile, double **lpTime, double **lpPhiScHighGain, double **lpPhiScLowGain, double **lpPhiSc, size_t *numberOfRecords);
 
-int loadTiiCalData(ProcessorState *state);
-void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state);
+int loadCalData(ProcessorState *state);
+void loadCalDataFromDate(const DayType dayType, ProcessorState *state, CalibrationVariable_t *variables, int nVariables);
+int loadCdfVariable(ProcessorState *state, CDFid calCdfId, CalibrationVariable_t *variable, long startRecord, long stopRecord, long *calibrationMemorySize);
+void freeVariable(void *var);
+void freeVariables(ProcessorVariables_t *vars);
+int reallocVariable(void **var, size_t newSize);
+int reallocVariables(ProcessorVariables_t *vars, size_t newSize);
 
-void setCalibrationFileName(ProcessorState *state, int year, int month, int day);
+void setCalibrationFileName(ProcessorState *state, int year, int month, int day, CalibrationFileType_enum fileType);
 
 int checkCalDataAvailability(ProcessorState *state);
 

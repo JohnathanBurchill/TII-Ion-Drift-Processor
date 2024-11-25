@@ -67,6 +67,7 @@ typedef struct AppState {
     Image *help;
     Image *storedFrames;
     int storedNVideoFrames;
+    bool show16Hz;
 } AppState_t;
 
 typedef enum TimeUnit {
@@ -83,14 +84,14 @@ typedef enum TimeUnit {
     DECADES,
 } TimeUnit_enum;
 
-Image *helpImage(void);
+Image *helpImage(int width, int height);
 void resetVideoFrames(ProcessorState *state);
 void resetDisplay(AppState_t *as);
 double calculateDeltaT(AppState_t *as, TimeUnit_enum units, int sign);
 void advancePlots(AppState_t *as, double amount, TimeUnit_enum units);
 void rewindPlots(AppState_t *as, double amount, TimeUnit_enum units);
 void updatePlots(ProcessorState *state);
-void rerunProcessor(ProcessorState *state);
+void rerunProcessor(AppState_t *state);
 
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
@@ -110,16 +111,21 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     }
 
     // New defaults
-    state->writeLogFiles = false;
+    state->writeLogFiles = true;
     state->export16Hz = false;
     state->export2Hz = false;
     state->exportZip = false;
     state->usePotentials = false;
-    state->lpPotentialSource = LP_POTENTIAL_NONE;
+    state->vars16hz.lpPotentialSource = LP_POTENTIAL_NONE;
+    state->vars2hz.lpPotentialSource = LP_POTENTIAL_NONE;
     state->visualizeResults = true;
     state->exportVideo = false;
 
     runProcessor(argc, argv, &state);
+
+    // Display 16 Hz data by default
+    as->show16Hz = true;
+    state->vars = &state->vars16hz;
 
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         SDL_Log("Couldn't initialize SDL: %s", SDL_GetError());
@@ -128,7 +134,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 
     SDL_SetLogPriorities(SDL_LOG_PRIORITY_CRITICAL);
 
-    if (!SDL_CreateWindowAndRenderer("examples/renderer/clear", IMAGE_WIDTH, IMAGE_HEIGHT, 0, &as->window, &as->plotRenderer)) {
+    if (!SDL_CreateWindowAndRenderer("examples/renderer/clear", state->frameWidth, state->frameHeight, 0, &as->window, &as->plotRenderer)) {
         SDL_Log("Couldn't create window/renderer: %s", SDL_GetError());
         return SDL_APP_FAILURE;
     }
@@ -151,8 +157,8 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     as->plotPage = 0;
     as->dayBegin = computeEPOCH(state->args.year, state->args.month, state->args.day, 0, 0, 0, 0);
     as->dayEnd = as->t0 + 86400.0 * 1000.0; // Ignore leap seconds
-    double *timesMs = (double*)state->dataBuffers[0];
-    if (state->nRecs > 1) {
+    double *timesMs = state->vars->timestamp;
+    if (state->vars->nRecs > 1) {
         as->samplePeriodSeconds = (timesMs[1] - timesMs[0]) / 1000.0;
     }
     else {
@@ -163,7 +169,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     as->playbackDirection = 1;
     as->playbackRate = 1.0;
 
-    as->help = helpImage();
+    as->help = helpImage(state->frameWidth, state->frameHeight);
     if (as->help == NULL) {
         return SDL_APP_FAILURE;
     }
@@ -174,7 +180,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     return SDL_APP_CONTINUE;  /* carry on with the program! */
 }
 
-Image *helpImage(void)
+Image *helpImage(int width, int height)
 {
     int x = 50;
     int y0 = 50;
@@ -184,7 +190,7 @@ Image *helpImage(void)
     int fontHeight = fontheight(fontSize);
 
     Image *help = malloc(sizeof *help);
-    int status = allocImage(help, IMAGE_WIDTH, IMAGE_HEIGHT, 1);
+    int status = allocImage(help, width, height, 1);
     if (status != TIICT_OK) {
         SDL_Log("Unable to allocate image");
         return NULL;
@@ -195,14 +201,14 @@ Image *helpImage(void)
 
     annotate("F1 - help", fontSize, x, y, help);
     y += fontHeight;
-    annotate(" Q - quit", fontSize, x, y, help);
+    annotate(" q - quit", fontSize, x, y, help);
+    y += fontHeight*2;
+    annotate(" a - Swarm A", fontSize, x, y, help);
     y += fontHeight;
-    annotate(" A - Swarm A", fontSize, x, y, help);
+    annotate(" b - Swarm B", fontSize, x, y, help);
     y += fontHeight;
-    annotate(" B - Swarm B", fontSize, x, y, help);
-    y += fontHeight;
-    annotate(" C - Swarm C", fontSize, x, y, help);
-    y += fontHeight;
+    annotate(" c - Swarm C", fontSize, x, y, help);
+    y += fontHeight*2;
     annotate(" 1 - LP PhiSc source: None", fontSize, x, y, help);
     y += fontHeight;
     annotate(" 2 - LP PhiSc source: U_SC", fontSize, x, y, help);
@@ -212,36 +218,50 @@ Image *helpImage(void)
     annotate(" 4 - LP PhiSc source: High Gain", fontSize, x, y, help);
     y += fontHeight;
 
+    x += IMAGE_WIDTH/2;
+    y = y0;
+    annotate("F2 - Ion drift", fontSize, x, y, help);
+    y += fontHeight;
+    annotate("F3 - Electric field", fontSize, x, y, help);
+    y += fontHeight;
+    annotate("F4 - Magnetic field", fontSize, x, y, help);
+    y += fontHeight*2;
+    annotate("F5 - Satellite position", fontSize, x, y, help);
+    y += fontHeight;
+    annotate("F6 - Satellite velocity", fontSize, x, y, help);
+    y += fontHeight;
+    annotate("F7 - Floating potential", fontSize, x, y, help);
+    y += fontHeight;
+    annotate("F8 - Geopotential", fontSize, x, y, help);
+    y += fontHeight;
+
     return help;
 }
 
 SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 {
-    int status = 0;
-    AppState_t *as = (AppState_t *)appstate;
-    int argc = 0;
-    char **argv = NULL;
-    double *timesMs;
-    ProcessorState *state = (ProcessorState *)as->state;
-    if (state != NULL) {
-        timesMs = (double*)state->dataBuffers[0];
-        if (timesMs != NULL) {
-            as->t0 = timesMs[0];
-            as->t1 = timesMs[state->nRecs - 1];
-        }
-    }
-    double middleTime = 0.0;
-    double timeRange = state->plotT1 - state->plotT0;
-    double secondsToAdvance = 0.0;
-
     if (event->type == SDL_EVENT_QUIT || (event->type == SDL_EVENT_KEY_UP && event->key.key == SDLK_Q)) {
         return SDL_APP_SUCCESS;  /* end the program, reporting success to the OS. */
     }
 
-    // Everything else requires state
+    int status = 0;
+    AppState_t *as = (AppState_t *)appstate;
+    int argc = 0;
+    char **argv = NULL;
+
+    ProcessorState *state = (ProcessorState *)as->state;
     if (state == NULL) {
         return SDL_APP_CONTINUE;
     }
+
+    double *timesMs = state->vars->timestamp;
+    if (timesMs != NULL) {
+        as->t0 = timesMs[0];
+        as->t1 = timesMs[state->vars->nRecs - 1];
+    }
+    double timeRange = state->plotT1 - state->plotT0;
+    double middleTime = 0.0;
+    double secondsToAdvance = 0.0;
 
     // Restore the display after a help request
     if (as->storedFrames != NULL) {
@@ -255,44 +275,48 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
         switch (event->key.key) {
             case SDLK_A:
                 state->args.satellite = "A";
-                rerunProcessor(state);
+                rerunProcessor(as);
                 break;
             case SDLK_B:
                 state->args.satellite = "B";
-                rerunProcessor(state);
+                rerunProcessor(as);
                 break;
             case SDLK_C:
                 state->args.satellite = "C";
-                rerunProcessor(state);
+                rerunProcessor(as);
                 break;
             case SDLK_E:
                 // Toggle use of eofr for along-track drift
                 state->useEofR = !state->useEofR;
-                rerunProcessor(state);
+                rerunProcessor(as);
                 break;
             case SDLK_1:
-                state->lpPotentialSource = LP_POTENTIAL_NONE;
+                state->vars->lpPotentialSource = LP_POTENTIAL_NONE;
                 state->usePotentials = false;
-                rerunProcessor(state);
+                rerunProcessor(as);
                 break;
             case SDLK_2:
-                state->lpPotentialSource = LP_POTENTIAL_U_SC;
+                state->vars->lpPotentialSource = LP_POTENTIAL_U_SC;
                 state->usePotentials = true;
-                rerunProcessor(state);
+                rerunProcessor(as);
                 break;
             case SDLK_3:
-                state->lpPotentialSource = LP_POTENTIAL_LOWGAIN;
+                state->vars->lpPotentialSource = LP_POTENTIAL_LOWGAIN;
                 state->usePotentials = true;
-                rerunProcessor(state);
+                rerunProcessor(as);
                 break;
             case SDLK_4:
-                state->lpPotentialSource = LP_POTENTIAL_HIGHGAIN;
+                state->vars->lpPotentialSource = LP_POTENTIAL_HIGHGAIN;
                 state->usePotentials = true;
-                rerunProcessor(state);
+                rerunProcessor(as);
+                break;
+            case SDLK_SEMICOLON:
+                as->show16Hz = !as->show16Hz;
+                rerunProcessor(as);
                 break;
             case SDLK_U:
                 // Update processor results
-                rerunProcessor(state);
+                rerunProcessor(as);
                 break;
             case SDLK_EQUALS:
                 // Plus on regular keboard
@@ -403,9 +427,43 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
                 as->storedNVideoFrames = state->nVideoFrames;
                 state->frames = as->help;
                 state->nVideoFrames = 1;
-
                 break;
 
+            case SDLK_F2:
+                // ion drift
+                state->plotCommand = "Vixh,-2,2,0.001;Vixv,-2,2,0.001;Viy,-2,2,0.001;Viz,-2,2,0.001";
+                updatePlots(state);
+                break;
+            case SDLK_F3:
+                // electric field
+                state->plotCommand = "Exh,-100,100,0.001";
+                updatePlots(state);
+                break;
+            case SDLK_F4:
+                // magnetic field
+                state->plotCommand = "Bx,-65000,65000,1e9";
+                updatePlots(state);
+                break;
+            case SDLK_F5:
+                // Satellite position
+                state->plotCommand = "Lat,-90,90,1";
+                updatePlots(state);
+                break;
+            case SDLK_F6:
+                // Satellite velocity
+                state->plotCommand = "VsatN,-8,8,0.001";
+                updatePlots(state);
+                break;
+            case SDLK_F7:
+                // Satellite floating potential
+                state->plotCommand = "PhiSc,-8,1,1";
+                updatePlots(state);
+                break;
+            case SDLK_F8:
+                // Geoelectric potential
+                state->plotCommand = "Geopot,-200,200,1";
+                updatePlots(state);
+                break;
             default:
                 break;
         }
@@ -426,6 +484,13 @@ SDL_AppResult SDL_AppIterate(void *appstate)
         visualizeResults(NULL);
         goto updatedisplay;
     }
+    if (as->show16Hz) {
+        state->vars = &state->vars16hz;
+    }
+    else {
+        state->vars = &state->vars2hz;
+    }
+
     if (state->nVideoFrames == 0) {
         visualizeResults(state);
         goto updatedisplay;
@@ -569,7 +634,7 @@ void advancePlots(AppState_t *as, double amount, TimeUnit_enum units)
     as->state->plotT1 += totalTime;
     if (as->state->plotT1 > as->t1) {
         as->state->args.day++;
-        rerunProcessor(as->state);
+        rerunProcessor(as);
     }
     updatePlots(as->state);
 
@@ -587,7 +652,7 @@ void rewindPlots(AppState_t *as, double amount, TimeUnit_enum units)
     // For now, limit to one day
     if (as->state->plotT0 < as->t0) {
         as->state->args.day--;
-        rerunProcessor(as->state);
+        rerunProcessor(as);
 
     }
     updatePlots(as->state);
@@ -602,9 +667,11 @@ void updatePlots(ProcessorState *state)
     return;
 }
 
-void rerunProcessor(ProcessorState *state)
+void rerunProcessor(AppState_t *appstate)
 {
     int status = TIICT_OK;
+
+    ProcessorState *state = appstate->state;
     shutdown(state);
     status = initProcessor(state);
     if (status != TIICT_OK) {
@@ -616,7 +683,7 @@ void rerunProcessor(ProcessorState *state)
         shutdown(state);
         goto vis;
     }
-    status = loadTiiCalData(state);
+    status = loadCalData(state);
     if (status != TIICT_OK) {
         shutdown(state);
         goto vis;
@@ -630,6 +697,38 @@ void rerunProcessor(ProcessorState *state)
     calculateFields(state);
 
 vis:
+    if (appstate->show16Hz) {
+        state->vars = &state->vars16hz;
+    }
+    else {
+        // Downsample 16 Hz
+        state->vars2hz.nRecs = state->vars16hz.nRecs / 8 + 1;
+        int reallocstatus = reallocVariables(&state->vars2hz, state->vars2hz.nRecs);
+        if (reallocstatus != TIICT_OK) {
+            state->vars = &state->vars16hz;
+            appstate->show16Hz = true;
+        }
+        double t0 = 0.0;
+        long storageIndex = 0;
+        bool downSampled = false;
+        long n2HzSamples = 0;
+        for (long i = 0; i <= state->vars16hz.nRecs;) // Time index advanced below
+        {
+            t0 = floor(state->vars16hz.timestamp[i] / 1000.0); // UT second reference
+            for (uint8_t halfSecond = 0; halfSecond < 2; halfSecond ++)
+            {
+                downSampled = downSampleHalfSecond(state, &i, storageIndex, t0 + 0.5 * halfSecond, state->vars16hz.nRecs-1);
+                if (downSampled)
+                {
+                    storageIndex++;
+                    n2HzSamples++;
+                }
+            }
+
+        }
+        state->vars2hz.nRecs = n2HzSamples;
+        state->vars = &state->vars2hz;
+    }
     visualizeResults(state);
 
     return;

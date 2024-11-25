@@ -24,7 +24,7 @@ int visualizeResults(ProcessorState *state)
     int topMargin = 10;
 
     Image image = {0};
-    if (allocImage(&image, IMAGE_WIDTH, IMAGE_HEIGHT, 1) != DRAW_OK)
+    if (allocImage(&image, state->frameWidth, state->frameHeight, 1) != DRAW_OK)
     {
         printf("Could not allocate memory for image.\n");
         goto cleanup;
@@ -34,25 +34,25 @@ int visualizeResults(ProcessorState *state)
 
     // Input data
     if (state == NULL) {
-        annotate("No data", 24, IMAGE_WIDTH/2 - fontwidth(24)*strlen("No data")/2, IMAGE_HEIGHT/2 + fontheight(24)/2, &image);
+        annotate("No data", 24, state->frameWidth/2 - fontwidth(24)*strlen("No data")/2, state->frameHeight/2 + fontheight(24)/2, &image);
         goto cleanup;
     }
 
-    uint8_t **dataBuffers = state->dataBuffers;
-    double *times = (double*)dataBuffers[0];
+    // Set by caller for 16 Hz or 2 Hz
+    ProcessorVariables_t *v = state->vars;
 
-    if (times == NULL) {
+    if (v->timestamp == NULL) {
         addAnnotations(state, &image, topMargin);
-        annotate("No data", 24, IMAGE_WIDTH/2 - fontwidth(24)*strlen("No data")/2, IMAGE_HEIGHT/2 + fontheight(24)/2, &image);
+        annotate("No data", 24, state->frameWidth/2 - fontwidth(24)*strlen("No data")/2, state->frameHeight/2 + fontheight(24)/2, &image);
         storeImage(state, &image);
         goto cleanup;
     }
 
     if (state->plotT0 < 0) {
-        state->plotT0 = times[0];
+        state->plotT0 = v->timestamp[0];
     }
-    if (state->plotT1 < 0) {
-        state->plotT1 = times[state->nRecs - 1];
+    if (state->plotT1 < state->plotT0) {
+        state->plotT1 = v->timestamp[v->nRecs - 1];
     }
 
     int firstIndex = 0;
@@ -60,20 +60,20 @@ int visualizeResults(ProcessorState *state)
 
     // Find first index
     if (state->plotT0 >= 0) {
-        while (firstIndex < state->nRecs - 1 && times[firstIndex] < state->plotT0) {
+        while (firstIndex < v->nRecs - 1 && v->timestamp[firstIndex] < state->plotT0) {
             firstIndex++;
         }
     }
     else  {
-        state->plotT0 = times[firstIndex];
+        state->plotT0 = v->timestamp[firstIndex];
     }
     if (state->plotT1 >= 0) {
-        while (lastIndex < state->nRecs && times[lastIndex] < state->plotT1) {
+        while (lastIndex < v->nRecs && v->timestamp[lastIndex] < state->plotT1) {
             lastIndex++;
         }
     }
     else  {
-        state->plotT1 = times[state->nRecs-1];
+        state->plotT1 = v->timestamp[v->nRecs-1];
     }
 
     if (strlen(state->videoFilename) == 0) {
@@ -131,7 +131,7 @@ int visualizeResults(ProcessorState *state)
     // Plot requested plots
 
     if (state->exportVideo) {
-        int status = initVideo(state->videoFilename);
+        int status = initVideo(state->videoFilename, state->frameWidth, state->frameHeight, state->framesPerSecond);
         if (status < 0)
         {
             fprintf(stderr, "Problem intializing video: got status %d.\n", status);
@@ -181,55 +181,68 @@ int visualizeResults(ProcessorState *state)
         plotYOffset += (plotHeight - oldPlotHeight);
 
         if (strcmp("QDLat", params[0]) == 0) {
-            parameter = (float*)dataBuffers[5];
+            parameter = v->qdlat;
             parameterLabel = "QD Lat";
+        } else if (strcmp("MLT", params[0]) == 0) {
+            parameter = v->mlt;
+            parameterLabel = "MLT";
         } else if (strcmp("PhiSc", params[0]) == 0) {
             if (state->usePotentials) {
-                parameter = state->potentials;
+                parameter = v->potentials;
             }
             else {
                 // Draw zeros
-                parameter = (float*)state->dataBuffers[1];
+                parameter = v->mlt;
                 yScale = 0.0;
             }
             parameterLabel = "U_SC";
         } else if (strcmp("Vixh", params[0]) == 0) {
-            parameter = (float*)dataBuffers[1];
+            parameter = v->vixh;
             parameterLabel = "Vixh";
-            tupleLength = 2;
-            tupleIndex = 0;
         } else if (strcmp("Vixv", params[0]) == 0) {
-            parameter = (float*)dataBuffers[2];
+            parameter = v->vixv;
             parameterLabel = "Vixv";
-            tupleLength = 2;
-            tupleIndex = 0;
         } else if (strcmp("Viy", params[0]) == 0) {
-            parameter = (float*)dataBuffers[1];
+            parameter = v->viy;
             parameterLabel = "Viy";
-            tupleLength = 2;
-            tupleIndex = 1;
         } else if (strcmp("Viz", params[0]) == 0) {
-            parameter = (float*)dataBuffers[2];
+            parameter = v->viz;
             parameterLabel = "Viz";
-            tupleLength = 2;
-            tupleIndex = 1;
+        } else if (strcmp("Exh", params[0]) == 0) {
+            parameter = v->ectxh;
+            parameterLabel = "Exh";
+        } else if (strcmp("Eyh", params[0]) == 0) {
+            parameter = v->ectyh;
+            parameterLabel = "Eyh";
+        } else if (strcmp("Ezh", params[0]) == 0) {
+            parameter = v->ectzh;
+            parameterLabel = "Ezh";
+        } else if (strcmp("Exv", params[0]) == 0) {
+            parameter = v->ectxv;
+            parameterLabel = "Exv";
+        } else if (strcmp("Eyv", params[0]) == 0) {
+            parameter = v->ectyv;
+            parameterLabel = "Eyv";
+        } else if (strcmp("Ezv", params[0]) == 0) {
+            parameter = v->ectzv;
+            parameterLabel = "Ezv";
         } else {
             gotParameter = false;
         }
 
         if (gotParameter) {
-            drawFloatTimeSeries(&image, (double*)dataBuffers[0], parameter, firstIndex, lastIndex, stride, yScale, yr0, yr1, plotX0, plotYOffset, plotWidth, plotHeight, xLabel, parameterLabel, MAX_COLOR_VALUE + 1, yr0str, yr1str, false, dotSize, 12, true, tupleLength, tupleIndex);
+            drawFloatTimeSeries(&image, v->timestamp, parameter, firstIndex, lastIndex, stride, yScale, yr0, yr1, plotX0, plotYOffset, plotWidth, plotHeight, xLabel, parameterLabel, MAX_COLOR_VALUE + 1, yr0str, yr1str, false, dotSize, 12, true, tupleLength, tupleIndex, 0);
             plotYOffset += plotHeight + plotdy;
             plotsMade++;
         }
 
-        if ((maxPlots > 0 && plotsMade % maxPlots == 0) || plotsMade == nPlots || plotYOffset > IMAGE_HEIGHT - 1 - plotdy ) {
+        if ((plotsMade > 0 && maxPlots > 0 && plotsMade % maxPlots == 0) || plotsMade == nPlots || plotYOffset > state->frameHeight - 1 - plotdy ) {
 
             // Add annotations
             addAnnotations(state, &image, topMargin);
             // Write video frames
             if (state->exportVideo) {
-                for (int c = 0; c < 1.0 * VIDEO_FPS; c++) {
+                for (int c = 0; c < 1.0 * state->framesPerSecond; c++) {
                     generateFrame(&image, frameCounter++);
                 }
             }
@@ -237,6 +250,11 @@ int visualizeResults(ProcessorState *state)
             plotHeight = plotHeight0;
             plotYOffset = plotHeight + plotdy + topMargin;
         }
+    }
+    if (plotsMade == 0) {
+        // Store anyway
+        addAnnotations(state, &image, topMargin);
+        storeImage(state, &image);
     }
 
     free(tofree);
@@ -260,7 +278,7 @@ cleanup:
     return TIICT_OK;
 }
 
-void drawFloatTimeSeries(Image *imageBuf, double *times, float *values, int firstInd, int lastInd, int stride, float valueScale, float minValue, float maxValue, int plotX0, int plotY0, int plotWidth, int plotHeight, const char *xLabel, const char *yLabel, int colorIndex, const char *minValueStr, const char *maxValueStr, bool log10Scale, int dotSize, int fontSize, bool axes, int tupleLength, int tupleIndex)
+void drawFloatTimeSeries(Image *imageBuf, double *times, float *values, int firstInd, int lastInd, int stride, float valueScale, float minValue, float maxValue, int plotX0, int plotY0, int plotWidth, int plotHeight, const char *xLabel, const char *yLabel, int colorIndex, const char *minValueStr, const char *maxValueStr, bool log10Scale, int dotSize, int fontSize, bool axes, int tupleLength, int tupleIndex, int orientation)
 {
     int x0, y0;
     int x, y;
@@ -376,7 +394,7 @@ void addAnnotations(ProcessorState *state, Image *image, int topMargin)
     annotate(label, fsize, 5, yText, image);
     yText += fontheight(fsize);
     char *potentialSource = "None";
-    switch (state->lpPotentialSource) {
+    switch (state->vars16hz.lpPotentialSource) {
         case LP_POTENTIAL_U_SC:
             potentialSource = "U_SC";
             break;

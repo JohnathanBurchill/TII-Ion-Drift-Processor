@@ -20,9 +20,11 @@
 
 #include "export.h"
 
+#include "loadData.h"
+#include "settings.h"
 #include "errors.h"
 #include "processing.h"
-#include "indexing.h"
+#include "state.h"
 #include "utilities.h"
 
 #include <cdf.h>
@@ -32,7 +34,6 @@
 #include <unistd.h>
 #include <time.h>
 #include <ctype.h>
-#include <math.h>
 
 extern char infoHeader[50];
 
@@ -41,9 +42,11 @@ int exportCdfs(ProcessorState *state)
 
     int status = TIICT_OK;
 
+    ProcessorVariables_t *v = &state->vars16hz;
+
     // Keep only data from the requested day
     double minTime, maxTime, startTime, stopTime, prevTime;
-    long startIndex = 0, stopIndex = state->nRecs;
+    long startIndex = 0, stopIndex = v->nRecs;
     minTime = computeEPOCH(state->args.year, state->args.month, state->args.day, 0, 0, 0, 0);
     maxTime = computeEPOCH(state->args.year, state->args.month, state->args.day + 1, 0, 0, 0, 0);
     bool gotStartTime = false, gotStopTime = false;
@@ -54,20 +57,19 @@ int exportCdfs(ProcessorState *state)
     uint16_t filesExported = 0;
 
     // Find first index with time on requested day
-    long timeIndex = 0;
-    uint8_t **dataBuffers = state->dataBuffers;
-    while (timeIndex < state->nRecs && TIME() < minTime) timeIndex++;
-    if (timeIndex == state->nRecs)
+    int i = 0;
+    while (i < v->nRecs && v->timestamp[i] < minTime) i++;
+    if (i == v->nRecs)
         return TIICT_NO_RECORDS_TO_EXPORT;
 
-    startIndex = timeIndex;
-    startTime = TIME();
+    startIndex = i;
+    startTime = v->timestamp[i];
     // Find last index not containing a gap of more than 10 minutes, or last index of the day
     stopIndex = startIndex;
     stopTime = startTime;
 
     // case where there are no records on the requested or following days
-    if (startIndex == state->nRecs)
+    if (startIndex == v->nRecs)
     {
         if (state->writeLogFiles) {
             fprintf(state->processingLogFile, "%sNo records found for requested date.\n", infoHeader);
@@ -76,9 +78,9 @@ int exportCdfs(ProcessorState *state)
     }
     while (exporting)
     {
-        double gapTime = (TIME() - stopTime)/1000.;
+        double gapTime = (v->timestamp[i] - stopTime)/1000.;
         double duration = (stopTime - startTime)/1000.;
-        if ((gapTime > MAX_ALLOWED_CDF_GAP_SECONDS) || (TIME() >= maxTime) || (timeIndex == (state->nRecs-1)))
+        if ((gapTime > MAX_ALLOWED_CDF_GAP_SECONDS) || (v->timestamp[i] >= maxTime) || (i == (v->nRecs-1)))
         {
             // Export data and continue even on error (for this interval)
             if (duration >= SECONDS_OF_DATA_REQUIRED_FOR_EXPORTING)
@@ -101,23 +103,23 @@ int exportCdfs(ProcessorState *state)
                 if (state->writeLogFiles) {
                     char startString[EPOCH_STRING_LEN+1], stopString[EPOCH_STRING_LEN+1];
                     toEncodeEPOCH(startTime, 0, startString);
-                    toEncodeEPOCH(TIME(), 0, stopString);
+                    toEncodeEPOCH(v->timestamp[i], 0, stopString);
                     fprintf(state->processingLogFile, "%sInterval spanning %s to %s has a duration of less than %d seconds: not exporting %ld records.\n", infoHeader, startString, stopString, SECONDS_OF_DATA_REQUIRED_FOR_EXPORTING, stopIndex - startIndex + 1);
                 }
             }
 
             // Try next interval
-            startIndex = timeIndex;
-            startTime = TIME();
-            if (TIME() >= maxTime || timeIndex == state->nRecs)
+            startIndex = i;
+            startTime = v->timestamp[i];
+            if (v->timestamp[i] >= maxTime || i == v->nRecs)
             {
                 exporting = false;
             }
         }
-        stopIndex = timeIndex;
-        stopTime = TIME();
-        timeIndex++;
-        if (timeIndex == state->nRecs)
+        stopIndex = i;
+        stopTime = v->timestamp[i];
+        i++;
+        if (i == v->nRecs)
         {
             exporting = false;
         }
@@ -559,6 +561,8 @@ void addAttributes(CDFid id, const char *dataset, const char *satellite, const c
 
 int exportTCT16Cdfs(ProcessorState *state, double startTime, double stopTime, long startIndex, long stopIndex)
 {
+    ProcessorVariables_t *v = &state->vars16hz;
+
     if (state->writeLogFiles) {
         fprintf(state->processingLogFile, "%sExporting 16 Hz data.\n",infoHeader);
         char epochString[EPOCH_STRING_LEN+1];
@@ -581,8 +585,6 @@ int exportTCT16Cdfs(ProcessorState *state, double startTime, double stopTime, lo
         return TIICT_ZIP_EXISTS;
     }
 
-    uint8_t **dataBuffers = state->dataBuffers;
-
     CDFid exportCdfId;
     CDFstatus status;
     status = CDFcreateCDF(cdfFileName, &exportCdfId);
@@ -595,46 +597,46 @@ int exportTCT16Cdfs(ProcessorState *state, double startTime, double stopTime, lo
     else
     {
         // export variables
-        createVarFrom1DVar(exportCdfId, "Timestamp", CDF_EPOCH, startIndex, stopIndex, dataBuffers[0]);
-        createVarFrom1DVar(exportCdfId, "Latitude", CDF_REAL4, startIndex, stopIndex, dataBuffers[7]);
-        createVarFrom1DVar(exportCdfId, "Longitude", CDF_REAL4, startIndex, stopIndex, dataBuffers[8]);
-        createVarFrom1DVar(exportCdfId, "Radius", CDF_REAL4, startIndex, stopIndex, dataBuffers[9]);
-        createVarFrom1DVar(exportCdfId, "QDLatitude", CDF_REAL4, startIndex, stopIndex, dataBuffers[5]);
-        createVarFrom1DVar(exportCdfId, "MLT", CDF_REAL4, startIndex, stopIndex, dataBuffers[4]);
-        createVarFrom2DVar(exportCdfId, "Vixh", CDF_REAL4, startIndex, stopIndex, dataBuffers[1], 0, 2);
-        createVarFrom2DVar(exportCdfId, "Vixh_error", CDF_REAL4, startIndex, stopIndex, state->viErrors, 0, 4);
-        createVarFrom2DVar(exportCdfId, "Vixv", CDF_REAL4, startIndex, stopIndex, dataBuffers[2], 0, 2);
-        createVarFrom2DVar(exportCdfId, "Vixv_error", CDF_REAL4, startIndex, stopIndex, state->viErrors, 2, 4);
-        createVarFrom2DVar(exportCdfId, "Viy", CDF_REAL4, startIndex, stopIndex, dataBuffers[1], 1, 2);
-        createVarFrom2DVar(exportCdfId, "Viy_error", CDF_REAL4, startIndex, stopIndex, state->viErrors, 1, 4);
-        createVarFrom2DVar(exportCdfId, "Viz", CDF_REAL4, startIndex, stopIndex, dataBuffers[2], 1, 2);
-        createVarFrom2DVar(exportCdfId, "Viz_error", CDF_REAL4, startIndex, stopIndex, state->viErrors, 3, 4);
-        createVarFrom2DVar(exportCdfId, "VsatN", CDF_REAL4, startIndex, stopIndex, dataBuffers[11], 0, 3);
-        createVarFrom2DVar(exportCdfId, "VsatE", CDF_REAL4, startIndex, stopIndex, dataBuffers[11], 1, 3);
-        createVarFrom2DVar(exportCdfId, "VsatC", CDF_REAL4, startIndex, stopIndex, dataBuffers[11], 2, 3);
-        createVarFrom2DVar(exportCdfId, "Ehx", CDF_REAL4, startIndex, stopIndex, state->ectFieldH, 0, 3);
-        createVarFrom2DVar(exportCdfId, "Ehy", CDF_REAL4, startIndex, stopIndex, state->ectFieldH, 1, 3);
-        createVarFrom2DVar(exportCdfId, "Ehz", CDF_REAL4, startIndex, stopIndex, state->ectFieldH, 2, 3);
-        createVarFrom2DVar(exportCdfId, "Evx", CDF_REAL4, startIndex, stopIndex, state->ectFieldV, 0, 3);
-        createVarFrom2DVar(exportCdfId, "Evy", CDF_REAL4, startIndex, stopIndex, state->ectFieldV, 1, 3);
-        createVarFrom2DVar(exportCdfId, "Evz", CDF_REAL4, startIndex, stopIndex, state->ectFieldV, 2, 3);
-        createVarFrom2DVar(exportCdfId, "Bx", CDF_REAL4, startIndex, stopIndex, state->bctField, 0, 3);
-        createVarFrom2DVar(exportCdfId, "By", CDF_REAL4, startIndex, stopIndex, state->bctField, 1, 3);
-        createVarFrom2DVar(exportCdfId, "Bz", CDF_REAL4, startIndex, stopIndex, state->bctField, 2, 3);
-        createVarFrom2DVar(exportCdfId, "Vicrx", CDF_REAL4, startIndex, stopIndex, dataBuffers[10], 0, 3);
-        createVarFrom2DVar(exportCdfId, "Vicry", CDF_REAL4, startIndex, stopIndex, dataBuffers[10], 1, 3);
-        createVarFrom2DVar(exportCdfId, "Vicrz", CDF_REAL4, startIndex, stopIndex, dataBuffers[10], 2, 3);
-        createVarFrom1DVar(exportCdfId, "U_SC", CDF_REAL4, startIndex, stopIndex, state->potentials);
-        createVarFrom1DVar(exportCdfId, "Quality_flags", CDF_UINT2, startIndex, stopIndex, state->flags);
-        createVarFrom1DVar(exportCdfId, "Calibration_flags", CDF_UINT4, startIndex, stopIndex, state->fitInfo);
-        createVarFrom1DVar(exportCdfId, "GeoelectricPotential", CDF_REAL4, startIndex, stopIndex, state->geoPotential);
-        createVarFrom1DVar(exportCdfId, "GeoelectricPotentialDifference", CDF_REAL4, startIndex, stopIndex, state->geoPotentialDifference);
-        createVarFrom1DVar(exportCdfId, "MaxAbsGeoelectricPotentialBaselineSlope", CDF_REAL4, startIndex, stopIndex, state->maxAbsGeopotentialSlope);
-        createVarFrom1DVar(exportCdfId, "EhxAdjusted", CDF_REAL4, startIndex, stopIndex, state->exAdjusted);
-        createVarFrom1DVar(exportCdfId, "EhxAdjustmentParameter", CDF_REAL4, startIndex, stopIndex, state->exAdjustmentParameter);
-        createVarFrom1DVar(exportCdfId, "GeoelectricPotentialDetrended", CDF_REAL4, startIndex, stopIndex, state->geoPotentialDetrended);
-        createVarFrom1DVar(exportCdfId, "MaxAbsGeoelectricPotentialDetrendedBaselineSlope", CDF_REAL4, startIndex, stopIndex, state->maxAbsGeopotentialDetrendedSlope);
-        createVarFrom1DVar(exportCdfId, "OrbitRegion", CDF_UINT1, startIndex, stopIndex, state->region);
+        createVarFrom1DVar(exportCdfId, "Timestamp", CDF_EPOCH, startIndex, stopIndex, v->timestamp);
+        createVarFrom1DVar(exportCdfId, "Latitude", CDF_REAL4, startIndex, stopIndex, v->latitude);
+        createVarFrom1DVar(exportCdfId, "Longitude", CDF_REAL4, startIndex, stopIndex, v->longitude);
+        createVarFrom1DVar(exportCdfId, "Radius", CDF_REAL4, startIndex, stopIndex, v->radius);
+        createVarFrom1DVar(exportCdfId, "QDLatitude", CDF_REAL4, startIndex, stopIndex, v->qdlat);
+        createVarFrom1DVar(exportCdfId, "MLT", CDF_REAL4, startIndex, stopIndex, v->mlt);
+        createVarFrom1DVar(exportCdfId, "Vixh", CDF_REAL4, startIndex, stopIndex, v->vixh);
+        createVarFrom1DVar(exportCdfId, "Vixh_error", CDF_REAL4, startIndex, stopIndex, v->vixherror);
+        createVarFrom1DVar(exportCdfId, "Vixv", CDF_REAL4, startIndex, stopIndex, v->vixv);
+        createVarFrom1DVar(exportCdfId, "Vixv_error", CDF_REAL4, startIndex, stopIndex, v->vixverror);
+        createVarFrom1DVar(exportCdfId, "Viy", CDF_REAL4, startIndex, stopIndex, v->viy);
+        createVarFrom1DVar(exportCdfId, "Viy_error", CDF_REAL4, startIndex, stopIndex, v->viyerror);
+        createVarFrom1DVar(exportCdfId, "Viz", CDF_REAL4, startIndex, stopIndex, v->viz);
+        createVarFrom1DVar(exportCdfId, "Viz_error", CDF_REAL4, startIndex, stopIndex, v->vizerror);
+        createVarFrom1DVar(exportCdfId, "VsatN", CDF_REAL4, startIndex, stopIndex, v->vsatn);
+        createVarFrom1DVar(exportCdfId, "VsatE", CDF_REAL4, startIndex, stopIndex, v->vsate);
+        createVarFrom1DVar(exportCdfId, "VsatC", CDF_REAL4, startIndex, stopIndex, v->vsatc);
+        createVarFrom1DVar(exportCdfId, "Ehx", CDF_REAL4, startIndex, stopIndex, v->ectxh);
+        createVarFrom1DVar(exportCdfId, "Ehy", CDF_REAL4, startIndex, stopIndex, v->ectyh);
+        createVarFrom1DVar(exportCdfId, "Ehz", CDF_REAL4, startIndex, stopIndex, v->ectzh);
+        createVarFrom1DVar(exportCdfId, "Evx", CDF_REAL4, startIndex, stopIndex, v->ectxv);
+        createVarFrom1DVar(exportCdfId, "Evy", CDF_REAL4, startIndex, stopIndex, v->ectyv);
+        createVarFrom1DVar(exportCdfId, "Evz", CDF_REAL4, startIndex, stopIndex, v->ectzv);
+        createVarFrom1DVar(exportCdfId, "Bx", CDF_REAL4, startIndex, stopIndex, v->bctx);
+        createVarFrom1DVar(exportCdfId, "By", CDF_REAL4, startIndex, stopIndex, v->bcty);
+        createVarFrom1DVar(exportCdfId, "Bz", CDF_REAL4, startIndex, stopIndex, v->bctz);
+        createVarFrom1DVar(exportCdfId, "Vicrx", CDF_REAL4, startIndex, stopIndex, v->vicrx);
+        createVarFrom1DVar(exportCdfId, "Vicry", CDF_REAL4, startIndex, stopIndex, v->vicry);
+        createVarFrom1DVar(exportCdfId, "Vicrz", CDF_REAL4, startIndex, stopIndex, v->vicrz);
+        createVarFrom1DVar(exportCdfId, "U_SC", CDF_REAL4, startIndex, stopIndex, v->potentials);
+        createVarFrom1DVar(exportCdfId, "Quality_flags", CDF_UINT2, startIndex, stopIndex, v->flags);
+        createVarFrom1DVar(exportCdfId, "Calibration_flags", CDF_UINT4, startIndex, stopIndex, v->fitInfo);
+        createVarFrom1DVar(exportCdfId, "GeoelectricPotential", CDF_REAL4, startIndex, stopIndex, v->geoelectricPotential);
+        createVarFrom1DVar(exportCdfId, "GeoelectricPotentialDifference", CDF_REAL4, startIndex, stopIndex, v->geoelectricPotentialDifference);
+        createVarFrom1DVar(exportCdfId, "MaxAbsGeoelectricPotentialBaselineSlope", CDF_REAL4, startIndex, stopIndex, v->maxAbsGeoelectricPotentialBaselineSlope);
+        createVarFrom1DVar(exportCdfId, "EhxAdjusted", CDF_REAL4, startIndex, stopIndex, v->ehxAdjusted);
+        createVarFrom1DVar(exportCdfId, "EhxAdjustmentParameter", CDF_REAL4, startIndex, stopIndex, v->ehxAdjustmentParameter);
+        createVarFrom1DVar(exportCdfId, "GeoelectricPotentialDetrended", CDF_REAL4, startIndex, stopIndex, v->geoelectricPotentialDetrended);
+        createVarFrom1DVar(exportCdfId, "MaxAbsGeoelectricPotentialDetrendedBaselineSlope", CDF_REAL4, startIndex, stopIndex, v->maxAbsGeoelectricPotentialDetrendedBaselineSlope);
+        createVarFrom1DVar(exportCdfId, "OrbitRegion", CDF_UINT1, startIndex, stopIndex, v->orbitRegion);
 
         // add attributes
         addAttributes(exportCdfId, "TCT16", state->args.satellite, state->args.exportVersion, startTime, stopTime);
@@ -661,6 +663,8 @@ int exportTCT02Cdfs(ProcessorState *state, double startTime, double stopTime, lo
         fprintf(state->processingLogFile, "%sExporting 2 Hz data.\n",infoHeader);
     }
 
+    ProcessorVariables_t *v = &state->vars16hz;
+
     // Average the data to 2 Hz from 16 Hz
     // In principle all 16 Hz data come from a single instrument source packet (ISP)
     // so we can safely assume the number of samples is a multiple of 8
@@ -680,18 +684,26 @@ int exportTCT02Cdfs(ProcessorState *state, double startTime, double stopTime, lo
         fprintf(state->processingLogFile, "%sDown-sampling 16 Hz to 2 Hz.\n",infoHeader);
     }
 
-    uint8_t** dataBuffers = state->dataBuffers;
-    long timeIndex;
     long n2HzSamples = 0;
     long storageIndex = startIndex;
     double t0;
     bool downSampled = false;
-    for (timeIndex = startIndex; timeIndex <= stopIndex;) // Time index advanced below
+
+    // request enough memory for 2 Hz data
+    state->vars2hz.nRecs = state->vars16hz.nRecs / 8 + 1;
+    // TODO set to actual number of records
+    int reallocstatus = reallocVariables(&state->vars2hz, state->vars2hz.nRecs);
+    if (reallocstatus != TIICT_OK) {
+        fprintf(state->processingLogFile, "%sUnable to allocate memory for 2Hz data.\n",infoHeader);
+        return reallocstatus;
+    }
+
+    for (long i = startIndex; i <= stopIndex;) // Time index advanced below
     {
-        t0 = floor(TIME()/1000.0); // UT second reference
+        t0 = floor(v->timestamp[i] / 1000.0); // UT second reference
         for (uint8_t halfSecond = 0; halfSecond < 2; halfSecond ++)
         {
-            downSampled = downSampleHalfSecond(state, &timeIndex, storageIndex, t0 + 0.5 * halfSecond, stopIndex);
+            downSampled = downSampleHalfSecond(state, &i, storageIndex, t0 + 0.5 * halfSecond, stopIndex);
             if (downSampled)
             {
                 storageIndex++;
@@ -701,9 +713,10 @@ int exportTCT02Cdfs(ProcessorState *state, double startTime, double stopTime, lo
 
     }
     // Update start and stop indexes and times
+    v = &state->vars2hz;
     stopIndex = startIndex + n2HzSamples - 1;
-    startTime = *((double*)dataBuffers[0] + (startIndex));
-    stopTime = *((double*)dataBuffers[0] + (stopIndex));
+    startTime = v->timestamp[startIndex];
+    stopTime = v->timestamp[stopIndex];
     if (state->writeLogFiles) {
         char epochString[EPOCH_STRING_LEN+1];
         toEncodeEPOCH(startTime, 0, epochString);
@@ -737,52 +750,52 @@ int exportTCT02Cdfs(ProcessorState *state, double startTime, double stopTime, lo
     else
     {
         // export variables
-        createVarFrom1DVar(exportCdfId, "Timestamp", CDF_EPOCH, startIndex, stopIndex, dataBuffers[0]);
-        createVarFrom1DVar(exportCdfId, "Latitude", CDF_REAL4, startIndex, stopIndex, dataBuffers[7]);
-        createVarFrom1DVar(exportCdfId, "Longitude", CDF_REAL4, startIndex, stopIndex, dataBuffers[8]);
-        createVarFrom1DVar(exportCdfId, "Radius", CDF_REAL4, startIndex, stopIndex, dataBuffers[9]);
-        createVarFrom1DVar(exportCdfId, "QDLatitude", CDF_REAL4, startIndex, stopIndex, dataBuffers[5]);
-        createVarFrom1DVar(exportCdfId, "MLT", CDF_REAL4, startIndex, stopIndex, dataBuffers[4]);
-        createVarFrom2DVar(exportCdfId, "Vixh", CDF_REAL4, startIndex, stopIndex, dataBuffers[1], 0, 2);
-        createVarFrom2DVar(exportCdfId, "Vixh_error", CDF_REAL4, startIndex, stopIndex, state->viErrors, 0, 4);
-        createVarFrom2DVar(exportCdfId, "Vixv", CDF_REAL4, startIndex, stopIndex, dataBuffers[2], 0, 2);
-        createVarFrom2DVar(exportCdfId, "Vixv_error", CDF_REAL4, startIndex, stopIndex, state->viErrors, 2, 4);
-        createVarFrom2DVar(exportCdfId, "Viy", CDF_REAL4, startIndex, stopIndex, dataBuffers[1], 1, 2);
-        createVarFrom2DVar(exportCdfId, "Viy_error", CDF_REAL4, startIndex, stopIndex, state->viErrors, 1, 4);
-        createVarFrom2DVar(exportCdfId, "Viz", CDF_REAL4, startIndex, stopIndex, dataBuffers[2], 1, 2);
-        createVarFrom2DVar(exportCdfId, "Viz_error", CDF_REAL4, startIndex, stopIndex, state->viErrors, 3, 4);
-        createVarFrom2DVar(exportCdfId, "VsatN", CDF_REAL4, startIndex, stopIndex, dataBuffers[11], 0, 3);
-        createVarFrom2DVar(exportCdfId, "VsatE", CDF_REAL4, startIndex, stopIndex, dataBuffers[11], 1, 3);
-        createVarFrom2DVar(exportCdfId, "VsatC", CDF_REAL4, startIndex, stopIndex, dataBuffers[11], 2, 3);
-        createVarFrom2DVar(exportCdfId, "Ehx", CDF_REAL4, startIndex, stopIndex, state->ectFieldH, 0, 3);
-        createVarFrom2DVar(exportCdfId, "Ehy", CDF_REAL4, startIndex, stopIndex, state->ectFieldH, 1, 3);
-        createVarFrom2DVar(exportCdfId, "Ehz", CDF_REAL4, startIndex, stopIndex, state->ectFieldH, 2, 3);
-        createVarFrom2DVar(exportCdfId, "Evx", CDF_REAL4, startIndex, stopIndex, state->ectFieldV, 0, 3);
-        createVarFrom2DVar(exportCdfId, "Evy", CDF_REAL4, startIndex, stopIndex, state->ectFieldV, 1, 3);
-        createVarFrom2DVar(exportCdfId, "Evz", CDF_REAL4, startIndex, stopIndex, state->ectFieldV, 2, 3);
-        createVarFrom2DVar(exportCdfId, "Bx", CDF_REAL4, startIndex, stopIndex, state->bctField, 0, 3);
-        createVarFrom2DVar(exportCdfId, "By", CDF_REAL4, startIndex, stopIndex, state->bctField, 1, 3);
-        createVarFrom2DVar(exportCdfId, "Bz", CDF_REAL4, startIndex, stopIndex, state->bctField, 2, 3);
-        createVarFrom2DVar(exportCdfId, "Vicrx", CDF_REAL4, startIndex, stopIndex, dataBuffers[10], 0, 3);
-        createVarFrom2DVar(exportCdfId, "Vicry", CDF_REAL4, startIndex, stopIndex, dataBuffers[10], 1, 3);
-        createVarFrom2DVar(exportCdfId, "Vicrz", CDF_REAL4, startIndex, stopIndex, dataBuffers[10], 2, 3);
-        createVarFrom1DVar(exportCdfId, "U_SC", CDF_REAL4, startIndex, stopIndex, state->potentials);
-        createVarFrom1DVar(exportCdfId, "Quality_flags", CDF_UINT2, startIndex, stopIndex, state->flags);
-        createVarFrom1DVar(exportCdfId, "Calibration_flags", CDF_UINT4, startIndex, stopIndex, state->fitInfo);
-        createVarFrom1DVar(exportCdfId, "GeoelectricPotential", CDF_REAL4, startIndex, stopIndex, state->geoPotential);
-        createVarFrom1DVar(exportCdfId, "GeoelectricPotentialDifference", CDF_REAL4, startIndex, stopIndex, state->geoPotentialDifference);
-        createVarFrom1DVar(exportCdfId, "MaxAbsGeoelectricPotentialBaselineSlope", CDF_REAL4, startIndex, stopIndex, state->maxAbsGeopotentialSlope);
-        createVarFrom1DVar(exportCdfId, "EhxAdjusted", CDF_REAL4, startIndex, stopIndex, state->exAdjusted);
-        createVarFrom1DVar(exportCdfId, "EhxAdjustmentParameter", CDF_REAL4, startIndex, stopIndex, state->exAdjustmentParameter);
-        createVarFrom1DVar(exportCdfId, "GeoelectricPotentialDetrended", CDF_REAL4, startIndex, stopIndex, state->geoPotentialDetrended);
-        createVarFrom1DVar(exportCdfId, "MaxAbsGeoelectricPotentialDetrendedBaselineSlope", CDF_REAL4, startIndex, stopIndex, state->maxAbsGeopotentialDetrendedSlope);
-        createVarFrom1DVar(exportCdfId, "OrbitRegion", CDF_UINT1, startIndex, stopIndex, state->region);
+        createVarFrom1DVar(exportCdfId, "Timestamp", CDF_EPOCH, startIndex, stopIndex, v->timestamp);
+        createVarFrom1DVar(exportCdfId, "Latitude", CDF_REAL4, startIndex, stopIndex, v->latitude);
+        createVarFrom1DVar(exportCdfId, "Longitude", CDF_REAL4, startIndex, stopIndex, v->longitude);
+        createVarFrom1DVar(exportCdfId, "Radius", CDF_REAL4, startIndex, stopIndex, v->radius);
+        createVarFrom1DVar(exportCdfId, "QDLatitude", CDF_REAL4, startIndex, stopIndex, v->qdlat);
+        createVarFrom1DVar(exportCdfId, "MLT", CDF_REAL4, startIndex, stopIndex, v->mlt);
+        createVarFrom1DVar(exportCdfId, "Vixh", CDF_REAL4, startIndex, stopIndex, v->vixh);
+        createVarFrom1DVar(exportCdfId, "Vixh_error", CDF_REAL4, startIndex, stopIndex, v->vixherror);
+        createVarFrom1DVar(exportCdfId, "Vixv", CDF_REAL4, startIndex, stopIndex, v->vixv);
+        createVarFrom1DVar(exportCdfId, "Vixv_error", CDF_REAL4, startIndex, stopIndex, v->vixverror);
+        createVarFrom1DVar(exportCdfId, "Viy", CDF_REAL4, startIndex, stopIndex, v->viy);
+        createVarFrom1DVar(exportCdfId, "Viy_error", CDF_REAL4, startIndex, stopIndex, v->viyerror);
+        createVarFrom1DVar(exportCdfId, "Viz", CDF_REAL4, startIndex, stopIndex, v->viz);
+        createVarFrom1DVar(exportCdfId, "Viz_error", CDF_REAL4, startIndex, stopIndex, v->vizerror);
+        createVarFrom1DVar(exportCdfId, "VsatN", CDF_REAL4, startIndex, stopIndex, v->vsatn);
+        createVarFrom1DVar(exportCdfId, "VsatE", CDF_REAL4, startIndex, stopIndex, v->vsate);
+        createVarFrom1DVar(exportCdfId, "VsatC", CDF_REAL4, startIndex, stopIndex, v->vsatc);
+        createVarFrom1DVar(exportCdfId, "Ehx", CDF_REAL4, startIndex, stopIndex, v->ectxh);
+        createVarFrom1DVar(exportCdfId, "Ehy", CDF_REAL4, startIndex, stopIndex, v->ectyh);
+        createVarFrom1DVar(exportCdfId, "Ehz", CDF_REAL4, startIndex, stopIndex, v->ectzh);
+        createVarFrom1DVar(exportCdfId, "Evx", CDF_REAL4, startIndex, stopIndex, v->ectxv);
+        createVarFrom1DVar(exportCdfId, "Evy", CDF_REAL4, startIndex, stopIndex, v->ectyv);
+        createVarFrom1DVar(exportCdfId, "Evz", CDF_REAL4, startIndex, stopIndex, v->ectzv);
+        createVarFrom1DVar(exportCdfId, "Bx", CDF_REAL4, startIndex, stopIndex, v->bctx);
+        createVarFrom1DVar(exportCdfId, "By", CDF_REAL4, startIndex, stopIndex, v->bcty);
+        createVarFrom1DVar(exportCdfId, "Bz", CDF_REAL4, startIndex, stopIndex, v->bctz);
+        createVarFrom1DVar(exportCdfId, "Vicrx", CDF_REAL4, startIndex, stopIndex, v->vicrx);
+        createVarFrom1DVar(exportCdfId, "Vicry", CDF_REAL4, startIndex, stopIndex, v->vicry);
+        createVarFrom1DVar(exportCdfId, "Vicrz", CDF_REAL4, startIndex, stopIndex, v->vicrz);
+        createVarFrom1DVar(exportCdfId, "U_SC", CDF_REAL4, startIndex, stopIndex, v->potentials);
+        createVarFrom1DVar(exportCdfId, "Quality_flags", CDF_UINT2, startIndex, stopIndex, v->flags);
+        createVarFrom1DVar(exportCdfId, "Calibration_flags", CDF_UINT4, startIndex, stopIndex, v->fitInfo);
+        createVarFrom1DVar(exportCdfId, "GeoelectricPotential", CDF_REAL4, startIndex, stopIndex, v->geoelectricPotential);
+        createVarFrom1DVar(exportCdfId, "GeoelectricPotentialDifference", CDF_REAL4, startIndex, stopIndex, v->geoelectricPotentialDifference);
+        createVarFrom1DVar(exportCdfId, "MaxAbsGeoelectricPotentialBaselineSlope", CDF_REAL4, startIndex, stopIndex, v->maxAbsGeoelectricPotentialBaselineSlope);
+        createVarFrom1DVar(exportCdfId, "EhxAdjusted", CDF_REAL4, startIndex, stopIndex, v->ehxAdjusted);
+        createVarFrom1DVar(exportCdfId, "EhxAdjustmentParameter", CDF_REAL4, startIndex, stopIndex, v->ehxAdjustmentParameter);
+        createVarFrom1DVar(exportCdfId, "GeoelectricPotentialDetrended", CDF_REAL4, startIndex, stopIndex, v->geoelectricPotentialDetrended);
+        createVarFrom1DVar(exportCdfId, "MaxAbsGeoelectricPotentialDetrendedBaselineSlope", CDF_REAL4, startIndex, stopIndex, v->maxAbsGeoelectricPotentialDetrendedBaselineSlope);
+        createVarFrom1DVar(exportCdfId, "OrbitRegion", CDF_UINT1, startIndex, stopIndex, v->orbitRegion);
 
         // add attributes
         // update start and stop times to the averaged ones
         addAttributes(exportCdfId, "TCT02", state->args.satellite, state->args.exportVersion, startTime, stopTime);
 
-        // Close export file
+        // close export file
         closeCdf(exportCdfId);
         if (state->writeLogFiles) {
             fprintf(state->processingLogFile, "%sExported %ld records to %s.cdf\n", infoHeader, (stopIndex - startIndex + 1), cdfFileName);
