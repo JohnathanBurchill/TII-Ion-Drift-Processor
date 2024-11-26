@@ -44,7 +44,6 @@ void updateDataQualityFlags(const char *satellite, uint8_t sensorIndex, uint8_t 
 
 float madThreshold(char satellite, int sensorIndex);
 
-int initFields(ProcessorVariables_t *var);
 int calculateFields(ProcessorState *state);
 int integrateField(ProcessorState *state, float *sourceField, float scaleFactor, float *targetPotential, long startInd, long stopInd, bool vsDistance, bool positive, bool absoluteValue, bool removeMedianFromStart, float *medianDifference, float *firstSlope, float *lastSlope);
 int regionMetrics(ProcessorState *state, long startInd, long stopInd, float *parameter, float *median, float *slope);

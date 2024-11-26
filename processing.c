@@ -541,39 +541,6 @@ float madThreshold(char satellite, int sensorIndex)
     return 100.0 * sqrtf(8.0);
 }
 
-int initFields(ProcessorVariables_t *var)
-{
-    // Set up new memory
-    var->xhat = malloc(var->nRecs * (sizeof *var->xhat) * 3);
-    var->yhat = malloc(var->nRecs * (sizeof *var->yhat) * 3);
-    var->zhat = malloc(var->nRecs * (sizeof *var->zhat) * 3);
-    var->ectxh = malloc(var->nRecs * sizeof *var->ectxh);
-    var->ectyh = malloc(var->nRecs * sizeof *var->ectyh);
-    var->ectzh = malloc(var->nRecs * sizeof *var->ectzh);
-    var->ectxv = malloc(var->nRecs * sizeof *var->ectxv);
-    var->ectyv = malloc(var->nRecs * sizeof *var->ectyv);
-    var->ectzv = malloc(var->nRecs * sizeof *var->ectzv);
-    var->bctx = malloc(var->nRecs * sizeof *var->bctx);
-    var->bcty = malloc(var->nRecs * sizeof *var->bcty);
-    var->bctz = malloc(var->nRecs * sizeof *var->bctz);
-    var->geoelectricPotential = malloc(var->nRecs * sizeof *var->geoelectricPotential);
-    var->geoelectricPotentialDifference = malloc(var->nRecs * sizeof *var->geoelectricPotentialDifference);
-    var->ehxAdjusted = malloc(var->nRecs * sizeof *var->ehxAdjusted);
-    var->ehxAdjustmentParameter= malloc(var->nRecs * sizeof *var->ehxAdjustmentParameter);
-    var->maxAbsGeoelectricPotentialBaselineSlope = malloc(var->nRecs * sizeof *var->maxAbsGeoelectricPotentialBaselineSlope);
-    var->geoelectricPotentialDetrended = malloc(var->nRecs * sizeof *var->geoelectricPotentialDetrended);
-    var->maxAbsGeoelectricPotentialDetrendedBaselineSlope = malloc(var->nRecs * sizeof *var->maxAbsGeoelectricPotentialDetrendedBaselineSlope);
-
-    if (var->xhat == NULL || var->yhat == NULL || var->zhat == NULL || var->ectxh == NULL || var->ectyh == NULL || var->ectzh == NULL
-        || var->ectxv == NULL || var->ectyv == NULL || var->ectzv == NULL || var->bctx == NULL || var->bctx == NULL || var->bctx == NULL
-        || var->geoelectricPotential == NULL || var->maxAbsGeoelectricPotentialBaselineSlope == NULL
-        || var->maxAbsGeoelectricPotentialDetrendedBaselineSlope == NULL) {
-        return TIICT_MEMORY;
-    }
-
-    return TIICT_OK;
-}
-
 int calculateFields(ProcessorState *state)
 {
     ProcessorVariables_t *v = &state->vars16hz;
@@ -617,14 +584,14 @@ int calculateFields(ProcessorState *state)
         v->bctz[i] = v->bn[i] * v->zhat[ind + 0] + v->be[i] * v->zhat[ind + 1] + v->bc[i] * v->zhat[ind + 2];
 
         // E field from H sensor X, in cross-track frame, mV/m:
-        v->ectxh[i] = -1.0 * (v->myh[i] * v->bctz[i] - v->myv[i] * v->bcty[i]) / 1000000000.0 * 1000.0;
-        v->ectyh[i] = -1.0 * (-1.0 * v->mxh[i] * v->bctz[i] + v->myv[i] * v->bctx[i]) / 1000000000.0 * 1000.0;
-        v->ectzh[i] = -1.0 * (v->mxh[i] * v->bcty[i] - v->myh[i] * v->bctx[i]) / 1000000000.0 * 1000.0;
+        v->ectxh[i] = -1.0 * (v->viy[i] * v->bctz[i] - v->viz[i] * v->bcty[i]) / 1000000000.0 * 1000.0;
+        v->ectyh[i] = -1.0 * (-1.0 * v->vixh[i] * v->bctz[i] + v->viz[i] * v->bctx[i]) / 1000000000.0 * 1000.0;
+        v->ectzh[i] = -1.0 * (v->vixh[i] * v->bcty[i] - v->viy[i] * v->bctx[i]) / 1000000000.0 * 1000.0;
 
         // E field from V sensor X, in cross-track frame, mV/m:
-        v->ectxv[i] = -1.0 * (v->myh[i] * v->bctz[i] - v->myv[i] * v->bcty[i]) / 1000000000.0 * 1000.0;
-        v->ectyv[i] = -1.0 * (-1.0 * v->mxv[i] * v->bctz[i] + v->myv[i] * v->bctx[i]) / 1000000000.0 * 1000.0;
-        v->ectzv[i] = -1.0 * (v->mxv[i] * v->bcty[i] - v->myh[i] * v->bctx[i]) / 1000000000.0 * 1000.0;
+        v->ectxv[i] = -1.0 * (v->viy[i] * v->bctz[i] - v->viz[i] * v->bcty[i]) / 1000000000.0 * 1000.0;
+        v->ectyv[i] = -1.0 * (-1.0 * v->vixv[i] * v->bctz[i] + v->viz[i] * v->bctx[i]) / 1000000000.0 * 1000.0;
+        v->ectzv[i] = -1.0 * (v->vixv[i] * v->bcty[i] - v->viy[i] * v->bctx[i]) / 1000000000.0 * 1000.0;
 
     }
 
