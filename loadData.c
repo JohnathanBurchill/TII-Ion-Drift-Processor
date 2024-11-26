@@ -343,7 +343,6 @@ int loadCalData(ProcessorState *state)
         {"Latitude", (void**)&v->latitude, 0},
         {"Longitude", (void**)&v->longitude, 0},
         {"Radius", (void**)&v->radius, 0},
-        {"Radius", (void**)&v->radius, 0},
         {"QDLat", (void**)&v->qdlat, 0},
         {"MLT", (void**)&v->mlt, 0},
         {"1st Moment - H", (void**)&v->mxh, 0},
