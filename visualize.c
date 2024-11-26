@@ -213,16 +213,16 @@ int visualizeResults(ProcessorState *state)
         } else if (strcmp("myv", params[0]) == 0) {
             parameter = v->myv;
             parameterLabel = "myv";
-        } else if (strcmp("Vmcph", params[0]) == 0) {
+        } else if (strcmp("VmcpH", params[0]) == 0) {
             parameter = v->vmcph;
             parameterLabel = "Vmcp H";
-        } else if (strcmp("Vmcpv", params[0]) == 0) {
+        } else if (strcmp("VmcpV", params[0]) == 0) {
             parameter = v->vmcpv;
             parameterLabel = "Vmcp V";
-        } else if (strcmp("Vbiash", params[0]) == 0) {
+        } else if (strcmp("VbiasH", params[0]) == 0) {
             parameter = v->vbiash;
             parameterLabel = "Vbias H";
-        } else if (strcmp("Vbiasv", params[0]) == 0) {
+        } else if (strcmp("VbiasV", params[0]) == 0) {
             parameter = v->vbiasv;
             parameterLabel = "Vbias V";
         } else if (strcmp("Vfp", params[0]) == 0) {

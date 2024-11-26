@@ -483,6 +483,11 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
                 state->plotCommand = "EnhRaw,0,30,1" ";EnvRaw,0,30,1" ";Enh,0,30,1" ";Env,0,30,1";
                 updatePlots(state);
                 break;
+            case SDLK_F12:
+                // Moments
+                state->plotCommand = "VmcpH,-2400,0,1" ";VmcpV,-2400,0,1" ";VbiasH,-105,0,1" ";VbiasV,-105,0,1" ";Vfp,-5,0,1";
+                updatePlots(state);
+                break;
             case SDLK_Z:
                 if (SDL_GetModState() & SDL_KMOD_SHIFT) {
                     if (state->defaultPlotHeight > DEFAULT_PLOT_HEIGHT) {
