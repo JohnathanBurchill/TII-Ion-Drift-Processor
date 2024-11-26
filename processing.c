@@ -258,6 +258,12 @@ int calibrateFlows(ProcessorState *state)
     state->setFlags = true;
     // Linear offset model
     state->bgws.fitDegree = 2;
+    if (state->useEofR) {
+        state->measurementType = ENERGY_MEASUREMENT;
+    }
+    else {
+        state->measurementType = VELOCITY_MEASUREMENT;
+    }
     status = removeOffsetsAndSetFlags(state, backgroundRemoval);
     if (status != TIICT_OK)
         return status;
