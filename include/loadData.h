@@ -59,8 +59,8 @@ void loadCalDataFromDate(const DayType dayType, ProcessorState *state, Calibrati
 int loadCdfVariable(ProcessorState *state, CDFid calCdfId, CalibrationVariable_t *variable, long startRecord, long stopRecord, long *calibrationMemorySize);
 void freeVariable(void *var);
 void freeVariables(ProcessorVariables_t *vars);
-int reallocVariable(void **var, size_t newSize);
-int reallocVariables(ProcessorVariables_t *vars, size_t newSize);
+int reallocVariable(void **var, size_t nRecords, size_t bytesPerRecord);
+int reallocVariables(ProcessorVariables_t *vars, size_t nRecords);
 
 void setCalibrationFileName(ProcessorState *state, int year, int month, int day, CalibrationFileType_enum fileType);
 

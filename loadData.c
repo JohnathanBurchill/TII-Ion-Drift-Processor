@@ -651,25 +651,32 @@ int loadCdfVariable(ProcessorState *state, CDFid calCdfId, CalibrationVariable_t
 
     long nRecordsAlreadyLoaded = state->vars16hz.nRecs;
     long nBytesAlreadyLoaded = nRecordsAlreadyLoaded * valuesPerRecord * bytesPerValue;
-    long nBytesToAdd = nRecords * bytesPerValue;
+    long nBytesToAdd = nRecords * valuesPerRecord * bytesPerValue;
     calibrationMemorySize += nBytesToAdd;
-    long nBytesNew = nBytesAlreadyLoaded + nBytesToAdd;
-    status = reallocVariable(variable->memoryPointer, (size_t) nBytesNew);
-    if (status != TIICT_OK) {
-        return status;
-    }
+    long nValuesNew = (nRecordsAlreadyLoaded + nRecords) * valuesPerRecord;
+    // This reallocs using the pointer's size
 
-    for (int i = 0; i < nRecords; i++) {
-        switch(dataType) {
-            case CDF_REAL8:
-            case CDF_EPOCH:
-                ((double*)*variable->memoryPointer)[nRecordsAlreadyLoaded + i] = ((double*)mem)[i*valuesPerRecord + variable->recordValueOffset];
-                break;
-            default:
-                // EfiCalCdfs have only epoch and real4 types
+    switch(dataType) {
+        // EfiCalCdfs have only epoch and real4 types
+        case CDF_REAL8:
+        case CDF_EPOCH:
+            status = reallocVariable(variable->memoryPointer, (size_t) nValuesNew, sizeof(double));
+            if (status != TIICT_OK) {
+                return status;
+            }
+            for (int i = 0; i < nRecords; i++) {
+                 ((double*)*variable->memoryPointer)[nRecordsAlreadyLoaded + i] = ((double*)mem)[i*valuesPerRecord + variable->recordValueOffset];
+            }
+            break;
+        default:
+            status = reallocVariable(variable->memoryPointer, (size_t) nValuesNew, sizeof(float));
+            if (status != TIICT_OK) {
+                return status;
+            }
+            for (int i = 0; i < nRecords; i++) {
                 ((float*)*variable->memoryPointer)[nRecordsAlreadyLoaded + i] = ((float*)mem)[i*valuesPerRecord + variable->recordValueOffset];
-                break;
-        }
+            }
+            break;
     }
 
     free(mem);
@@ -828,13 +835,13 @@ void freeVariables(ProcessorVariables_t *vars)
     return;
 }
 
-int reallocVariable(void **var, size_t newSize)
+int reallocVariable(void **var, size_t nRecords, size_t bytesPerRecord)
 {
 
     if (var == NULL) {
         return TIICT_ARGS_BAD;
     }
-    void *mem = realloc(*var, newSize * sizeof **var);
+    void *mem = realloc(*var, nRecords * bytesPerRecord);
     if (mem == NULL) {
         return TIICT_MEMORY;
     }
@@ -843,75 +850,75 @@ int reallocVariable(void **var, size_t newSize)
     return TIICT_OK;
 }
 
-int reallocVariables(ProcessorVariables_t *vars, size_t newSize)
+int reallocVariables(ProcessorVariables_t *vars, size_t nRecords)
 {
     int status = TIICT_OK;
-    status |= reallocVariable((void*)&vars->timestamp, newSize);
-    status |= reallocVariable((void*)&vars->latitude, newSize);
-    status |= reallocVariable((void*)&vars->longitude, newSize);
-    status |= reallocVariable((void*)&vars->radius, newSize);
-    status |= reallocVariable((void*)&vars->qdlat, newSize);
-    status |= reallocVariable((void*)&vars->mlt, newSize);
-    status |= reallocVariable((void*)&vars->mxh, newSize);
-    status |= reallocVariable((void*)&vars->myh, newSize);
-    status |= reallocVariable((void*)&vars->mxv, newSize);
-    status |= reallocVariable((void*)&vars->myv, newSize);
-    status |= reallocVariable((void*)&vars->vmcph, newSize);
-    status |= reallocVariable((void*)&vars->vmcpv, newSize);
-    status |= reallocVariable((void*)&vars->vbiash, newSize);
-    status |= reallocVariable((void*)&vars->vbiasv, newSize);
-    status |= reallocVariable((void*)&vars->vfp, newSize);
-    status |= reallocVariable((void*)&vars->vsatx, newSize);
-    status |= reallocVariable((void*)&vars->vsaty, newSize);
-    status |= reallocVariable((void*)&vars->vsatz, newSize);
-    status |= reallocVariable((void*)&vars->enhRaw, newSize);
-    status |= reallocVariable((void*)&vars->envRaw, newSize);
-    status |= reallocVariable((void*)&vars->enh, newSize);
-    status |= reallocVariable((void*)&vars->env, newSize);
-    status |= reallocVariable((void*)&vars->vixh, newSize);
-    status |= reallocVariable((void*)&vars->vixherror, newSize);
-    status |= reallocVariable((void*)&vars->vixv, newSize);
-    status |= reallocVariable((void*)&vars->vixverror, newSize);
-    status |= reallocVariable((void*)&vars->viy, newSize);
-    status |= reallocVariable((void*)&vars->viyerror, newSize);
-    status |= reallocVariable((void*)&vars->viz, newSize);
-    status |= reallocVariable((void*)&vars->vizerror, newSize);
-    status |= reallocVariable((void*)&vars->vsatn, newSize);
-    status |= reallocVariable((void*)&vars->vsate, newSize);
-    status |= reallocVariable((void*)&vars->vsatc, newSize);
-    status |= reallocVariable((void*)&vars->bn, newSize);
-    status |= reallocVariable((void*)&vars->be, newSize);
-    status |= reallocVariable((void*)&vars->bc, newSize);
-    status |= reallocVariable((void*)&vars->vicrx, newSize);
-    status |= reallocVariable((void*)&vars->vicry, newSize);
-    status |= reallocVariable((void*)&vars->vicrz, newSize);
-    status |= reallocVariable((void*)&vars->ectxh, newSize);
-    status |= reallocVariable((void*)&vars->ectyh, newSize);
-    status |= reallocVariable((void*)&vars->ectzh, newSize);
-    status |= reallocVariable((void*)&vars->ectxv, newSize);
-    status |= reallocVariable((void*)&vars->ectyv, newSize);
-    status |= reallocVariable((void*)&vars->ectzv, newSize);
-    status |= reallocVariable((void*)&vars->bctx, newSize);
-    status |= reallocVariable((void*)&vars->bcty, newSize);
-    status |= reallocVariable((void*)&vars->bctz, newSize);
-    status |= reallocVariable((void*)&vars->flags, newSize);
-    status |= reallocVariable((void*)&vars->fitInfo, newSize);
-    status |= reallocVariable((void*)&vars->geoelectricPotential, newSize);
-    status |= reallocVariable((void*)&vars->geoelectricPotentialDifference, newSize);
-    status |= reallocVariable((void*)&vars->maxAbsGeoelectricPotentialBaselineSlope, newSize);
-    status |= reallocVariable((void*)&vars->ehxAdjusted, newSize);
-    status |= reallocVariable((void*)&vars->ehxAdjustmentParameter, newSize);
-    status |= reallocVariable((void*)&vars->geoelectricPotentialDetrended, newSize);
-    status |= reallocVariable((void*)&vars->maxAbsGeoelectricPotentialDetrendedBaselineSlope, newSize);
-    status |= reallocVariable((void*)&vars->orbitRegion, newSize);
-    status |= reallocVariable((void*)&vars->lpTimes, newSize);
-    status |= reallocVariable((void*)&vars->lpPhiScHighGain, newSize);
-    status |= reallocVariable((void*)&vars->lpPhiScLowGain, newSize);
-    status |= reallocVariable((void*)&vars->lpPhiSc, newSize);
-    status |= reallocVariable((void*)&vars->potentials, newSize);
-    status |= reallocVariable((void*)&vars->xhat, newSize * 3);
-    status |= reallocVariable((void*)&vars->yhat, newSize * 3);
-    status |= reallocVariable((void*)&vars->zhat, newSize * 3);
+    status |= reallocVariable((void*)&vars->timestamp, nRecords, sizeof *vars->timestamp);
+    status |= reallocVariable((void*)&vars->latitude, nRecords, sizeof *vars->latitude);
+    status |= reallocVariable((void*)&vars->longitude, nRecords, sizeof *vars->longitude);
+    status |= reallocVariable((void*)&vars->radius, nRecords, sizeof *vars->radius);
+    status |= reallocVariable((void*)&vars->qdlat, nRecords, sizeof *vars->qdlat);
+    status |= reallocVariable((void*)&vars->mlt, nRecords, sizeof *vars->mlt);
+    status |= reallocVariable((void*)&vars->mxh, nRecords, sizeof *vars->mxh);
+    status |= reallocVariable((void*)&vars->myh, nRecords, sizeof *vars->myh);
+    status |= reallocVariable((void*)&vars->mxv, nRecords, sizeof *vars->mxv);
+    status |= reallocVariable((void*)&vars->myv, nRecords, sizeof *vars->myv);
+    status |= reallocVariable((void*)&vars->vmcph, nRecords, sizeof *vars->vmcph);
+    status |= reallocVariable((void*)&vars->vmcpv, nRecords, sizeof *vars->vmcpv);
+    status |= reallocVariable((void*)&vars->vbiash, nRecords, sizeof *vars->vbiash);
+    status |= reallocVariable((void*)&vars->vbiasv, nRecords, sizeof *vars->vbiasv);
+    status |= reallocVariable((void*)&vars->vfp, nRecords, sizeof *vars->vfp);
+    status |= reallocVariable((void*)&vars->vsatx, nRecords, sizeof *vars->vsatx);
+    status |= reallocVariable((void*)&vars->vsaty, nRecords, sizeof *vars->vsaty);
+    status |= reallocVariable((void*)&vars->vsatz, nRecords, sizeof *vars->vsatz);
+    status |= reallocVariable((void*)&vars->enhRaw, nRecords, sizeof *vars->enhRaw);
+    status |= reallocVariable((void*)&vars->envRaw, nRecords, sizeof *vars->envRaw);
+    status |= reallocVariable((void*)&vars->enh, nRecords, sizeof *vars->enh);
+    status |= reallocVariable((void*)&vars->env, nRecords, sizeof *vars->env);
+    status |= reallocVariable((void*)&vars->vixh, nRecords, sizeof *vars->vixh);
+    status |= reallocVariable((void*)&vars->vixherror, nRecords, sizeof *vars->vixherror);
+    status |= reallocVariable((void*)&vars->vixv, nRecords, sizeof *vars->vixv);
+    status |= reallocVariable((void*)&vars->vixverror, nRecords, sizeof *vars->vixverror);
+    status |= reallocVariable((void*)&vars->viy, nRecords, sizeof *vars->viy);
+    status |= reallocVariable((void*)&vars->viyerror, nRecords, sizeof *vars->viyerror);
+    status |= reallocVariable((void*)&vars->viz, nRecords, sizeof *vars->viz);
+    status |= reallocVariable((void*)&vars->vizerror, nRecords, sizeof *vars->vizerror);
+    status |= reallocVariable((void*)&vars->vsatn, nRecords, sizeof *vars->vsatn);
+    status |= reallocVariable((void*)&vars->vsate, nRecords, sizeof *vars->vsate);
+    status |= reallocVariable((void*)&vars->vsatc, nRecords, sizeof *vars->vsatc);
+    status |= reallocVariable((void*)&vars->bn, nRecords, sizeof *vars->bn);
+    status |= reallocVariable((void*)&vars->be, nRecords, sizeof *vars->be);
+    status |= reallocVariable((void*)&vars->bc, nRecords, sizeof *vars->bc);
+    status |= reallocVariable((void*)&vars->vicrx, nRecords, sizeof *vars->vicrx);
+    status |= reallocVariable((void*)&vars->vicry, nRecords, sizeof *vars->vicry);
+    status |= reallocVariable((void*)&vars->vicrz, nRecords, sizeof *vars->vicrz);
+    status |= reallocVariable((void*)&vars->ectxh, nRecords, sizeof *vars->ectxh);
+    status |= reallocVariable((void*)&vars->ectyh, nRecords, sizeof *vars->ectyh);
+    status |= reallocVariable((void*)&vars->ectzh, nRecords, sizeof *vars->ectzh);
+    status |= reallocVariable((void*)&vars->ectxv, nRecords, sizeof *vars->ectxv);
+    status |= reallocVariable((void*)&vars->ectyv, nRecords, sizeof *vars->ectyv);
+    status |= reallocVariable((void*)&vars->ectzv, nRecords, sizeof *vars->ectzv);
+    status |= reallocVariable((void*)&vars->bctx, nRecords, sizeof *vars->bctx);
+    status |= reallocVariable((void*)&vars->bcty, nRecords, sizeof *vars->bcty);
+    status |= reallocVariable((void*)&vars->bctz, nRecords, sizeof *vars->bctz);
+    status |= reallocVariable((void*)&vars->flags, nRecords, sizeof *vars->flags);
+    status |= reallocVariable((void*)&vars->fitInfo, nRecords, sizeof *vars->fitInfo);
+    status |= reallocVariable((void*)&vars->geoelectricPotential, nRecords, sizeof *vars->geoelectricPotential);
+    status |= reallocVariable((void*)&vars->geoelectricPotentialDifference, nRecords, sizeof *vars->geoelectricPotentialDifference);
+    status |= reallocVariable((void*)&vars->maxAbsGeoelectricPotentialBaselineSlope, nRecords, sizeof *vars->maxAbsGeoelectricPotentialBaselineSlope);
+    status |= reallocVariable((void*)&vars->ehxAdjusted, nRecords, sizeof *vars->ehxAdjusted);
+    status |= reallocVariable((void*)&vars->ehxAdjustmentParameter, nRecords, sizeof *vars->ehxAdjustmentParameter);
+    status |= reallocVariable((void*)&vars->geoelectricPotentialDetrended, nRecords, sizeof *vars->geoelectricPotentialDetrended);
+    status |= reallocVariable((void*)&vars->maxAbsGeoelectricPotentialDetrendedBaselineSlope, nRecords, sizeof *vars->maxAbsGeoelectricPotentialDetrendedBaselineSlope);
+    status |= reallocVariable((void*)&vars->orbitRegion, nRecords, sizeof *vars->orbitRegion);
+    status |= reallocVariable((void*)&vars->lpTimes, nRecords, sizeof *vars->lpTimes);
+    status |= reallocVariable((void*)&vars->lpPhiScHighGain, nRecords, sizeof *vars->lpPhiScHighGain);
+    status |= reallocVariable((void*)&vars->lpPhiScLowGain, nRecords, sizeof *vars->lpPhiScLowGain);
+    status |= reallocVariable((void*)&vars->lpPhiSc, nRecords, sizeof *vars->lpPhiSc);
+    status |= reallocVariable((void*)&vars->potentials, nRecords, sizeof *vars->potentials);
+    status |= reallocVariable((void*)&vars->xhat, nRecords, sizeof *vars->xhat * 3);
+    status |= reallocVariable((void*)&vars->yhat, nRecords, sizeof *vars->yhat * 3);
+    status |= reallocVariable((void*)&vars->zhat, nRecords, sizeof *vars->zhat * 3);
 
     return status;
 }
