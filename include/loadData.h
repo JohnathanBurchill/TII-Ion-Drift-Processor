@@ -57,7 +57,7 @@ int loadLpInputs(const char *cdfFile, double **lpTime, double **lpPhiScHighGain,
 int loadCalData(ProcessorState *state);
 void loadCalDataFromDate(const DayType dayType, ProcessorState *state, CalibrationVariable_t *variables, int nVariables);
 int loadCdfVariable(ProcessorState *state, CDFid calCdfId, CalibrationVariable_t *variable, long startRecord, long stopRecord, long *calibrationMemorySize);
-void freeVariable(void *var);
+void freeVariable(void **var);
 void freeVariables(ProcessorVariables_t *vars);
 int reallocVariable(void **var, size_t nRecords, size_t bytesPerRecord);
 int reallocVariables(ProcessorVariables_t *vars, size_t nRecords);

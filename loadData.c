@@ -125,9 +125,9 @@ int loadLpCalData(ProcessorState *state)
 
 int getLpData(ProcessorState *state)
 {
-    freeVariable(state->vars16hz.lpPhiSc);
-    freeVariable(state->vars16hz.lpPhiScLowGain);
-    freeVariable(state->vars16hz.lpPhiScHighGain);
+    freeVariable((void **)&state->vars16hz.lpPhiSc);
+    freeVariable((void **)&state->vars16hz.lpPhiScLowGain);
+    freeVariable((void **)&state->vars16hz.lpPhiScHighGain);
     state->vars16hz.nLpRecs = 0;
 
     // Get data from previous day, requested date, and next day
@@ -753,84 +753,86 @@ int checkCalDataAvailability(ProcessorState *state)
 
 }
 
-void freeVariable(void *var)
+void freeVariable(void **var)
 {
-    free(var);
-    var = NULL;
+    if (var != NULL) {
+        free(*var);
+        *var = NULL;
+    }
 
     return;
 }
 
 void freeVariables(ProcessorVariables_t *vars)
 {
-    freeVariable(vars->timestamp);
-    freeVariable(vars->latitude);
-    freeVariable(vars->longitude);
-    freeVariable(vars->radius);
-    freeVariable(vars->qdlat);
-    freeVariable(vars->mlt);
-    freeVariable(vars->mxh);
-    freeVariable(vars->myh);
-    freeVariable(vars->mxv);
-    freeVariable(vars->myv);
-    freeVariable(vars->vsatx);
-    freeVariable(vars->vsaty);
-    freeVariable(vars->vsatz);
-    freeVariable(vars->enhRaw);
-    freeVariable(vars->envRaw);
-    freeVariable(vars->enh);
-    freeVariable(vars->env);
-    freeVariable(vars->vixh);
-    freeVariable(vars->vixherror);
-    freeVariable(vars->vixv);
-    freeVariable(vars->vixverror);
-    freeVariable(vars->viy);
-    freeVariable(vars->viyerror);
-    freeVariable(vars->viz);
-    freeVariable(vars->vizerror);
-    freeVariable(vars->vsatn);
-    freeVariable(vars->vsate);
-    freeVariable(vars->vsatc);
-    freeVariable(vars->ectxh);
-    freeVariable(vars->ectyh);
-    freeVariable(vars->ectzh);
-    freeVariable(vars->ectxv);
-    freeVariable(vars->ectyv);
-    freeVariable(vars->ectzv);
-    freeVariable(vars->bctx);
-    freeVariable(vars->bcty);
-    freeVariable(vars->bctz);
-    freeVariable(vars->bn);
-    freeVariable(vars->be);
-    freeVariable(vars->bc);
-    freeVariable(vars->vicrx);
-    freeVariable(vars->vicry);
-    freeVariable(vars->vicrz);
-    freeVariable(vars->flags);
-    freeVariable(vars->fitInfo);
-    freeVariable(vars->geoelectricPotential);
-    freeVariable(vars->geoelectricPotentialDifference);
-    freeVariable(vars->maxAbsGeoelectricPotentialBaselineSlope);
-    freeVariable(vars->ehxAdjusted);
-    freeVariable(vars->ehxAdjustmentParameter);
-    freeVariable(vars->geoelectricPotentialDetrended);
-    freeVariable(vars->maxAbsGeoelectricPotentialDetrendedBaselineSlope);
-    freeVariable(vars->orbitRegion);
-    freeVariable(vars->lpTimes);
-    freeVariable(vars->lpPhiScHighGain);
-    freeVariable(vars->lpPhiScLowGain);
-    freeVariable(vars->lpPhiSc);
-    freeVariable(vars->potentials);
-    freeVariable(vars->xhat);
-    freeVariable(vars->yhat);
-    freeVariable(vars->zhat);
-    freeVariable(vars->geoelectricPotential);
-    freeVariable(vars->maxAbsGeoelectricPotentialBaselineSlope);
-    freeVariable(vars->geoelectricPotentialDifference);
-    freeVariable(vars->geoelectricPotentialDetrended);
-    freeVariable(vars->maxAbsGeoelectricPotentialDetrendedBaselineSlope);
-    freeVariable(vars->ehxAdjusted);
-    freeVariable(vars->ehxAdjustmentParameter);
+    freeVariable((void **)&vars->timestamp);
+    freeVariable((void **)&vars->latitude);
+    freeVariable((void **)&vars->longitude);
+    freeVariable((void **)&vars->radius);
+    freeVariable((void **)&vars->qdlat);
+    freeVariable((void **)&vars->mlt);
+    freeVariable((void **)&vars->mxh);
+    freeVariable((void **)&vars->myh);
+    freeVariable((void **)&vars->mxv);
+    freeVariable((void **)&vars->myv);
+    freeVariable((void **)&vars->vsatx);
+    freeVariable((void **)&vars->vsaty);
+    freeVariable((void **)&vars->vsatz);
+    freeVariable((void **)&vars->enhRaw);
+    freeVariable((void **)&vars->envRaw);
+    freeVariable((void **)&vars->enh);
+    freeVariable((void **)&vars->env);
+    freeVariable((void **)&vars->vixh);
+    freeVariable((void **)&vars->vixherror);
+    freeVariable((void **)&vars->vixv);
+    freeVariable((void **)&vars->vixverror);
+    freeVariable((void **)&vars->viy);
+    freeVariable((void **)&vars->viyerror);
+    freeVariable((void **)&vars->viz);
+    freeVariable((void **)&vars->vizerror);
+    freeVariable((void **)&vars->vsatn);
+    freeVariable((void **)&vars->vsate);
+    freeVariable((void **)&vars->vsatc);
+    freeVariable((void **)&vars->ectxh);
+    freeVariable((void **)&vars->ectyh);
+    freeVariable((void **)&vars->ectzh);
+    freeVariable((void **)&vars->ectxv);
+    freeVariable((void **)&vars->ectyv);
+    freeVariable((void **)&vars->ectzv);
+    freeVariable((void **)&vars->bctx);
+    freeVariable((void **)&vars->bcty);
+    freeVariable((void **)&vars->bctz);
+    freeVariable((void **)&vars->bn);
+    freeVariable((void **)&vars->be);
+    freeVariable((void **)&vars->bc);
+    freeVariable((void **)&vars->vicrx);
+    freeVariable((void **)&vars->vicry);
+    freeVariable((void **)&vars->vicrz);
+    freeVariable((void **)&vars->flags);
+    freeVariable((void **)&vars->fitInfo);
+    freeVariable((void **)&vars->geoelectricPotential);
+    freeVariable((void **)&vars->geoelectricPotentialDifference);
+    freeVariable((void **)&vars->maxAbsGeoelectricPotentialBaselineSlope);
+    freeVariable((void **)&vars->ehxAdjusted);
+    freeVariable((void **)&vars->ehxAdjustmentParameter);
+    freeVariable((void **)&vars->geoelectricPotentialDetrended);
+    freeVariable((void **)&vars->maxAbsGeoelectricPotentialDetrendedBaselineSlope);
+    freeVariable((void **)&vars->orbitRegion);
+    freeVariable((void **)&vars->lpTimes);
+    freeVariable((void **)&vars->lpPhiScHighGain);
+    freeVariable((void **)&vars->lpPhiScLowGain);
+    freeVariable((void **)&vars->lpPhiSc);
+    freeVariable((void **)&vars->potentials);
+    freeVariable((void **)&vars->xhat);
+    freeVariable((void **)&vars->yhat);
+    freeVariable((void **)&vars->zhat);
+    freeVariable((void **)&vars->geoelectricPotential);
+    freeVariable((void **)&vars->maxAbsGeoelectricPotentialBaselineSlope);
+    freeVariable((void **)&vars->geoelectricPotentialDifference);
+    freeVariable((void **)&vars->geoelectricPotentialDetrended);
+    freeVariable((void **)&vars->maxAbsGeoelectricPotentialDetrendedBaselineSlope);
+    freeVariable((void **)&vars->ehxAdjusted);
+    freeVariable((void **)&vars->ehxAdjustmentParameter);
 
     return;
 }
