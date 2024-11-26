@@ -455,12 +455,12 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
                 break;
             case SDLK_F6:
                 // Satellite position
-                state->plotCommand = "Lat,-90,90,1" ";Lon,-180,180,1" ";Radius,6400,7000,0.001" ";Alt,400,550,0.001";
+                state->plotCommand = "Lat,-90,90,1" ";Lon,-180,180,1" ";Radius,6400,7000,0.001" ";Alt,430,520,0.001";
                 updatePlots(state);
                 break;
             case SDLK_F7:
                 // Satellite velocity
-                state->plotCommand = "VSatN,-8,8,0.001" ";VSatE,-8,8,0.001" ";VSatC,-0.1,0.1,0.001";
+                state->plotCommand = "VSatN,-8,8,0.001" ";VSatE,-8,8,0.001" ";VSatC,-0.1,0.1,0.001" ";VSatX,-8,8,0.001" ";VSatY,-2,2,0.001" ";VSatZ,-0.5,0.5,0.001" ";VicrX,-0.5,0.5,0.001" ";VicrY,-0.6,0.6,0.001" ";VicrZ,-0.5,0.5,0.001";
                 updatePlots(state);
                 break;
             case SDLK_F8:

@@ -273,6 +273,15 @@ int visualizeResults(ProcessorState *state)
         } else if (strcmp("Vizerror", params[0]) == 0) {
             parameter = v->vizerror;
             parameterLabel = "Vizerror";
+        } else if (strcmp("VSatX", params[0]) == 0) {
+            parameter = v->vsatx;
+            parameterLabel = "Vsat X";
+        } else if (strcmp("VSatY", params[0]) == 0) {
+            parameter = v->vsaty;
+            parameterLabel = "Vsat Y";
+        } else if (strcmp("VSatZ", params[0]) == 0) {
+            parameter = v->vsatz;
+            parameterLabel = "Vsat Z";
         } else if (strcmp("VSatN", params[0]) == 0) {
             parameter = v->vsatn;
             parameterLabel = "Vsat N";
@@ -291,13 +300,13 @@ int visualizeResults(ProcessorState *state)
         } else if (strcmp("BC", params[0]) == 0) {
             parameter = v->bc;
             parameterLabel = "B C";
-        } else if (strcmp("Vicrx", params[0]) == 0) {
+        } else if (strcmp("VicrX", params[0]) == 0) {
             parameter = v->vicrx;
             parameterLabel = "Vicr X";
-        } else if (strcmp("Vicry", params[0]) == 0) {
+        } else if (strcmp("VicrY", params[0]) == 0) {
             parameter = v->vicry;
             parameterLabel = "Vicr Y";
-        } else if (strcmp("Vicrz", params[0]) == 0) {
+        } else if (strcmp("VicrZ", params[0]) == 0) {
             parameter = v->vicrz;
             parameterLabel = "Vicr Z";
         } else if (strcmp("Geopot", params[0]) == 0) {
