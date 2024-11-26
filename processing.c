@@ -584,10 +584,7 @@ int calculateFields(ProcessorState *state)
 {
     ProcessorVariables_t *v = &state->vars16hz;
 
-    // Init memory for fields
-    int status = initFields(v);
-    if (status != TIICT_OK)
-        return status;
+    int status = TIICT_OK;
 
     // Calculate fields
     long long ind;
@@ -621,19 +618,19 @@ int calculateFields(ProcessorState *state)
         v->zhat[ind + 2] /= magzhat;
 
         // B field in cross-track frame, nT:
-        v->bctx[ind] = v->bn[i] * v->xhat[ind + 0] + v->be[i] * v->xhat[ind + 1] + v->bc[i] * v->xhat[ind + 2];
-        v->bcty[ind] = v->bn[i] * v->yhat[ind + 0] + v->be[i] * v->yhat[ind + 1] + v->bc[i] * v->yhat[ind + 2];
-        v->bctz[ind] = v->bn[i] * v->zhat[ind + 0] + v->be[i] * v->zhat[ind + 1] + v->bc[i] * v->zhat[ind + 2];
+        v->bctx[i] = v->bn[i] * v->xhat[ind + 0] + v->be[i] * v->xhat[ind + 1] + v->bc[i] * v->xhat[ind + 2];
+        v->bcty[i] = v->bn[i] * v->yhat[ind + 0] + v->be[i] * v->yhat[ind + 1] + v->bc[i] * v->yhat[ind + 2];
+        v->bctz[i] = v->bn[i] * v->zhat[ind + 0] + v->be[i] * v->zhat[ind + 1] + v->bc[i] * v->zhat[ind + 2];
 
         // E field from H sensor X, in cross-track frame, mV/m:
-        v->ectxh[ind] = -1.0 * (v->myh[i] * v->bctz[ind] - v->myv[i] * v->bcty[ind]) / 1000000000.0 * 1000.0;
-        v->ectyh[ind] = -1.0 * (-1.0 * v->mxh[i] * v->bctz[ind] + v->myv[i] * v->bctx[ind]) / 1000000000.0 * 1000.0;
-        v->ectzh[ind] = -1.0 * (v->mxh[i] * v->bcty[ind] - v->myh[i] * v->bctx[ind]) / 1000000000.0 * 1000.0;
+        v->ectxh[i] = -1.0 * (v->myh[i] * v->bctz[i] - v->myv[i] * v->bcty[i]) / 1000000000.0 * 1000.0;
+        v->ectyh[i] = -1.0 * (-1.0 * v->mxh[i] * v->bctz[i] + v->myv[i] * v->bctx[i]) / 1000000000.0 * 1000.0;
+        v->ectzh[i] = -1.0 * (v->mxh[i] * v->bcty[i] - v->myh[i] * v->bctx[i]) / 1000000000.0 * 1000.0;
 
         // E field from V sensor X, in cross-track frame, mV/m:
-        v->ectxv[ind] = -1.0 * (v->myh[i] * v->bctz[ind] - v->myv[i] * v->bcty[ind]) / 1000000000.0 * 1000.0;
-        v->ectyv[ind] = -1.0 * (-1.0 * v->mxv[i] * v->bctz[ind] + v->myv[i] * v->bctx[ind]) / 1000000000.0 * 1000.0;
-        v->ectzv[ind] = -1.0 * (v->mxv[i] * v->bcty[ind] - v->myh[i] * v->bctx[ind]) / 1000000000.0 * 1000.0;
+        v->ectxv[i] = -1.0 * (v->myh[i] * v->bctz[i] - v->myv[i] * v->bcty[i]) / 1000000000.0 * 1000.0;
+        v->ectyv[i] = -1.0 * (-1.0 * v->mxv[i] * v->bctz[i] + v->myv[i] * v->bctx[i]) / 1000000000.0 * 1000.0;
+        v->ectzv[i] = -1.0 * (v->mxv[i] * v->bcty[i] - v->myh[i] * v->bctx[i]) / 1000000000.0 * 1000.0;
 
     }
 
