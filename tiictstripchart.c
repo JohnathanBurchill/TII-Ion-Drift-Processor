@@ -470,7 +470,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
                 break;
             case SDLK_F9:
                 // Geoelectric potential
-                state->plotCommand = "Geopot,-200,200,1";
+                state->plotCommand = "Exh,-50,50,1" ";Geopot,-100,100,0.001" ";ExhAdj,-50,50,1" ";GeopotAdj,-100,100,0.001" ";ExhAdjParam,-1,1,1";
                 updatePlots(state);
                 break;
             case SDLK_F10:

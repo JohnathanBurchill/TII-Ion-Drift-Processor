@@ -312,18 +312,27 @@ int visualizeResults(ProcessorState *state)
         } else if (strcmp("Geopot", params[0]) == 0) {
             parameter = v->geoelectricPotential;
             parameterLabel = "Geopot";
+        } else if (strcmp("GeopotAdj", params[0]) == 0) {
+            parameter = v->geoelectricPotentialDetrended;
+            parameterLabel = "Geopot Adj";
         } else if (strcmp("GeopotDiff", params[0]) == 0) {
             parameter = v->geoelectricPotentialDifference;
             parameterLabel = "Geopot diff.";
-        } else if (strcmp("Geopotmaxslope", params[0]) == 0) {
+        } else if (strcmp("GeopotMaxslope", params[0]) == 0) {
             parameter = v->maxAbsGeoelectricPotentialBaselineSlope;
             parameterLabel = "Geopot max slope";
-        } else if (strcmp("Geopotmaxslopedet", params[0]) == 0) {
+        } else if (strcmp("GeopotAdjMaxslope", params[0]) == 0) {
             parameter = v->maxAbsGeoelectricPotentialDetrendedBaselineSlope;
-            parameterLabel = "Geopot detrend max slope";
+            parameterLabel = "Geopot adj max slope";
         } else if (strcmp("Exh", params[0]) == 0) {
             parameter = v->ectxh;
             parameterLabel = "Exh";
+        } else if (strcmp("ExhAdj", params[0]) == 0) {
+            parameter = v->ehxAdjusted;
+            parameterLabel = "Exh adj.";
+        } else if (strcmp("ExhAdjParam", params[0]) == 0) {
+            parameter = v->ehxAdjustmentParameter;
+            parameterLabel = "Exh adj. param";
         } else if (strcmp("Eyh", params[0]) == 0) {
             parameter = v->ectyh;
             parameterLabel = "Eyh";
