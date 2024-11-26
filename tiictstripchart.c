@@ -43,6 +43,7 @@
 #include <tiigraphics/video.h>
 
 #include <stdio.h>
+#include <unistd.h>
 
 #define SDL_MAIN_USE_CALLBACKS 1  /* use the callbacks instead of main() */
 #include <SDL3/SDL.h>
@@ -544,6 +545,10 @@ SDL_AppResult SDL_AppIterate(void *appstate)
         else {
             rewindPlots(as, deltaT, SECONDS);
         }
+    }
+    else {
+        // Brief pause to yield CPU
+        usleep(100000);
     }
 
 updatedisplay:
