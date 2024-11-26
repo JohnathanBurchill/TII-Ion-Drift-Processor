@@ -821,7 +821,6 @@ void freeVariables(ProcessorVariables_t *vars)
     freeVariable((void **)&vars->lpPhiScHighGain);
     freeVariable((void **)&vars->lpPhiScLowGain);
     freeVariable((void **)&vars->lpPhiSc);
-    freeVariable((void **)&vars->potentials);
     freeVariable((void **)&vars->xhat);
     freeVariable((void **)&vars->yhat);
     freeVariable((void **)&vars->zhat);
@@ -916,7 +915,6 @@ int reallocVariables(ProcessorVariables_t *vars, size_t nRecords)
     status |= reallocVariable((void*)&vars->lpPhiScHighGain, nRecords, sizeof *vars->lpPhiScHighGain);
     status |= reallocVariable((void*)&vars->lpPhiScLowGain, nRecords, sizeof *vars->lpPhiScLowGain);
     status |= reallocVariable((void*)&vars->lpPhiSc, nRecords, sizeof *vars->lpPhiSc);
-    status |= reallocVariable((void*)&vars->potentials, nRecords, sizeof *vars->potentials);
     status |= reallocVariable((void*)&vars->xhat, nRecords, sizeof *vars->xhat * 3);
     status |= reallocVariable((void*)&vars->yhat, nRecords, sizeof *vars->yhat * 3);
     status |= reallocVariable((void*)&vars->zhat, nRecords, sizeof *vars->zhat * 3);
