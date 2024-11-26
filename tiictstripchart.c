@@ -449,7 +449,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
                 break;
             case SDLK_F5:
                 // magnetic field
-                state->plotCommand = "Bx,-65000,65000,1e9";
+                state->plotCommand = "Bx,-65000,65000,1" ";By,-65000,65000,1" ";Bz,-65000,65000,1";
                 updatePlots(state);
                 break;
             case SDLK_F6:
@@ -470,6 +470,16 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
             case SDLK_F9:
                 // Geoelectric potential
                 state->plotCommand = "Geopot,-200,200,1";
+                updatePlots(state);
+                break;
+            case SDLK_F10:
+                // Moments
+                state->plotCommand = "mxh,0,66,1" ";myh,0,66,1" ";mxv,0,66,1" ";myv,0,66,1";
+                updatePlots(state);
+                break;
+            case SDLK_F11:
+                // Moments
+                state->plotCommand = "EnhRaw,0,30,1" ";EnvRaw,0,30,1" ";Enh,0,30,1" ";Env,0,30,1";
                 updatePlots(state);
                 break;
             case SDLK_Z:
