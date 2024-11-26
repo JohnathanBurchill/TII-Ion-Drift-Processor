@@ -597,7 +597,7 @@ void loadCalDataFromDate(const DayType dayType, ProcessorState *state, Calibrati
     }
     // Update number of records found and memory allocated
     state->vars16hz.nRecs += nRecs;
-    state->vars16hz.memoryAllocated = calibrationMemorySize;
+    state->vars16hz.memoryAllocated += calibrationMemorySize;
 
     return;
 }
@@ -651,7 +651,7 @@ int loadCdfVariable(ProcessorState *state, CDFid calCdfId, CalibrationVariable_t
     long nRecordsAlreadyLoaded = state->vars16hz.nRecs;
     long nBytesAlreadyLoaded = nRecordsAlreadyLoaded * valuesPerRecord * bytesPerValue;
     long nBytesToAdd = nRecords * valuesPerRecord * bytesPerValue;
-    calibrationMemorySize += nBytesToAdd;
+    *calibrationMemorySize += nBytesToAdd;
     long nValuesNew = (nRecordsAlreadyLoaded + nRecords) * valuesPerRecord;
     // This reallocs using the pointer's size
 

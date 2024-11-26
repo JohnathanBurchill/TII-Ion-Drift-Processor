@@ -46,31 +46,19 @@ char infoHeader[50] = {0};
 int initQualityData(ProcessorVariables_t *var)
 {
     // Quality flag and fitInfo flag initialized to zero
-    var->flags = malloc(var->nRecs * sizeof *var->flags);
-    var->fitInfo = malloc(var->nRecs * sizeof *var->fitInfo);
-    var->orbitRegion = malloc(var->nRecs * sizeof *var->orbitRegion);
-    // Error estimates from Mean Absolute Deviation (MAD): default is -42. :)
-    var->vixherror = malloc(var->nRecs * sizeof *var->vixherror);
-    var->vixverror = malloc(var->nRecs * sizeof *var->vixverror);
-    var->viyerror = malloc(var->nRecs * sizeof *var->viyerror);
-    var->vizerror = malloc(var->nRecs * sizeof *var->vizerror);
-    if (var->flags == NULL || var->fitInfo == NULL || var->vixherror == NULL || var->vixverror == NULL || var->viyerror == NULL || var->vizerror == NULL)
+    for (long i = 0; i < var->nRecs; i++)
     {
-        return TIICT_MEMORY;
-    }
-    for (long ind = 0; ind < var->nRecs; ind++)
-    {
-        var->vixherror[ind] = DEFAULT_VI_ERROR;
-        var->vixverror[ind] = DEFAULT_VI_ERROR;
-        var->viyerror[ind] = DEFAULT_VI_ERROR;
-        var->vizerror[ind] = DEFAULT_VI_ERROR;
-        var->flags[ind] = 0;
-        var->orbitRegion[ind] = 255; // Invalid or incomplete region
+        var->vixherror[i] = DEFAULT_VI_ERROR;
+        var->vixverror[i] = DEFAULT_VI_ERROR;
+        var->viyerror[i] = DEFAULT_VI_ERROR;
+        var->vizerror[i] = DEFAULT_VI_ERROR;
+        var->flags[i] = 0;
+        var->orbitRegion[i] = 255; // Invalid or incomplete region
         // FITINFO_OFFSET_NOT_REMOVED = 1 and FITINFO_INCOMPLETE_REGION = 1 are the defaults for fitInfo
         // Set for each velocity component
         for (uint8_t k = 0; k < 4; k++)
         {
-            var->fitInfo[ind] |= ((FITINFO_OFFSET_NOT_REMOVED | FITINFO_INCOMPLETE_REGION)) << (k * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT);
+            var->fitInfo[i] |= ((FITINFO_OFFSET_NOT_REMOVED | FITINFO_INCOMPLETE_REGION)) << (k * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT);
         }
     }
 
@@ -242,8 +230,8 @@ int calibrateFlows(ProcessorState *state)
         {
             // Old way, estimates a proxy based on image moments
             // no potential correction, and this is our offset-biased flow estimate
-            v->vixh[i] = -1.0 * (v->mxh[i] - 32.5) * shx - v->vsatx[i];
-            v->vixv[i] = -1.0 * (v->mxv[i] - 32.5) * svx - v->vsatx[i];
+            v->vixh[i] = -1.0 * (v->mxh[i] - 32.5) * shx + v->vsatx[i];
+            v->vixv[i] = -1.0 * (v->mxv[i] - 32.5) * svx + v->vsatx[i];
             v->enhRaw[i] = v->envRaw[i] = v->enh[i] = v->env[i] = 0.0;
         }
 
@@ -1492,18 +1480,20 @@ int shutdown(ProcessorState *state)
         return(TIICT_ARGS_BAD);
 
     // Free the memory
-    if (state->vars16hz.memoryAllocated) {
+    if (state->vars16hz.memoryAllocated > 0) {
         freeVariables(&state->vars16hz);
         state->vars16hz.memoryAllocated = 0;
         state->vars16hz.nRecs = 0;
         state->vars16hz.nLpRecs = 0;
     }
-    if (state->vars2hz.memoryAllocated) {
+    if (state->vars2hz.memoryAllocated > 0) {
         freeVariables(&state->vars2hz);
         state->vars2hz.memoryAllocated = 0;
         state->vars2hz.nRecs = 0;
         state->vars2hz.nLpRecs = 0;
     }
+
+    state->vars = NULL;
 
     for (int i = 0; i < state->nVideoFrames; i++) {
         free(state->frames[i].pixels);

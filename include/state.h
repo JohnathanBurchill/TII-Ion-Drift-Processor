@@ -91,7 +91,7 @@ typedef struct BackgroundRemovalWorkspace
 
 typedef struct ProcessorVariables {
 
-    long memoryAllocated;
+    size_t memoryAllocated;
     long nRecs;
 
     // Exported variables
