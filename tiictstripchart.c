@@ -450,7 +450,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
                 break;
             case SDLK_F5:
                 // magnetic field
-                state->plotCommand = "Bx,-65000,65000,1" ";By,-65000,65000,1" ";Bz,-65000,65000,1";
+                state->plotCommand = "BN,-65000,65000,1" ";BE,-65000,65000,1" ";BC,-65000,65000,1" ";Bx,-65000,65000,1" ";By,-65000,65000,1" ";Bz,-65000,65000,1";
                 updatePlots(state);
                 break;
             case SDLK_F6:
@@ -460,7 +460,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
                 break;
             case SDLK_F7:
                 // Satellite velocity
-                state->plotCommand = "VsatN,-8,8,0.001";
+                state->plotCommand = "VSatN,-8,8,0.001" ";VSatE,-8,8,0.001" ";VSatC,-0.1,0.1,0.001";
                 updatePlots(state);
                 break;
             case SDLK_F8:
