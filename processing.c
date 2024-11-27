@@ -217,8 +217,14 @@ int calibrateFlows(ProcessorState *state)
             // Then remove offsets from this
             // Then convert to flow velocity, adding ram energy of O+ before taking sqare root.
             // Use eofr estimate, no correction for variations in satellite potential
-            v->enh[i] = v->enhRaw[i] = eofr(v->mxh[i] - xch, innerDomeBias, v->vmcph[i]);
-            v->env[i] = v->envRaw[i] = eofr(v->mxv[i] - xcv, innerDomeBias, v->vmcpv[i]);
+            double dmx = v->mxh[i] - xch;
+            double dmy = v->myh[i] - ych;
+            double r = sqrt(dmx*dmx + dmy*dmy);
+            v->enh[i] = v->enhRaw[i] = eofr(r, innerDomeBias, v->vmcph[i]);
+            dmx = v->mxv[i] - xch;
+            dmy = v->myv[i] - ych;
+            r = sqrt(dmx*dmx + dmy*dmy);
+            v->env[i] = v->envRaw[i] = eofr(r, innerDomeBias, v->vmcpv[i]);
             if (state->usePotentials)
             {
                 // TODO include emf?
@@ -243,35 +249,42 @@ int calibrateFlows(ProcessorState *state)
     }
 
     // Remove offsets and set calibration flags
-    state->setFlags = true;
     // Linear offset model
-    state->bgws.fitDegree = 2;
-    if (state->useEofR) {
-        state->measurementType = ENERGY_MEASUREMENT;
-    }
-    else {
-        state->measurementType = VELOCITY_MEASUREMENT;
-    }
-    status = removeOffsetsAndSetFlags(state, backgroundRemoval);
-    if (status != TIICT_OK)
-        return status;
+    state->bgws.fitDegree = DETREND_MODEL_FIT_DEGREE;
 
     // If using EofR method, calculate ion along-track drift from offset-corrected energies
     // We have effectively removed 4.8 eV from each energy by setting the energy to 0 at mid-latitude
     // Add it back in before calculating velocity, then remove satellite velocity
-    float backgroundRamEnergyeV = 0.0;
-    float factor = 0.5 * mass / q;
     if (state->useEofR)
     {
+        // Remove backgrounds
+        state->setFlags = false;
+        state->measurementType = ENERGY_MEASUREMENT;
+        status = removeOffsetsAndSetFlags(state, backgroundRemoval);
+        if (status != TIICT_OK) {
+            return status;
+        }
+        // Estimate along-track ion drifts
+        float backgroundRamEnergyeV = 0.0;
+        float factor = 0.5 * mass / q;
         for (long i = 0; i < v->nRecs; i++)
         {
             backgroundRamEnergyeV = factor * v->vsatx[i] * v->vsatx[i];
             // Calculate vix assuming pure O+
             // Positive, is flow towards satellite, in direction of sensor x axis.
             // Then calculate vi. Note that VSATX is positive toward direction of motion
-            v->vixh[i] = v->vsatx[i] - sqrtf((v->enh[i] + backgroundRamEnergyeV) / factor);
-            v->vixv[i] = v->vsatx[i] - sqrtf((v->env[i] + backgroundRamEnergyeV) / factor);
+            v->vixh[i] = -sqrtf((v->enh[i] + backgroundRamEnergyeV) / factor) + v->vsatx[i];
+            v->vixv[i] = -sqrtf((v->env[i] + backgroundRamEnergyeV) / factor) + v->vsatx[i];
         }
+    }
+
+    // Now remove trends in cross-track drift and any residual trends in
+    // along-track drift
+    state->setFlags = true;
+    state->measurementType = VELOCITY_MEASUREMENT;
+    status = removeOffsetsAndSetFlags(state, backgroundRemoval);
+    if (status != TIICT_OK) {
+        return status;
     }
 
     return TIICT_OK;
