@@ -113,7 +113,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     }
 
     // New defaults
-    state->writeLogFiles = true;
+    state->writeLogFiles = false;
     state->export16Hz = false;
     state->export2Hz = false;
     state->exportZip = false;
