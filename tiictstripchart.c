@@ -475,7 +475,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
                 break;
             case SDLK_F10:
                 // Moments
-                state->plotCommand = "mxh,0,66,1" ";myh,0,66,1" ";mxv,0,66,1" ";myv,0,66,1";
+                state->plotCommand = "mxh,0,66,1" ";mxv,0,66,1" ";myh,0,66,1" ";myv,0,66,1";
                 updatePlots(state);
                 break;
             case SDLK_F11:
