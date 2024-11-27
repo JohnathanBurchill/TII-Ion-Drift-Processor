@@ -67,6 +67,7 @@ int visualizeResults(ProcessorState *state)
     else  {
         state->plotT0 = v->timestamp[firstIndex];
     }
+    lastIndex = firstIndex;
     if (state->plotT1 >= 0) {
         while (lastIndex < v->nRecs && v->timestamp[lastIndex] < state->plotT1) {
             lastIndex++;

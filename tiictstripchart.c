@@ -744,6 +744,7 @@ void rerunProcessor(AppState_t *appstate)
     calibrateFlows(state);
     calculateFields(state);
 
+
 vis:
     if (appstate->show16Hz) {
         state->vars = &state->vars16hz;
@@ -777,6 +778,13 @@ vis:
         state->vars2hz.nRecs = n2HzSamples;
         state->vars = &state->vars2hz;
     }
+
+    double *timesMs = state->vars->timestamp;
+    if (timesMs != NULL) {
+        appstate->t0 = timesMs[0];
+        appstate->t1 = timesMs[state->vars->nRecs - 1];
+    }
+
     visualizeResults(state);
 
     return;
