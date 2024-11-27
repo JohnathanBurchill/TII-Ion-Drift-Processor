@@ -217,14 +217,17 @@ int calibrateFlows(ProcessorState *state)
             // Then remove offsets from this
             // Then convert to flow velocity, adding ram energy of O+ before taking sqare root.
             // Use eofr estimate, no correction for variations in satellite potential
-            double dmx = v->mxh[i] - xch;
-            double dmy = v->myh[i] - ych;
-            v->rh[i] = sqrt(dmx*dmx + dmy*dmy);
+
+            v->dxh[i] = v->mxh[i] - xch;
+            v->dyh[i] = v->myh[i] - ych;
+            v->rh[i] = sqrt(v->dxh[i]*v->dxh[i] + v->dyh[i]*v->dyh[i]);
             v->enh[i] = v->enhRaw[i] = eofr(v->rh[i], innerDomeBias, v->vmcph[i]);
-            dmx = v->mxv[i] - xch;
-            dmy = v->myv[i] - ych;
-            v->rv[i] = sqrt(dmx*dmx + dmy*dmy);
+
+            v->dxv[i] = v->mxv[i] - xcv;
+            v->dyv[i] = v->myv[i] - ycv;
+            v->rv[i] = sqrt(v->dxv[i]*v->dxv[i] + v->dyv[i]*v->dyv[i]);
             v->env[i] = v->envRaw[i] = eofr(v->rv[i], innerDomeBias, v->vmcpv[i]);
+
             if (state->usePotentials)
             {
                 // TODO include emf?
@@ -267,6 +270,8 @@ int calibrateFlows(ProcessorState *state)
         // Estimate along-track ion drifts
         float backgroundRamEnergyeV = 0.0;
         float factor = 0.5 * mass / q;
+        float vram = 0.0;
+        float phi = 0.0;
         for (long i = 0; i < v->nRecs; i++)
         {
             backgroundRamEnergyeV = factor * v->vsatx[i] * v->vsatx[i];
@@ -274,9 +279,14 @@ int calibrateFlows(ProcessorState *state)
             // Positive, is flow towards satellite, in direction of sensor x axis.
             // Then calculate vi. Note that VSATX is positive toward direction of motion
             v->enh[i] += backgroundRamEnergyeV;
-            v->vixh[i] = -sqrtf(v->enh[i] / factor) - v->vsatx[i];
+            vram = sqrtf(v->enh[i] / factor);
+            phi = atan2(v->dyh[i], v->dxh[i]);
+            v->vixh[i] = -vram*cos(phi) - v->vsatx[i];
+
             v->env[i] += backgroundRamEnergyeV;
-            v->vixv[i] = -sqrtf(v->env[i] / factor) - v->vsatx[i];
+            vram = sqrtf(v->env[i] / factor);
+            phi = atan2(v->dyv[i], v->dxv[i]);
+            v->vixv[i] = -vram*cos(phi) - v->vsatx[i];
         }
     }
 
@@ -817,6 +827,10 @@ bool downSampleHalfSecond(ProcessorState *state, long *index, long storageIndex,
         floatBuf[k++] += v16->myh[i];
         floatBuf[k++] += v16->mxv[i];
         floatBuf[k++] += v16->myv[i];
+        floatBuf[k++] += v16->dxh[i];
+        floatBuf[k++] += v16->dyh[i];
+        floatBuf[k++] += v16->dxv[i];
+        floatBuf[k++] += v16->dyv[i];
         floatBuf[k++] += v16->rh[i];
         floatBuf[k++] += v16->rv[i];
         floatBuf[k++] += v16->vmcph[i];
@@ -910,6 +924,10 @@ bool downSampleHalfSecond(ProcessorState *state, long *index, long storageIndex,
         v2->myh[storageIndex] = floatBuf[k++] / 8.0;
         v2->mxv[storageIndex] = floatBuf[k++] / 8.0;
         v2->myv[storageIndex] = floatBuf[k++] / 8.0;
+        v2->dxh[storageIndex] = floatBuf[k++] / 8.0;
+        v2->dyh[storageIndex] = floatBuf[k++] / 8.0;
+        v2->dxv[storageIndex] = floatBuf[k++] / 8.0;
+        v2->dyv[storageIndex] = floatBuf[k++] / 8.0;
         v2->rh[storageIndex] = floatBuf[k++] / 8.0;
         v2->rv[storageIndex] = floatBuf[k++] / 8.0;
         v2->vmcph[storageIndex] = floatBuf[k++] / 8.0;

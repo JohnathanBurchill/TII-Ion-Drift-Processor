@@ -213,6 +213,18 @@ int visualizeResults(ProcessorState *state)
         } else if (strcmp("myv", params[0]) == 0) {
             parameter = v->myv;
             parameterLabel = "myv";
+        } else if (strcmp("dxh", params[0]) == 0) {
+            parameter = v->dxh;
+            parameterLabel = "dxh";
+        } else if (strcmp("dyh", params[0]) == 0) {
+            parameter = v->dyh;
+            parameterLabel = "dyh";
+        } else if (strcmp("dxv", params[0]) == 0) {
+            parameter = v->dxv;
+            parameterLabel = "dxv";
+        } else if (strcmp("dyv", params[0]) == 0) {
+            parameter = v->dyv;
+            parameterLabel = "dyv";
         } else if (strcmp("rh", params[0]) == 0) {
             parameter = v->rh;
             parameterLabel = "rh";
