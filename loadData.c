@@ -774,6 +774,8 @@ void freeVariables(ProcessorVariables_t *vars)
     freeVariable((void **)&vars->myh);
     freeVariable((void **)&vars->mxv);
     freeVariable((void **)&vars->myv);
+    freeVariable((void **)&vars->rh);
+    freeVariable((void **)&vars->rv);
     freeVariable((void **)&vars->vsatx);
     freeVariable((void **)&vars->vsaty);
     freeVariable((void **)&vars->vsatz);
@@ -863,6 +865,8 @@ int reallocVariables(ProcessorVariables_t *vars, size_t nRecords)
     status |= reallocVariable((void*)&vars->myh, nRecords, sizeof *vars->myh);
     status |= reallocVariable((void*)&vars->mxv, nRecords, sizeof *vars->mxv);
     status |= reallocVariable((void*)&vars->myv, nRecords, sizeof *vars->myv);
+    status |= reallocVariable((void*)&vars->rh, nRecords, sizeof *vars->rh);
+    status |= reallocVariable((void*)&vars->rv, nRecords, sizeof *vars->rv);
     status |= reallocVariable((void*)&vars->vmcph, nRecords, sizeof *vars->vmcph);
     status |= reallocVariable((void*)&vars->vmcpv, nRecords, sizeof *vars->vmcpv);
     status |= reallocVariable((void*)&vars->vbiash, nRecords, sizeof *vars->vbiash);

@@ -465,7 +465,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
                 break;
             case SDLK_F8:
                 // Satellite floating potential
-                state->plotCommand = "PhiSc,-8,1,1";
+                state->plotCommand = "mxh,40,60,1" ";Vixh,-3,3,0.001" ";rh,0,20,1" ";Enh,0,15,1" ";mxv,40,60,1" ";Vixv,-3,3,0.001" ";rv,0,20,1" ";Env,0,15,1";
                 updatePlots(state);
                 break;
             case SDLK_F9:

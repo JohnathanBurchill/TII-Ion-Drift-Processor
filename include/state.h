@@ -107,6 +107,8 @@ typedef struct ProcessorVariables {
     float *myh;
     float *mxv;
     float *myv;
+    float *rh;
+    float *rv;
     float *vmcph;
     float *vmcpv;
     float *vbiash;

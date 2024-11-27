@@ -213,6 +213,12 @@ int visualizeResults(ProcessorState *state)
         } else if (strcmp("myv", params[0]) == 0) {
             parameter = v->myv;
             parameterLabel = "myv";
+        } else if (strcmp("rh", params[0]) == 0) {
+            parameter = v->rh;
+            parameterLabel = "rh";
+        } else if (strcmp("rv", params[0]) == 0) {
+            parameter = v->rv;
+            parameterLabel = "rv";
         } else if (strcmp("VmcpH", params[0]) == 0) {
             parameter = v->vmcph;
             parameterLabel = "Vmcp H";

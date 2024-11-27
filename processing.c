@@ -219,12 +219,12 @@ int calibrateFlows(ProcessorState *state)
             // Use eofr estimate, no correction for variations in satellite potential
             double dmx = v->mxh[i] - xch;
             double dmy = v->myh[i] - ych;
-            double r = sqrt(dmx*dmx + dmy*dmy);
-            v->enh[i] = v->enhRaw[i] = eofr(r, innerDomeBias, v->vmcph[i]);
+            v->rh[i] = sqrt(dmx*dmx + dmy*dmy);
+            v->enh[i] = v->enhRaw[i] = eofr(v->rh[i], innerDomeBias, v->vmcph[i]);
             dmx = v->mxv[i] - xch;
             dmy = v->myv[i] - ych;
-            r = sqrt(dmx*dmx + dmy*dmy);
-            v->env[i] = v->envRaw[i] = eofr(r, innerDomeBias, v->vmcpv[i]);
+            v->rv[i] = sqrt(dmx*dmx + dmy*dmy);
+            v->env[i] = v->envRaw[i] = eofr(v->rv[i], innerDomeBias, v->vmcpv[i]);
             if (state->usePotentials)
             {
                 // TODO include emf?
@@ -236,8 +236,8 @@ int calibrateFlows(ProcessorState *state)
         {
             // Old way, estimates a proxy based on image moments
             // no potential correction, and this is our offset-biased flow estimate
-            v->vixh[i] = -1.0 * (v->mxh[i] - 32.5) * shx + v->vsatx[i];
-            v->vixv[i] = -1.0 * (v->mxv[i] - 32.5) * svx + v->vsatx[i];
+            v->vixh[i] = -1.0 * (v->mxh[i] - 32.5) * shx - v->vsatx[i];
+            v->vixv[i] = -1.0 * (v->mxv[i] - 32.5) * svx - v->vsatx[i];
             v->enhRaw[i] = v->envRaw[i] = v->enh[i] = v->env[i] = 0.0;
         }
 
@@ -273,8 +273,10 @@ int calibrateFlows(ProcessorState *state)
             // Calculate vix assuming pure O+
             // Positive, is flow towards satellite, in direction of sensor x axis.
             // Then calculate vi. Note that VSATX is positive toward direction of motion
-            v->vixh[i] = -sqrtf((v->enh[i] + backgroundRamEnergyeV) / factor) + v->vsatx[i];
-            v->vixv[i] = -sqrtf((v->env[i] + backgroundRamEnergyeV) / factor) + v->vsatx[i];
+            v->enh[i] += backgroundRamEnergyeV;
+            v->vixh[i] = -sqrtf(v->enh[i] / factor) - v->vsatx[i];
+            v->env[i] += backgroundRamEnergyeV;
+            v->vixv[i] = -sqrtf(v->env[i] / factor) - v->vsatx[i];
         }
     }
 
@@ -815,6 +817,8 @@ bool downSampleHalfSecond(ProcessorState *state, long *index, long storageIndex,
         floatBuf[k++] += v16->myh[i];
         floatBuf[k++] += v16->mxv[i];
         floatBuf[k++] += v16->myv[i];
+        floatBuf[k++] += v16->rh[i];
+        floatBuf[k++] += v16->rv[i];
         floatBuf[k++] += v16->vmcph[i];
         floatBuf[k++] += v16->vmcpv[i];
         floatBuf[k++] += v16->vbiash[i];
@@ -906,6 +910,8 @@ bool downSampleHalfSecond(ProcessorState *state, long *index, long storageIndex,
         v2->myh[storageIndex] = floatBuf[k++] / 8.0;
         v2->mxv[storageIndex] = floatBuf[k++] / 8.0;
         v2->myv[storageIndex] = floatBuf[k++] / 8.0;
+        v2->rh[storageIndex] = floatBuf[k++] / 8.0;
+        v2->rv[storageIndex] = floatBuf[k++] / 8.0;
         v2->vmcph[storageIndex] = floatBuf[k++] / 8.0;
         v2->vmcpv[storageIndex] = floatBuf[k++] / 8.0;
         v2->vbiash[storageIndex] = floatBuf[k++] / 8.0;
