@@ -48,13 +48,6 @@ int visualizeResults(ProcessorState *state)
         goto cleanup;
     }
 
-    if (state->plotT0 < 0) {
-        state->plotT0 = v->timestamp[0];
-    }
-    if (state->plotT1 < state->plotT0) {
-        state->plotT1 = v->timestamp[v->nRecs - 1];
-    }
-
     int firstIndex = 0;
     int lastIndex = 0;
 
@@ -119,6 +112,8 @@ int visualizeResults(ProcessorState *state)
         nPlots++;
     }
     free(tofree);
+
+    int fontSize = 12;
 
     // Plot requested plots
 
@@ -426,7 +421,8 @@ int visualizeResults(ProcessorState *state)
         }
 
         if (gotParameter) {
-            drawFloatTimeSeries(&image, v->timestamp, parameter, firstIndex, lastIndex, stride, valueScale, valueOffset, yr0, yr1, plotX0, plotYOffset, plotWidth, plotHeight, xLabel, parameterLabel, MAX_COLOR_VALUE + 1, yr0str, yr1str, false, dotSize, 12, true, tupleLength, tupleIndex, 0);
+            drawAxes(&image, state->plotT0, state->plotT1, xLabel, parameterLabel, yr0str, yr1str, fontSize, plotX0, plotYOffset, plotWidth, plotHeight);
+            drawFloatTimeSeries(&image, v->timestamp, parameter, firstIndex, lastIndex, stride, valueScale, valueOffset, yr0, yr1, plotX0, plotYOffset, plotWidth, plotHeight, xLabel, parameterLabel, MAX_COLOR_VALUE + 1, yr0str, yr1str, false, dotSize, fontSize, false, tupleLength, tupleIndex, 0);
             plotYOffset += plotHeight + plotdy;
             plotsMade++;
         }
@@ -485,48 +481,11 @@ void drawFloatTimeSeries(Image *imageBuf, double *times, float *values, int firs
     double tmpVal;
     char label[255];
 
-    // time label string
-    char timeFormat[EPOCHx_FORMAT_MAX];
-    char timeString[EPOCHx_STRING_MAX];
-    snprintf(timeFormat, EPOCHx_FORMAT_MAX, "<hour.02>:<min.02>:<sec.02>");
-
-    double tickDeltaTSeconds = 0.0;
-
-    if (timeRange < 10.0) {
-        tickDeltaTSeconds = 1.0;
-    } else if (timeRange < 30.0) {
-        tickDeltaTSeconds = 5.0;
-    } else if (timeRange < 60.0) {
-        tickDeltaTSeconds = 10.0;
-    } else if (timeRange < 60.0*10.0) {
-        tickDeltaTSeconds = 60.0;
-    } else if (timeRange < 60.0*60.0) {
-        tickDeltaTSeconds = 300.0;
-    } else if (timeRange < 60.0*60.0*12.0) {
-        tickDeltaTSeconds = 3600.0;
-    } else {
-         tickDeltaTSeconds = 3600.0*3.0;
-    }
-
     if (timeRange > 0 && nValues > 0)
     {
         if (axes)
         {
-            // Abscissa
-            for (int s = 0; s <= timeRange; s+=tickDeltaTSeconds)
-            {
-                encodeEPOCHx(times[firstInd] + 1000.0 * s, timeFormat, timeString);
-                annotate(timeString, fontSize, plotX0 + (int)(s / timeRange * plotWidth)-6, plotY0, imageBuf);
-            }
-            annotate(xLabel, fontSize, plotX0 + plotWidth/2 - (strlen(xLabel)*(8*fontSize))/24, plotY0+12, imageBuf);
-            // Ordinate
-            annotate(yLabel, fontSize, plotX0 + plotWidth + 5, plotY0 - plotHeight/2 - 6, imageBuf);
-            annotate(minValueStr, fontSize, plotX0 + plotWidth+3, plotY0 - 8, imageBuf);
-            annotate(maxValueStr, fontSize, plotX0 + plotWidth+3, plotY0 - plotHeight - 8, imageBuf);
-            for (int o = plotY0; o >= plotY0 - plotHeight; o--)
-            {
-                setBufferColorIndex(imageBuf, plotX0 + plotWidth+1, o, FOREGROUND_COLOR);
-            }
+            drawAxes(imageBuf, t0, t1, xLabel, yLabel, minValueStr, maxValueStr, fontSize, plotX0, plotY0, plotWidth, plotHeight);
         }
 
         // data
@@ -566,6 +525,53 @@ void drawFloatTimeSeries(Image *imageBuf, double *times, float *values, int firs
                     break;
             }
         }
+    }
+
+    return;
+}
+
+void drawAxes(Image *imageBuf, double t0, double t1, const char *xLabel, const char *yLabel, const char *minValueStr, const char *maxValueStr, int fontSize, int plotX0, int plotY0, int plotWidth, int plotHeight)
+{
+
+    double timeRange = (t1 - t0) / 1000.0;
+
+    // time label string
+    char timeFormat[EPOCHx_FORMAT_MAX];
+    char timeString[EPOCHx_STRING_MAX];
+    snprintf(timeFormat, EPOCHx_FORMAT_MAX, "<hour.02>:<min.02>:<sec.02>");
+
+    double tickDeltaTSeconds = 0.0;
+
+    if (timeRange < 10.0) {
+        tickDeltaTSeconds = 1.0;
+    } else if (timeRange < 30.0) {
+        tickDeltaTSeconds = 5.0;
+    } else if (timeRange < 60.0) {
+        tickDeltaTSeconds = 10.0;
+    } else if (timeRange < 60.0*10.0) {
+        tickDeltaTSeconds = 60.0;
+    } else if (timeRange < 60.0*60.0) {
+        tickDeltaTSeconds = 300.0;
+    } else if (timeRange < 60.0*60.0*12.0) {
+        tickDeltaTSeconds = 3600.0;
+    } else {
+         tickDeltaTSeconds = 3600.0*3.0;
+    }
+
+    // Abscissa
+    for (int s = 0; s <= timeRange; s+=tickDeltaTSeconds)
+    {
+        encodeEPOCHx(t0 + 1000.0 * s, timeFormat, timeString);
+        annotate(timeString, fontSize, plotX0 + (int)(s / timeRange * plotWidth)-6, plotY0, imageBuf);
+    }
+    annotate(xLabel, fontSize, plotX0 + plotWidth/2 - (strlen(xLabel)*(8*fontSize))/24, plotY0+12, imageBuf);
+    // Ordinate
+    annotate(yLabel, fontSize, plotX0 + plotWidth + 5, plotY0 - plotHeight/2 - 6, imageBuf);
+    annotate(minValueStr, fontSize, plotX0 + plotWidth+3, plotY0 - 8, imageBuf);
+    annotate(maxValueStr, fontSize, plotX0 + plotWidth+3, plotY0 - plotHeight - 8, imageBuf);
+    for (int o = plotY0; o >= plotY0 - plotHeight; o--)
+    {
+        setBufferColorIndex(imageBuf, plotX0 + plotWidth+1, o, FOREGROUND_COLOR);
     }
 
     return;

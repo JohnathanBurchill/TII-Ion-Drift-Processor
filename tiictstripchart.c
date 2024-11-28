@@ -159,7 +159,11 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     as->state = state;
     as->plotPage = 0;
     as->dayBegin = computeEPOCH(state->args.year, state->args.month, state->args.day, 0, 0, 0, 0);
-    as->dayEnd = as->t0 + 86400.0 * 1000.0; // Ignore leap seconds
+    as->dayEnd = as->dayBegin + 86400.0 * 1000.0; // Ignore leap seconds
+
+    state->plotT0 = as->dayBegin;
+    state->plotT1 = as->dayEnd;
+
     double *timesMs = state->vars->timestamp;
     if (state->vars->nRecs > 1) {
         as->samplePeriodSeconds = (timesMs[1] - timesMs[0]) / 1000.0;
@@ -692,6 +696,7 @@ void advancePlots(AppState_t *as, double amount, TimeUnit_enum units)
     if (as->state->plotT1 > as->t1) {
         updateProcessingDateFromTime((as->state->plotT0 + as->state->plotT1)/2, &as->state->args);
         rerunProcessor(as);
+        as->playing = false;
     }
     updatePlots(as->state);
 
@@ -717,6 +722,7 @@ void rewindPlots(AppState_t *as, double amount, TimeUnit_enum units)
     if (as->state->plotT0 < as->t0) {
         updateProcessingDateFromTime((as->state->plotT0 + as->state->plotT1)/2, &as->state->args);
         rerunProcessor(as);
+        as->playing = false;
     }
     updatePlots(as->state);
     return;
