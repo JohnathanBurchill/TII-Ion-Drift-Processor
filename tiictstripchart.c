@@ -94,6 +94,7 @@ void advancePlots(AppState_t *as, double amount, TimeUnit_enum units);
 void rewindPlots(AppState_t *as, double amount, TimeUnit_enum units);
 void updatePlots(ProcessorState *state);
 void rerunProcessor(AppState_t *state);
+void updateProcessingDateFromTime(double epoch, Arguments *args);
 
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
@@ -675,13 +676,21 @@ double calculateDeltaT(AppState_t *as, TimeUnit_enum units, int sign)
 
 void advancePlots(AppState_t *as, double amount, TimeUnit_enum units)
 {
+    if (as->state == NULL) {
+        return;
+    }
+    if (as->state->plotT1 < as->state->plotT0) {
+        return;
+    }
+
     double deltaT = calculateDeltaT(as, units, 1);
     double totalTime = deltaT * amount;
     double timeRange = as->state->plotT1 - as->state->plotT0;
     as->state->plotT0 += totalTime;
     as->state->plotT1 += totalTime;
+
     if (as->state->plotT1 > as->t1) {
-        as->state->args.day++;
+        updateProcessingDateFromTime((as->state->plotT0 + as->state->plotT1)/2, &as->state->args);
         rerunProcessor(as);
     }
     updatePlots(as->state);
@@ -691,6 +700,13 @@ void advancePlots(AppState_t *as, double amount, TimeUnit_enum units)
 
 void rewindPlots(AppState_t *as, double amount, TimeUnit_enum units)
 {
+    if (as->state == NULL) {
+        return;
+    }
+    if (as->state->plotT1 < as->state->plotT0) {
+        return;
+    }
+
     double deltaT = calculateDeltaT(as, units, -1);
     double totalTime = deltaT * amount;
     double timeRange = as->state->plotT1 - as->state->plotT0;
@@ -699,9 +715,8 @@ void rewindPlots(AppState_t *as, double amount, TimeUnit_enum units)
     // TODO check if we can process other days by updating date and calling runProcessor?
     // For now, limit to one day
     if (as->state->plotT0 < as->t0) {
-        as->state->args.day--;
+        updateProcessingDateFromTime((as->state->plotT0 + as->state->plotT1)/2, &as->state->args);
         rerunProcessor(as);
-
     }
     updatePlots(as->state);
     return;
@@ -789,3 +804,19 @@ vis:
 
     return;
 }
+
+void updateProcessingDateFromTime(double epoch, Arguments *args)
+{
+    if (args == NULL) {
+        return;
+    }
+
+    long year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0, msec = 0;
+    EPOCHbreakdown(epoch, &year, &month, &day, &hour, &minute, &second, &msec);
+    args->year = year;
+    args->month = month;
+    args->day = day;
+
+    return;
+}
+

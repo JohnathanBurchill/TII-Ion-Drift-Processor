@@ -59,22 +59,12 @@ int visualizeResults(ProcessorState *state)
     int lastIndex = 0;
 
     // Find first index
-    if (state->plotT0 >= 0) {
-        while (firstIndex < v->nRecs - 1 && v->timestamp[firstIndex] < state->plotT0) {
-            firstIndex++;
-        }
-    }
-    else  {
-        state->plotT0 = v->timestamp[firstIndex];
+    while (firstIndex < v->nRecs - 1 && v->timestamp[firstIndex] < state->plotT0) {
+        firstIndex++;
     }
     lastIndex = firstIndex;
-    if (state->plotT1 >= 0) {
-        while (lastIndex < v->nRecs && v->timestamp[lastIndex] < state->plotT1) {
-            lastIndex++;
-        }
-    }
-    else  {
-        state->plotT1 = v->timestamp[v->nRecs-1];
+    while (lastIndex < v->nRecs && v->timestamp[lastIndex] < state->plotT1) {
+        lastIndex++;
     }
 
     if (strlen(state->videoFilename) == 0) {
