@@ -1499,12 +1499,14 @@ int shutdown(ProcessorState *state)
 
     state->vars = NULL;
 
-    for (int i = 0; i < state->nVideoFrames; i++) {
-        free(state->frames[i].pixels);
+    if (!state->keepFrames) {
+        for (int i = 0; i < state->nVideoFrames; i++) {
+            free(state->frames[i].pixels);
+        }
+        free(state->frames);
+        state->frames = NULL;
+        state->nVideoFrames = 0;
     }
-    free(state->frames);
-    state->frames = NULL;
-    state->nVideoFrames = 0;
 
     return TIICT_OK;
 }

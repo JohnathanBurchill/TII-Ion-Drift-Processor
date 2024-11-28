@@ -934,4 +934,99 @@ int reallocVariables(ProcessorVariables_t *vars, size_t nRecords)
     return status;
 }
 
+void copyVariables(ProcessorVariables_t *dst, ProcessorVariables_t *src)
+{
+    reallocVariables(dst, src->nRecs);
+    dst->nRecs = src->nRecs;
+    memcpy(dst->timestamp, src->timestamp, sizeof *dst->timestamp * dst->nRecs);
+    memcpy(dst->latitude, src->latitude, sizeof *dst->latitude * dst->nRecs);
+    memcpy(dst->longitude, src->longitude, sizeof *dst->longitude * dst->nRecs);
+    memcpy(dst->radius, src->radius, sizeof *dst->radius * dst->nRecs);
+    memcpy(dst->qdlat, src->qdlat, sizeof *dst->qdlat * dst->nRecs);
+    memcpy(dst->mlt, src->mlt, sizeof *dst->mlt * dst->nRecs);
+    memcpy(dst->mxh, src->mxh, sizeof *dst->mxh * dst->nRecs);
+    memcpy(dst->myh, src->myh, sizeof *dst->myh * dst->nRecs);
+    memcpy(dst->mxv, src->mxv, sizeof *dst->mxv * dst->nRecs);
+    memcpy(dst->myv, src->myv, sizeof *dst->myv * dst->nRecs);
+    memcpy(dst->dxh, src->dxh, sizeof *dst->dxh * dst->nRecs);
+    memcpy(dst->dyh, src->dyh, sizeof *dst->dyh * dst->nRecs);
+    memcpy(dst->dxv, src->dxv, sizeof *dst->dxv * dst->nRecs);
+    memcpy(dst->dyv, src->dyv, sizeof *dst->dyv * dst->nRecs);
+    memcpy(dst->rh, src->rh, sizeof *dst->rh * dst->nRecs);
+    memcpy(dst->rv, src->rv, sizeof *dst->rv * dst->nRecs);
+    memcpy(dst->vsatx, src->vsatx, sizeof *dst->vsatx * dst->nRecs);
+    memcpy(dst->vsaty, src->vsaty, sizeof *dst->vsaty * dst->nRecs);
+    memcpy(dst->vsatz, src->vsatz, sizeof *dst->vsatz * dst->nRecs);
+    memcpy(dst->enhRaw, src->enhRaw, sizeof *dst->enhRaw * dst->nRecs);
+    memcpy(dst->envRaw, src->envRaw, sizeof *dst->envRaw * dst->nRecs);
+    memcpy(dst->enh, src->enh, sizeof *dst->enh * dst->nRecs);
+    memcpy(dst->env, src->env, sizeof *dst->env * dst->nRecs);
+    memcpy(dst->vixh, src->vixh, sizeof *dst->vixh * dst->nRecs);
+    memcpy(dst->vixherror, src->vixherror, sizeof *dst->vixherror * dst->nRecs);
+    memcpy(dst->vixv, src->vixv, sizeof *dst->vixv * dst->nRecs);
+    memcpy(dst->vixverror, src->vixverror, sizeof *dst->vixverror * dst->nRecs);
+    memcpy(dst->viy, src->viy, sizeof *dst->viy * dst->nRecs);
+    memcpy(dst->viyerror, src->viyerror, sizeof *dst->viyerror * dst->nRecs);
+    memcpy(dst->viz, src->viz, sizeof *dst->viz * dst->nRecs);
+    memcpy(dst->vizerror, src->vizerror, sizeof *dst->vizerror * dst->nRecs);
+    memcpy(dst->vsatn, src->vsatn, sizeof *dst->vsatn * dst->nRecs);
+    memcpy(dst->vsate, src->vsate, sizeof *dst->vsate * dst->nRecs);
+    memcpy(dst->vsatc, src->vsatc, sizeof *dst->vsatc * dst->nRecs);
+    memcpy(dst->ectxh, src->ectxh, sizeof *dst->ectxh * dst->nRecs);
+    memcpy(dst->ectyh, src->ectyh, sizeof *dst->ectyh * dst->nRecs);
+    memcpy(dst->ectzh, src->ectzh, sizeof *dst->ectzh * dst->nRecs);
+    memcpy(dst->ectxv, src->ectxv, sizeof *dst->ectxv * dst->nRecs);
+    memcpy(dst->ectyv, src->ectyv, sizeof *dst->ectyv * dst->nRecs);
+    memcpy(dst->ectzv, src->ectzv, sizeof *dst->ectzv * dst->nRecs);
+    memcpy(dst->bctx, src->bctx, sizeof *dst->bctx * dst->nRecs);
+    memcpy(dst->bcty, src->bcty, sizeof *dst->bcty * dst->nRecs);
+    memcpy(dst->bctz, src->bctz, sizeof *dst->bctz * dst->nRecs);
+    memcpy(dst->bn, src->bn, sizeof *dst->bn * dst->nRecs);
+    memcpy(dst->be, src->be, sizeof *dst->be * dst->nRecs);
+    memcpy(dst->bc, src->bc, sizeof *dst->bc * dst->nRecs);
+    memcpy(dst->vicrx, src->vicrx, sizeof *dst->vicrx * dst->nRecs);
+    memcpy(dst->vicry, src->vicry, sizeof *dst->vicry * dst->nRecs);
+    memcpy(dst->vicrz, src->vicrz, sizeof *dst->vicrz * dst->nRecs);
+    memcpy(dst->flags, src->flags, sizeof *dst->flags * dst->nRecs);
+    memcpy(dst->fitInfo, src->fitInfo, sizeof *dst->fitInfo * dst->nRecs);
+    memcpy(dst->geoelectricPotential, src->geoelectricPotential, sizeof *dst->geoelectricPotential * dst->nRecs);
+    memcpy(dst->geoelectricPotentialDifference, src->geoelectricPotentialDifference, sizeof *dst->geoelectricPotentialDifference * dst->nRecs);
+    memcpy(dst->maxAbsGeoelectricPotentialBaselineSlope, src->maxAbsGeoelectricPotentialBaselineSlope, sizeof *dst->maxAbsGeoelectricPotentialBaselineSlope * dst->nRecs);
+    memcpy(dst->ehxAdjusted, src->ehxAdjusted, sizeof *dst->ehxAdjusted * dst->nRecs);
+    memcpy(dst->ehxAdjustmentParameter, src->ehxAdjustmentParameter, sizeof *dst->ehxAdjustmentParameter * dst->nRecs);
+    memcpy(dst->geoelectricPotentialDetrended, src->geoelectricPotentialDetrended, sizeof *dst->geoelectricPotentialDetrended * dst->nRecs);
+    memcpy(dst->maxAbsGeoelectricPotentialDetrendedBaselineSlope, src->maxAbsGeoelectricPotentialDetrendedBaselineSlope, sizeof *dst->maxAbsGeoelectricPotentialDetrendedBaselineSlope * dst->nRecs);
+    memcpy(dst->orbitRegion, src->orbitRegion, sizeof *dst->orbitRegion * dst->nRecs);
+    memcpy(dst->lpTimes, src->lpTimes, sizeof *dst->lpTimes * dst->nRecs);
+    memcpy(dst->lpPhiScHighGain, src->lpPhiScHighGain, sizeof *dst->lpPhiScHighGain * dst->nRecs);
+    memcpy(dst->lpPhiScLowGain, src->lpPhiScLowGain, sizeof *dst->lpPhiScLowGain * dst->nRecs);
+    memcpy(dst->lpPhiSc, src->lpPhiSc, sizeof *dst->lpPhiSc * dst->nRecs);
+    memcpy(dst->xhat, src->xhat, sizeof *dst->xhat * dst->nRecs * 3);
+    memcpy(dst->yhat, src->yhat, sizeof *dst->yhat * dst->nRecs * 3);
+    memcpy(dst->zhat, src->zhat, sizeof *dst->zhat * dst->nRecs * 3);
+    memcpy(dst->geoelectricPotential, src->geoelectricPotential, sizeof *dst->geoelectricPotential * dst->nRecs);
+    memcpy(dst->maxAbsGeoelectricPotentialBaselineSlope, src->maxAbsGeoelectricPotentialBaselineSlope, sizeof *dst->maxAbsGeoelectricPotentialBaselineSlope * dst->nRecs);
+    memcpy(dst->geoelectricPotentialDifference, src->geoelectricPotentialDifference, sizeof *dst->geoelectricPotentialDifference * dst->nRecs);
+    memcpy(dst->geoelectricPotentialDetrended, src->geoelectricPotentialDetrended, sizeof *dst->geoelectricPotentialDetrended * dst->nRecs);
+    memcpy(dst->maxAbsGeoelectricPotentialDetrendedBaselineSlope, src->maxAbsGeoelectricPotentialDetrendedBaselineSlope, sizeof *dst->maxAbsGeoelectricPotentialDetrendedBaselineSlope * dst->nRecs);
+    memcpy(dst->ehxAdjusted, src->ehxAdjusted, sizeof *dst->ehxAdjusted * dst->nRecs);
+    memcpy(dst->ehxAdjustmentParameter, src->ehxAdjustmentParameter, sizeof *dst->ehxAdjustmentParameter * dst->nRecs);
+    dst->lpPotentialSource = src->lpPotentialSource;
+    switch (dst->lpPotentialSource) {
+        case LP_POTENTIAL_U_SC:
+            dst->potentials = dst->lpPhiSc;
+            break;
+        case LP_POTENTIAL_LOWGAIN:
+            dst->potentials = dst->lpPhiScLowGain;
+            break;
+        case LP_POTENTIAL_HIGHGAIN:
+            dst->potentials = dst->lpPhiScHighGain;
+            break;
+        default:
+            dst->potentials = NULL;
+            break;
+    }
+
+    return;
+}
 

@@ -45,15 +45,16 @@
 #include <stdio.h>
 #include <unistd.h>
 
+#include <pthread.h>
+#include <sys/wait.h>
+
 #define SDL_MAIN_USE_CALLBACKS 1  /* use the callbacks instead of main() */
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
 typedef struct AppState {
-    ProcessorState *stateA;
-    ProcessorState *stateB;
-    ProcessorState *stateC;
     ProcessorState *state;
+    ProcessorState *newState;
     int plotPage;
     double dayBegin;
     double dayEnd;
@@ -70,6 +71,11 @@ typedef struct AppState {
     Image *storedFrames;
     int storedNVideoFrames;
     bool show16Hz;
+
+    bool processorRunning;
+	pthread_t processorThreadId;
+	pthread_attr_t attr;
+
 } AppState_t;
 
 typedef enum TimeUnit {
@@ -95,6 +101,9 @@ void rewindPlots(AppState_t *as, double amount, TimeUnit_enum units);
 void updatePlots(ProcessorState *state);
 void rerunProcessor(AppState_t *state);
 void updateProcessingDateFromTime(double epoch, Arguments *args);
+ProcessorState *copyState(ProcessorState *state, bool copyVariableData);
+void *runProcessorInBackground(void *appstate);
+
 
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
@@ -124,7 +133,12 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     state->visualizeResults = true;
     state->exportVideo = false;
 
-    runProcessor(argc, argv, &state);
+	int status = pthread_attr_init(&as->attr);
+	if (status)
+	{
+		printf("Could not init processor thread attributes.\n");
+		return SDL_APP_FAILURE;
+	}
 
     // Display 16 Hz data by default
     as->show16Hz = true;
@@ -164,14 +178,6 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     state->plotT0 = as->dayBegin;
     state->plotT1 = as->dayEnd;
 
-    double *timesMs = state->vars->timestamp;
-    if (state->vars->nRecs > 1) {
-        as->samplePeriodSeconds = (timesMs[1] - timesMs[0]) / 1000.0;
-    }
-    else {
-        // arbitrary value
-        as->samplePeriodSeconds = 1.0;
-    }
     as->playing = false;
     as->playbackDirection = 1;
     as->playbackRate = 1.0;
@@ -183,6 +189,9 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     as->storedFrames = NULL;
     as->storedNVideoFrames = 0;
 
+    as->samplePeriodSeconds = 1.0 / 16;
+
+    rerunProcessor(as);
 
     return SDL_APP_CONTINUE;  /* carry on with the program! */
 }
@@ -260,6 +269,12 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
     if (state == NULL) {
         return SDL_APP_CONTINUE;
     }
+
+    if (state->processorRunning) {
+        // Do nothing while processor thread is running
+        return SDL_APP_CONTINUE;
+    }
+
 
     double *timesMs = state->vars->timestamp;
     if (timesMs != NULL) {
@@ -528,10 +543,26 @@ SDL_AppResult SDL_AppIterate(void *appstate)
     SDL_Texture *plotTexture = NULL;
 
     AppState_t *as = (AppState_t*)appstate;
+
+    // Background processor finished, update state
+    if (as->newState != NULL) {
+        copyVariables(&as->state->vars16hz, &as->newState->vars16hz);
+        as->state->processorRunning = false;
+        as->newState->keepFrames = false;
+        shutdown(as->newState);
+        free(as->newState);
+        as->newState = NULL;
+        double *timesMs = as->state->vars->timestamp;
+        if (timesMs != NULL) {
+            as->t0 = timesMs[0];
+            as->t1 = timesMs[as->state->vars->nRecs - 1];
+        }
+        updatePlots(as->state);
+    }
+
     ProcessorState *state = as->state;
-    if (state == NULL) {
-        visualizeResults(NULL);
-        goto updatedisplay;
+    if (state == NULL || state->vars16hz.timestamp == NULL) {
+        goto updatedisplayLast;
     }
     if (as->show16Hz) {
         state->vars = &state->vars16hz;
@@ -541,9 +572,9 @@ SDL_AppResult SDL_AppIterate(void *appstate)
     }
 
     if (state->nVideoFrames == 0) {
-        visualizeResults(state);
         goto updatedisplay;
     }
+
 
     // Handle playback
     if (as->playing) {
@@ -563,13 +594,22 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 
 updatedisplay:
 
-    indexedSurface = SDL_CreateSurfaceFrom(IMAGE_WIDTH, IMAGE_HEIGHT, SDL_PIXELFORMAT_INDEX8, state->frames[as->plotPage].pixels, IMAGE_WIDTH);
-    SDL_SetSurfacePalette(indexedSurface, as->colors);
+    if (state->nVideoFrames > 0) {
+        if (state->processorRunning) {
+            int fontSize = 12;
+            annotate("Updating...", fontSize, state->frameWidth/2 - fontwidth(fontSize)*strlen("Updating...")/2, fontheight(fontSize)+5, &state->frames[as->plotPage]);
+        }
 
-    plotTexture = SDL_CreateTextureFromSurface(as->plotRenderer, indexedSurface);
-    SDL_DestroySurface(indexedSurface);
-    SDL_RenderTexture(as->plotRenderer, plotTexture, NULL, NULL);
-    SDL_DestroyTexture(plotTexture);
+        indexedSurface = SDL_CreateSurfaceFrom(IMAGE_WIDTH, IMAGE_HEIGHT, SDL_PIXELFORMAT_INDEX8, state->frames[as->plotPage].pixels, IMAGE_WIDTH);
+        SDL_SetSurfacePalette(indexedSurface, as->colors);
+
+        plotTexture = SDL_CreateTextureFromSurface(as->plotRenderer, indexedSurface);
+        SDL_DestroySurface(indexedSurface);
+        SDL_RenderTexture(as->plotRenderer, plotTexture, NULL, NULL);
+        SDL_DestroyTexture(plotTexture);
+    }
+
+updatedisplayLast:
 
     SDL_RenderPresent(as->plotRenderer);
 
@@ -584,15 +624,11 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
     }
 
     ProcessorState *state = (ProcessorState*)as->state;
+    state->keepFrames = false;
     shutdown(state);
-    if (state->nVideoFrames > 0) {
-        for (int i = 0; i < state->nVideoFrames; i++) {
-            free(state->frames[i].pixels);
-        }
-        free(state->frames);
-    }
     free(state);
     free(as->help);
+	pthread_attr_destroy(&as->attr);
     free(as);
 
     return;
@@ -603,6 +639,7 @@ void resetVideoFrames(ProcessorState *state)
     if (state != NULL) {
         for (int i = 0; i < state->nVideoFrames; i++) {
             free(state->frames[i].pixels);
+            state->frames[i].pixels = NULL;
         }
         free(state->frames);
         state->frames = NULL;
@@ -680,7 +717,7 @@ double calculateDeltaT(AppState_t *as, TimeUnit_enum units, int sign)
 
 void advancePlots(AppState_t *as, double amount, TimeUnit_enum units)
 {
-    if (as->state == NULL) {
+    if (as->state == NULL || as->state->processorRunning) {
         return;
     }
     if (as->state->plotT1 < as->state->plotT0) {
@@ -705,7 +742,7 @@ void advancePlots(AppState_t *as, double amount, TimeUnit_enum units)
 
 void rewindPlots(AppState_t *as, double amount, TimeUnit_enum units)
 {
-    if (as->state == NULL) {
+    if (as->state == NULL || as->state->processorRunning) {
         return;
     }
     if (as->state->plotT1 < as->state->plotT0) {
@@ -725,6 +762,7 @@ void rewindPlots(AppState_t *as, double amount, TimeUnit_enum units)
         as->playing = false;
     }
     updatePlots(as->state);
+
     return;
 }
 
@@ -738,10 +776,70 @@ void updatePlots(ProcessorState *state)
 
 void rerunProcessor(AppState_t *appstate)
 {
+    pthread_create(&appstate->processorThreadId, &appstate->attr, &runProcessorInBackground, (void*) appstate);
+
+    return;
+}
+
+void updateProcessingDateFromTime(double epoch, Arguments *args)
+{
+    if (args == NULL) {
+        return;
+    }
+
+    long year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0, msec = 0;
+    EPOCHbreakdown(epoch, &year, &month, &day, &hour, &minute, &second, &msec);
+    args->year = year;
+    args->month = month;
+    args->day = day;
+
+    return;
+}
+
+ProcessorState *copyState(ProcessorState *state, bool copyVariableData)
+{
+    ProcessorState *newState = malloc(sizeof *newState);
+    if (newState == NULL) {
+        return NULL;
+    }
+
+    memcpy(newState, state, sizeof *newState);
+    newState->frames = NULL;
+    newState->nVideoFrames = 0;
+    // Set variables pointers to NULL
+    memset(&newState->vars16hz, 0, sizeof(newState->vars16hz));
+    newState->vars16hz.nRecs = 0;
+    newState->vars16hz.lpPotentialSource = state->vars16hz.lpPotentialSource;
+    memset(&newState->vars2hz, 0, sizeof(newState->vars2hz));
+    newState->vars2hz.nRecs = 0;
+    newState->vars2hz.lpPotentialSource = state->vars2hz.lpPotentialSource;
+    newState->vars = &newState->vars16hz;
+    newState->vars->potentials = NULL;
+
+    // TODO 2 Hz?
+    if (copyVariableData) {
+        int status = reallocVariables(newState->vars, newState->vars->nRecs);
+        if (status != TIICT_OK) {
+            free(newState);
+            return NULL;
+        }
+        copyVariables(newState->vars, &state->vars16hz);
+    }
+
+    return newState;
+}
+
+void *runProcessorInBackground(void *appstate)
+{
+    AppState_t *as = (AppState_t *)appstate;
+    if (as == NULL) {
+        return NULL;
+    }
+
     int status = TIICT_OK;
 
-    ProcessorState *state = appstate->state;
-    shutdown(state);
+    ProcessorState *state = copyState(as->state, false);
+    as->state->processorRunning = true;
     status = initProcessor(state);
     if (status != TIICT_OK) {
         shutdown(state);
@@ -765,9 +863,8 @@ void rerunProcessor(AppState_t *appstate)
     calibrateFlows(state);
     calculateFields(state);
 
-
 vis:
-    if (appstate->show16Hz) {
+    if (as->show16Hz) {
         state->vars = &state->vars16hz;
     }
     else {
@@ -776,7 +873,7 @@ vis:
         int reallocstatus = reallocVariables(&state->vars2hz, state->vars2hz.nRecs);
         if (reallocstatus != TIICT_OK) {
             state->vars = &state->vars16hz;
-            appstate->show16Hz = true;
+            as->show16Hz = true;
         }
         double t0 = 0.0;
         long storageIndex = 0;
@@ -800,29 +897,10 @@ vis:
         state->vars = &state->vars2hz;
     }
 
-    double *timesMs = state->vars->timestamp;
-    if (timesMs != NULL) {
-        appstate->t0 = timesMs[0];
-        appstate->t1 = timesMs[state->vars->nRecs - 1];
-    }
+    as->newState = state;
+    state->processorRunning = false;
 
-    visualizeResults(state);
+	pthread_exit(NULL);
 
-    return;
-}
-
-void updateProcessingDateFromTime(double epoch, Arguments *args)
-{
-    if (args == NULL) {
-        return;
-    }
-
-    long year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0, msec = 0;
-    EPOCHbreakdown(epoch, &year, &month, &day, &hour, &minute, &second, &msec);
-    args->year = year;
-    args->month = month;
-    args->day = day;
-
-    return;
 }
 

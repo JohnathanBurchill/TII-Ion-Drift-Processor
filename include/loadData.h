@@ -61,6 +61,7 @@ void freeVariable(void **var);
 void freeVariables(ProcessorVariables_t *vars);
 int reallocVariable(void **var, size_t nRecords, size_t bytesPerRecord);
 int reallocVariables(ProcessorVariables_t *vars, size_t nRecords);
+void copyVariables(ProcessorVariables_t *dst, ProcessorVariables_t *src);
 
 void setCalibrationFileName(ProcessorState *state, int year, int month, int day, CalibrationFileType_enum fileType);
 

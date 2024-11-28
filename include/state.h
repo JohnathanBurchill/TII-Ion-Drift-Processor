@@ -233,6 +233,9 @@ typedef struct ProcessorState {
     int framesPerSecond;
     int nVideoFrames;
 
+    volatile bool processorRunning;
+    bool keepFrames;
+
 } ProcessorState;
 
 #endif // _STATE_H

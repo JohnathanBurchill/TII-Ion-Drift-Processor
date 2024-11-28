@@ -16,6 +16,9 @@
 
 int visualizeResults(ProcessorState *state)
 {
+    if (state == NULL) {
+        return TIICT_ARGS_BAD;
+    }
     int frameCounter = 0;
     static int timesReached = 0;
 
@@ -32,12 +35,6 @@ int visualizeResults(ProcessorState *state)
     // Set background
     memset(image.pixels, BACKGROUND_COLOR, image.numberOfBytes);
 
-    // Input data
-    if (state == NULL) {
-        annotate("No data", 24, state->frameWidth/2 - fontwidth(24)*strlen("No data")/2, state->frameHeight/2 + fontheight(24)/2, &image);
-        goto cleanup;
-    }
-
     // Set by caller for 16 Hz or 2 Hz
     ProcessorVariables_t *v = state->vars;
 
@@ -47,7 +44,6 @@ int visualizeResults(ProcessorState *state)
         storeImage(state, &image);
         goto cleanup;
     }
-
     int firstIndex = 0;
     int lastIndex = 0;
 
@@ -56,7 +52,7 @@ int visualizeResults(ProcessorState *state)
         firstIndex++;
     }
     lastIndex = firstIndex;
-    while (lastIndex < v->nRecs && v->timestamp[lastIndex] < state->plotT1) {
+    while (lastIndex < v->nRecs - 1 && v->timestamp[lastIndex] < state->plotT1) {
         lastIndex++;
     }
 
