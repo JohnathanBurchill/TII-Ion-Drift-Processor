@@ -421,8 +421,8 @@ int visualizeResults(ProcessorState *state)
         }
 
         if (gotParameter) {
-            drawAxes(&image, state->plotT0, state->plotT1, xLabel, parameterLabel, yr0str, yr1str, fontSize, plotX0, plotYOffset, plotWidth, plotHeight);
-            drawFloatTimeSeries(&image, v->timestamp, parameter, firstIndex, lastIndex, stride, valueScale, valueOffset, yr0, yr1, plotX0, plotYOffset, plotWidth, plotHeight, xLabel, parameterLabel, MAX_COLOR_VALUE + 1, yr0str, yr1str, false, dotSize, fontSize, false, tupleLength, tupleIndex, 0);
+//            drawAxes(&image, state->plotT0, state->plotT1, xLabel, parameterLabel, yr0str, yr1str, fontSize, plotX0, plotYOffset, plotWidth, plotHeight);
+            drawFloatTimeSeries(&image, v->timestamp, parameter, state->plotT0, state->plotT1, firstIndex, lastIndex, stride, valueScale, valueOffset, yr0, yr1, plotX0, plotYOffset, plotWidth, plotHeight, xLabel, parameterLabel, MAX_COLOR_VALUE + 1, yr0str, yr1str, false, dotSize, fontSize, true, tupleLength, tupleIndex, 0);
             plotYOffset += plotHeight + plotdy;
             plotsMade++;
         }
@@ -469,19 +469,16 @@ cleanup:
     return TIICT_OK;
 }
 
-void drawFloatTimeSeries(Image *imageBuf, double *times, float *values, int firstInd, int lastInd, int stride, float valueScale, float valueOffset, float minValue, float maxValue, int plotX0, int plotY0, int plotWidth, int plotHeight, const char *xLabel, const char *yLabel, int colorIndex, const char *minValueStr, const char *maxValueStr, bool log10Scale, int dotSize, int fontSize, bool axes, int tupleLength, int tupleIndex, int orientation)
+void drawFloatTimeSeries(Image *imageBuf, double *times, float *values, double t0, double t1, int firstInd, int lastInd, int stride, float valueScale, float valueOffset, float minValue, float maxValue, int plotX0, int plotY0, int plotWidth, int plotHeight, const char *xLabel, const char *yLabel, int colorIndex, const char *minValueStr, const char *maxValueStr, bool log10Scale, int dotSize, int fontSize, bool axes, int tupleLength, int tupleIndex, int orientation)
 {
     int x0, y0;
     int x, y;
 
-    double t0 = times[firstInd]/1000.0;
-    double t1 = times[lastInd]/1000.0;
     int nValues = lastInd - firstInd + 1;
-    double timeRange = t1 - t0;
     double tmpVal;
     char label[255];
 
-    if (timeRange > 0 && nValues > 0)
+    if (t1 - t0 > 0 && nValues > 0)
     {
         if (axes)
         {
@@ -491,7 +488,7 @@ void drawFloatTimeSeries(Image *imageBuf, double *times, float *values, int firs
         // data
         for (int i = firstInd; i < lastInd; i+=stride)
         {
-            x0 = rescaleAsInteger(times[i]/1000.0, t0, t1, plotX0, plotX0 + plotWidth);
+            x0 = rescaleAsInteger(times[i], t0, t1, plotX0, plotX0 + plotWidth);
             tmpVal = (values[i*tupleLength + tupleIndex] - valueOffset) * valueScale;
             if (log10Scale)
             {
