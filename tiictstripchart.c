@@ -460,7 +460,13 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
                 break;
             case SDLK_F3:
                 // ion drift
-                state->plotCommand = "Vixh,-2,2,0.001" ";Vixv,-2,2,0.001" ";Viy,-2,2,0.001" ";Viz,-2,2,0.001";
+                if (SDL_GetModState() & SDL_KMOD_SHIFT) {
+                    // Increase velocity range
+                    state->plotCommand = "Vixh,-10,10,0.001" ";Vixv,-10,10,0.001" ";Viy,-10,10,0.001" ";Viz,-10,10,0.001";
+                }
+                else {
+                    state->plotCommand = "Vixh,-2,2,0.001" ";Vixv,-2,2,0.001" ";Viy,-2,2,0.001" ";Viz,-2,2,0.001";
+                }
                 updatePlots(state);
                 break;
             case SDLK_F4:
@@ -484,7 +490,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
                 updatePlots(state);
                 break;
             case SDLK_F8:
-                // Satellite floating potential
+                // Energy calculations
                 state->plotCommand = "dxh,0,25,1" ";dyh,-5,5,1" ";rh,0,25,1" ";Vixh,-3,3,0.001" ";Enh,0,15,1" ";dxv,0,25,1" ";dyv,-5,5,1" ";rv,0,25,1" ";Vixv,-3,3,0.001" ";Env,0,15,1";
                 updatePlots(state);
                 break;
@@ -499,7 +505,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
                 updatePlots(state);
                 break;
             case SDLK_F11:
-                // Moments
+                // Energy
                 state->plotCommand = "EnhRaw,0,30,1" ";EnvRaw,0,30,1" ";Enh,0,30,1" ";Env,0,30,1";
                 updatePlots(state);
                 break;
