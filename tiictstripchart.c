@@ -20,7 +20,6 @@
 
 #include "SDL3/SDL_events.h"
 #include "SDL3/SDL_keyboard.h"
-#include "SDL3/SDL_mouse.h"
 #include "export.h"
 #include "processing.h"
 #include "loadData.h"
