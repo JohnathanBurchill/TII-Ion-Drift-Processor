@@ -401,7 +401,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
                 state->plotT1 = state->plotT0 + timeRange;
                 updatePlots(state);
                 break;
-            case SDLK_PERIOD:
+            case SDLK_COMMA:
                 // Advance the plot by 10% of timeRange
                 secondsToAdvance = timeRange / 1000.0 / 10.0;
                 if (SDL_GetModState() & SDL_KMOD_SHIFT) {
@@ -415,7 +415,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
                 }
                 advancePlots(as, secondsToAdvance, SECONDS);
                 break;
-            case SDLK_COMMA:
+            case SDLK_PERIOD:
                 // Rewind the plot by 10% of timeRange
                 secondsToAdvance = timeRange / 1000.0 / 10.0;
                 if (SDL_GetModState() & SDL_KMOD_SHIFT) {
@@ -429,11 +429,11 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
                 }
                 rewindPlots(as, secondsToAdvance, SECONDS);
                 break;
-            case SDLK_H:
+            case SDLK_L:
                 // Rewind the plot timerange by the current timerange
                 rewindPlots(as, 1, TIME_RANGES);
                 break;
-            case SDLK_L:
+            case SDLK_H:
                 // Advance the plot timerange by the current timerange
                 advancePlots(as, 1, TIME_RANGES);
                 break;
