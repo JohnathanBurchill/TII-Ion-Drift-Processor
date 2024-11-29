@@ -18,17 +18,14 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "SDL3/SDL_events.h"
-#include "SDL3/SDL_keyboard.h"
-#include "export.h"
 #include "processing.h"
 #include "loadData.h"
-#include "settings.h"
 #include "tiigraphics/draw.h"
 #include "tiigraphics/fonts.h"
 #include "visualize.h"
 #include "state.h"
 #include "errors.h"
+#include "export.h"
 
 #include "SDL3/SDL_error.h"
 #include "SDL3/SDL_init.h"
@@ -38,6 +35,8 @@
 #include "SDL3/SDL_render.h"
 #include "SDL3/SDL_surface.h"
 #include "SDL3/SDL_video.h"
+#include "SDL3/SDL_events.h"
+#include "SDL3/SDL_keyboard.h"
 
 #include <tiigraphics/colors.h>
 #include <tiigraphics/tiigraphics.h>
@@ -48,6 +47,8 @@
 
 #include <pthread.h>
 #include <sys/wait.h>
+
+#define MINIMUM_PLOT_HEIGHT 60
 
 #define SDL_MAIN_USE_CALLBACKS 1  /* use the callbacks instead of main() */
 #include <SDL3/SDL.h>
@@ -124,7 +125,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     }
 
     // New defaults
-    state->writeLogFiles = true;
+    state->writeLogFiles = false;
     state->export16Hz = false;
     state->export2Hz = false;
     state->exportZip = false;
@@ -133,6 +134,9 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     state->vars2hz.lpPotentialSource = LP_POTENTIAL_NONE;
     state->visualizeResults = true;
     state->exportVideo = false;
+    state->frameWidth = 1920;
+    state->frameHeight = 1080;
+    state->defaultPlotHeight = state->frameHeight / 8;
 
 	int status = pthread_attr_init(&as->attr);
 	if (status)
@@ -152,7 +156,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 
     SDL_SetLogPriorities(SDL_LOG_PRIORITY_CRITICAL);
 
-    if (!SDL_CreateWindowAndRenderer("examples/renderer/clear", state->frameWidth, state->frameHeight, 0, &as->window, &as->plotRenderer)) {
+    if (!SDL_CreateWindowAndRenderer("examples/renderer/clear", state->frameWidth, state->frameHeight, SDL_WINDOW_FULLSCREEN, &as->window, &as->plotRenderer)) {
         SDL_Log("Couldn't create window/renderer: %s", SDL_GetError());
         return SDL_APP_FAILURE;
     }
@@ -168,8 +172,6 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     as->colors->colors[FOREGROUND_COLOR + 1] = (SDL_Color){10, 10, 10, 255};
     as->colors->colors[FOREGROUND_COLOR + 2] = (SDL_Color){20, 20, 20, 255};
     as->colors->colors[BACKGROUND_COLOR ] = (SDL_Color){255, 255, 255, 255};
-
-    resetDisplay(as);
 
     as->state = state;
     as->plotPage = 0;
@@ -193,6 +195,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     as->samplePeriodSeconds = 1.0 / 16;
 
     rerunProcessor(as);
+    resetDisplay(as);
 
     return SDL_APP_CONTINUE;  /* carry on with the program! */
 }
@@ -511,7 +514,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
                 break;
             case SDLK_Z:
                 if (SDL_GetModState() & SDL_KMOD_SHIFT) {
-                    if (state->defaultPlotHeight > DEFAULT_PLOT_HEIGHT) {
+                    if (state->defaultPlotHeight > MINIMUM_PLOT_HEIGHT) {
                         state->defaultPlotHeight -= 30;
                     }
                 }
@@ -631,7 +634,7 @@ updatedisplay:
             annotate("Updating...", fontSize, state->frameWidth/2 - fontwidth(fontSize)*strlen("Updating...")/2, fontheight(fontSize)+5, &state->frames[as->plotPage]);
         }
 
-        indexedSurface = SDL_CreateSurfaceFrom(IMAGE_WIDTH, IMAGE_HEIGHT, SDL_PIXELFORMAT_INDEX8, state->frames[as->plotPage].pixels, IMAGE_WIDTH);
+        indexedSurface = SDL_CreateSurfaceFrom(state->frameWidth, state->frameHeight, SDL_PIXELFORMAT_INDEX8, state->frames[as->plotPage].pixels, state->frameWidth);
         SDL_SetSurfacePalette(indexedSurface, as->colors);
 
         plotTexture = SDL_CreateTextureFromSurface(as->plotRenderer, indexedSurface);

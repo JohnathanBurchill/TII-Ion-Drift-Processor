@@ -65,7 +65,7 @@ int visualizeResults(ProcessorState *state)
     }
 
     // Draw PA and measles time series
-    int plotWidth = 700;
+    int plotWidth = state->frameWidth * 0.9;
     int plotHeight0 = state->defaultPlotHeight;
     int plotHeight = plotHeight0;
     int ox = 100;
