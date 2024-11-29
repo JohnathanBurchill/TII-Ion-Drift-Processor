@@ -726,7 +726,9 @@ int regionMetrics(ProcessorState *state, long startInd, long stopInd, float *par
         if (gslStatus != GSL_SUCCESS)
         {
             double t1 = v->timestamp[stopInd];
-            fprintf(stderr, "%sregionMetrics: unable to estimate linear fit between epochs %lf and %lf\n", infoHeader, t0, t1);
+            if (state->writeLogFiles) {
+                fprintf(state->fitFile, "%sregionMetrics: unable to estimate linear fit between epochs %lf and %lf\n", infoHeader, t0, t1);
+            }
         }
         *slope = (float)gsl_vector_get(fitCoefficients, 1);
     }
