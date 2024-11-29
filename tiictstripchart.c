@@ -19,6 +19,8 @@
 */
 
 #include "SDL3/SDL_events.h"
+#include "SDL3/SDL_keyboard.h"
+#include "SDL3/SDL_mouse.h"
 #include "export.h"
 #include "processing.h"
 #include "loadData.h"
@@ -454,19 +456,13 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
                 break;
 
             case SDLK_F2:
-                // ion drift
+                // ion drift with potential
                 state->plotCommand = "QDLat,-90,90,1" ";PhiSc,-5,0,1" ";Vixh,-4,4,0.001" ";Vixv,-4,4,0.001" ";Viy,-2,2,0.001" ";Viz,-2,2,0.001";
                 updatePlots(state);
                 break;
             case SDLK_F3:
                 // ion drift
-                if (SDL_GetModState() & SDL_KMOD_SHIFT) {
-                    // Increase velocity range
-                    state->plotCommand = "Vixh,-10,10,0.001" ";Vixv,-10,10,0.001" ";Viy,-10,10,0.001" ";Viz,-10,10,0.001";
-                }
-                else {
-                    state->plotCommand = "Vixh,-2,2,0.001" ";Vixv,-2,2,0.001" ";Viy,-2,2,0.001" ";Viz,-2,2,0.001";
-                }
+                state->plotCommand = "Vixh,-2,2,0.001" ";Vixv,-2,2,0.001" ";Viy,-2,2,0.001" ";Viz,-2,2,0.001";
                 updatePlots(state);
                 break;
             case SDLK_F4:
@@ -518,13 +514,11 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
                 if (SDL_GetModState() & SDL_KMOD_SHIFT) {
                     if (state->defaultPlotHeight > DEFAULT_PLOT_HEIGHT) {
                         state->defaultPlotHeight -= 30;
-                        updatePlots(state);
                     }
                 }
                 else {
                     if (state->defaultPlotHeight < state->frameHeight - 70) {
                         state->defaultPlotHeight += 30;
-                        updatePlots(state);
                     }
                 }
                 if (as->plotPage > state->nVideoFrames - 1) {
@@ -533,6 +527,38 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
                 if (as->plotPage < 0) {
                     as->plotPage = 0;
                 }
+                updatePlots(state);
+                break;
+            case SDLK_RIGHTBRACKET:
+                if (SDL_GetModState() & SDL_KMOD_SHIFT) {
+                    if (state->yOffset > -5.0) {
+                        state->yOffset -= 0.1;
+                    }
+                }
+                else {
+                    if (state->yScaleFactor > 0.1) {
+                        state->yScaleFactor /= 2.0;
+                    }
+                }
+                updatePlots(state);
+                break;
+            case SDLK_LEFTBRACKET:
+                if (SDL_GetModState() & SDL_KMOD_SHIFT) {
+                    if (state->yOffset < 5.0) {
+                        state->yOffset += 0.1;
+                    }
+                }
+                else {
+                    if (state->yScaleFactor < 100) {
+                        state->yScaleFactor *= 2.0;
+                    }
+                }
+                updatePlots(state);
+                break;
+            case SDLK_BACKSLASH:
+                state->yOffset = 0.0;
+                state->yScaleFactor = 1.0;
+                updatePlots(state);
                 break;
             default:
                 break;
@@ -630,6 +656,9 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
     }
 
     ProcessorState *state = (ProcessorState*)as->state;
+    if (state == NULL) {
+        return;
+    }
     state->keepFrames = false;
     shutdown(state);
     free(state);

@@ -88,7 +88,7 @@ int visualizeResults(ProcessorState *state)
     int nParams = 0;
     float yr0 = 0.0;
     float yr1 = 0.0;
-    float valueScale = 0.0;
+    float valueScale = 1.0;
     float valueOffset = 0.0;
     char yr0str[255];
     char yr1str[255];
@@ -148,13 +148,10 @@ int visualizeResults(ProcessorState *state)
             continue;
         }
 
-        yr0 = atof(params[1]);
-        snprintf(yr0str, 255, "%s", params[1]);
-        yr1 = atof(params[2]);
-        snprintf(yr1str, 255, "%s", params[2]);
+        yr0 = atof(params[1]) * state->yScaleFactor;
+        yr1 = atof(params[2]) * state->yScaleFactor;
         valueScale = atof(params[3]);
         valueOffset = 0.0;
-
         int oldPlotHeight = plotHeight;
         if (nParams == 5) {
             plotHeight = atoi(params[4]);
@@ -416,8 +413,13 @@ int visualizeResults(ProcessorState *state)
             gotParameter = false;
         }
 
+        float yRange = yr1 - yr0;
+        yr0 += state->yOffset * yRange;
+        yr1 += state->yOffset * yRange;
+        snprintf(yr0str, 255, "%.1f", yr0);
+        snprintf(yr1str, 255, "%.1f", yr1);
+
         if (gotParameter) {
-//            drawAxes(&image, state->plotT0, state->plotT1, xLabel, parameterLabel, yr0str, yr1str, fontSize, plotX0, plotYOffset, plotWidth, plotHeight);
             drawFloatTimeSeries(&image, v->timestamp, parameter, state->plotT0, state->plotT1, firstIndex, lastIndex, stride, valueScale, valueOffset, yr0, yr1, plotX0, plotYOffset, plotWidth, plotHeight, xLabel, parameterLabel, MAX_COLOR_VALUE + 1, yr0str, yr1str, false, dotSize, fontSize, true, tupleLength, tupleIndex, 0);
             plotYOffset += plotHeight + plotdy;
             plotsMade++;

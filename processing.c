@@ -1181,6 +1181,7 @@ int parseArguments(ProcessorState *state)
     state->videoFilename[0] = '\0';
     state->printVideoFilename = false;
     state->visualizeResults = false;
+    state->yScaleFactor = 1.0;
     state->frameWidth = 960;
     state->frameHeight = 540;
     state->framesPerSecond = 15;
