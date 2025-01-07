@@ -32,4 +32,4 @@ examples/*.png
 .clangd
 .cache
 cmake
-
+tags

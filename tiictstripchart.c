@@ -27,17 +27,6 @@
 #include "errors.h"
 #include "export.h"
 
-#include "SDL3/SDL_error.h"
-#include "SDL3/SDL_init.h"
-#include "SDL3/SDL_keycode.h"
-#include "SDL3/SDL_log.h"
-#include "SDL3/SDL_pixels.h"
-#include "SDL3/SDL_render.h"
-#include "SDL3/SDL_surface.h"
-#include "SDL3/SDL_video.h"
-#include "SDL3/SDL_events.h"
-#include "SDL3/SDL_keyboard.h"
-
 #include <tiigraphics/colors.h>
 #include <tiigraphics/tiigraphics.h>
 #include <tiigraphics/video.h>
@@ -238,8 +227,50 @@ Image *helpImage(int width, int height)
     annotate(" 4 - LP PhiSc source: High Gain", fontSize, x, y, help);
     y += fontHeight;
 
+    // navigation
+    y += 3*fontHeight;
+    annotate("Navigation:", fontSize + 3, x, y, help);
+    y += fontheight(fontSize + 3);
+    annotate(" l - advance a window by current time range", fontSize, x, y, help);
+    y += fontHeight;
+    annotate(" h - rewind a window by curerent time range", fontSize, x, y, help);
+    y += fontHeight*2;
+    annotate(" . - advance a window by small amount (smaller still with shift and LCTL modifiers)", fontSize, x, y, help);
+    y += fontHeight;
+    annotate(" , - rewind a window by small amount (smaller still with shift and LCTL modifiers)", fontSize, x, y, help);
+    y += fontHeight;
+    annotate(" k - next page", fontSize, x, y, help);
+    y += fontHeight;
+    annotate(" j - previous page", fontSize, x, y, help);
+    y += fontHeight;
+    annotate(" z - increase plot size", fontSize, x, y, help);
+    y += fontHeight;
+    annotate(" <shift>-z - decrease plot size", fontSize, x, y, help);
+    y += fontHeight;
+    annotate(" ] - decrease y scale (with <shift>, decrease offset)", fontSize, x, y, help);
+    y += fontHeight;
+    annotate(" [ - increase y scale (with <shift>, increase offset)", fontSize, x, y, help);
+    y += fontHeight;
+    annotate(" \\ - reset y scale and offset", fontSize, x, y, help);
+    y += fontHeight;
+    annotate(" d - zoom to full day", fontSize, x, y, help);
+    y += fontHeight;
+    annotate(" f - zoom to full file time range", fontSize, x, y, help);
+    y += fontHeight;
+    annotate(" o - zoom to approximately one orbit", fontSize, x, y, help);
+    y += fontHeight;
+    annotate(" <space> - toggle playback", fontSize, x, y, help);
+    y += fontHeight;
+    annotate(" r - toggle playback direction", fontSize, x, y, help);
+    y += fontHeight;
+    annotate(" x - toggle playback rate", fontSize, x, y, help);
+    y += fontHeight;
+
+    // Views
     x += IMAGE_WIDTH/2;
     y = y0;
+    annotate("View:", fontSize + 3, x, y, help);
+    y += fontheight(fontSize + 3);
     annotate("F2 - Ion drift", fontSize, x, y, help);
     y += fontHeight;
     annotate("F3 - Electric field", fontSize, x, y, help);
@@ -252,7 +283,13 @@ Image *helpImage(int width, int height)
     y += fontHeight;
     annotate("F7 - Floating potential", fontSize, x, y, help);
     y += fontHeight;
-    annotate("F8 - Geopotential", fontSize, x, y, help);
+    annotate("F8 - Energy calculations", fontSize, x, y, help);
+    y += fontHeight;
+    annotate("F9 - Geopotential", fontSize, x, y, help);
+    y += fontHeight;
+    annotate("F10 - Image moments", fontSize, x, y, help);
+    y += fontHeight;
+    annotate("F11 - Voltages", fontSize, x, y, help);
     y += fontHeight;
 
     return help;
@@ -508,7 +545,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
                 updatePlots(state);
                 break;
             case SDLK_F12:
-                // Moments
+                // Voltages
                 state->plotCommand = "VmcpH,-2400,0,1" ";VmcpV,-2400,0,1" ";VbiasH,-105,0,1" ";VbiasV,-105,0,1" ";Vfp,-5,0,1";
                 updatePlots(state);
                 break;
