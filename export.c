@@ -532,13 +532,13 @@ void addAttributes(CDFid id, const char *dataset, const char *satellite, const c
         {"U_SC", "CDF_FLOAT", "V", "Satellite floating potential estimate from EXTD LP_HM dataset.", -50., 5.},
         {"Quality_flags", "CDF_UINT2", "*", "Bitwise flag for each velocity component, where a value of 1 for a particular component signifies that calibration was successful, and that the baseline 1-sigma noise level is less than or equal to 100 m/s at 2 Hz. Electric field quality can be assessed from these flags according to -vxB. Bit0 (least significant) = Vixh, bit1 = Vixv, bit2 = Viy, bit3 = Viz. Refer to the release notes for details.", 0, 65535},
         {"Calibration_flags", "CDF_UINT4", "*", "Information about the calibration process. Refer to the release notes for details.", 0, 4294967295},
-        {"GeoelectricPotential", "CDF_FLOAT", "V", "Geoelectric potential estimate from Ehx.", -1000000., 1000000.},
-        {"GeoelectricPotentialDifference", "CDF_FLOAT", "V", "Geoelectric potential at end of orbit region minus geoelectric potential at beginning of orbit region.", -1000000., 1000000.},
-        {"MaxAbsGeoelectricPotentialBaselineSlope", "CDF_FLOAT", "mV/m", "Maximum absolute slope of the mid-latitude geoelectric potential estimates.", -1000000., 1000000.},
-        {"EhxAdjusted", "CDF_FLOAT", "mV/m", "Along-track electric field component adjusted according to Zhu et al. (2020).", -400., 400.},
-        {"EhxAdjustmentParameter", "CDF_FLOAT", "*", "Parameter used to adjust the along-track electric field component to remove mid-latitude potential offset (Zhu et al., 2020).", -400., 400.},
-        {"GeoelectricPotentialDetrended", "CDF_FLOAT", "V", "Geoelectric potential linearly detrended within each orbit region.", -1000000., 1000000.},
-        {"MaxAbsGeoelectricPotentialDetrendedBaselineSlope", "CDF_FLOAT", "mV/m", "Maximum absolute slope of the mid-latitude detrended geoelectric potential estimates.", -1000000., 1000000.},
+        {"GeoPotential", "CDF_FLOAT", "V", "Geoelectric potential estimate from Ehx.", -1000000., 1000000.},
+        {"GeoPotentialDiff", "CDF_FLOAT", "V", "Geoelectric potential at end of orbit region minus geoelectric potential at beginning of orbit region.", -1000000., 1000000.},
+        {"MAGBS", "CDF_FLOAT", "mV/m", "Maximum absolute slope of the mid-latitude geoelectric potential estimates.", -1000000., 1000000.},
+        {"EhxAdj", "CDF_FLOAT", "mV/m", "Along-track electric field component adjusted according to Zhu et al. (2020).", -400., 400.},
+        {"EhxAdjParameter", "CDF_FLOAT", "*", "Parameter used to adjust the along-track electric field component to remove mid-latitude potential offset (Zhu et al., 2020).", -400., 400.},
+        {"GeoPotentialDetrended", "CDF_FLOAT", "V", "Geoelectric potential linearly detrended within each orbit region.", -1000000., 1000000.},
+        {"MAGDBS", "CDF_FLOAT", "mV/m", "Maximum absolute slope of the mid-latitude detrended geoelectric potential estimates.", -1000000., 1000000.},
         {"OrbitRegion", "CDF_UINT1", "*", "Orbit region poleward or equatorward of plus-or-minus 44.0 degrees quasi-dipole latitude. 0: northern polar ascending; 1: equatorial descending; 2: southern polar descending; 3: equatorial ascending; 255: incomplete or invalid.", 0, 3},
     };
 
@@ -617,13 +617,13 @@ int exportTCT16Cdfs(ProcessorState *state, double startTime, double stopTime, lo
         createVarFrom1DVar(exportCdfId, "U_SC", CDF_REAL4, startIndex, stopIndex, state->potentials);
         createVarFrom1DVar(exportCdfId, "Quality_flags", CDF_UINT2, startIndex, stopIndex, state->flags);
         createVarFrom1DVar(exportCdfId, "Calibration_flags", CDF_UINT4, startIndex, stopIndex, state->fitInfo);
-        createVarFrom1DVar(exportCdfId, "GeoelectricPotential", CDF_REAL4, startIndex, stopIndex, state->geoPotential);
-        createVarFrom1DVar(exportCdfId, "GeoelectricPotentialDifference", CDF_REAL4, startIndex, stopIndex, state->geoPotentialDifference);
-        createVarFrom1DVar(exportCdfId, "MaxAbsGeoelectricPotentialBaselineSlope", CDF_REAL4, startIndex, stopIndex, state->maxAbsGeopotentialSlope);
-        createVarFrom1DVar(exportCdfId, "EhxAdjusted", CDF_REAL4, startIndex, stopIndex, state->exAdjusted);
-        createVarFrom1DVar(exportCdfId, "EhxAdjustmentParameter", CDF_REAL4, startIndex, stopIndex, state->exAdjustmentParameter);
-        createVarFrom1DVar(exportCdfId, "GeoelectricPotentialDetrended", CDF_REAL4, startIndex, stopIndex, state->geoPotentialDetrended);
-        createVarFrom1DVar(exportCdfId, "MaxAbsGeoelectricPotentialDetrendedBaselineSlope", CDF_REAL4, startIndex, stopIndex, state->maxAbsGeopotentialDetrendedSlope);
+        createVarFrom1DVar(exportCdfId, "GeoPotential", CDF_REAL4, startIndex, stopIndex, state->geoPotential);
+        createVarFrom1DVar(exportCdfId, "GeoPotentialDiff", CDF_REAL4, startIndex, stopIndex, state->geoPotentialDifference);
+        createVarFrom1DVar(exportCdfId, "MAGBS", CDF_REAL4, startIndex, stopIndex, state->maxAbsGeopotentialSlope);
+        createVarFrom1DVar(exportCdfId, "EhxAdj", CDF_REAL4, startIndex, stopIndex, state->exAdjusted);
+        createVarFrom1DVar(exportCdfId, "EhxAdjParameter", CDF_REAL4, startIndex, stopIndex, state->exAdjustmentParameter);
+        createVarFrom1DVar(exportCdfId, "GeoPotentialDetrended", CDF_REAL4, startIndex, stopIndex, state->geoPotentialDetrended);
+        createVarFrom1DVar(exportCdfId, "MAGDBS", CDF_REAL4, startIndex, stopIndex, state->maxAbsGeopotentialDetrendedSlope);
         createVarFrom1DVar(exportCdfId, "OrbitRegion", CDF_UINT1, startIndex, stopIndex, state->region);
 
         // add attributes
@@ -750,13 +750,13 @@ int exportTCT02Cdfs(ProcessorState *state, double startTime, double stopTime, lo
         createVarFrom1DVar(exportCdfId, "U_SC", CDF_REAL4, startIndex, stopIndex, state->potentials);
         createVarFrom1DVar(exportCdfId, "Quality_flags", CDF_UINT2, startIndex, stopIndex, state->flags);
         createVarFrom1DVar(exportCdfId, "Calibration_flags", CDF_UINT4, startIndex, stopIndex, state->fitInfo);
-        createVarFrom1DVar(exportCdfId, "GeoelectricPotential", CDF_REAL4, startIndex, stopIndex, state->geoPotential);
-        createVarFrom1DVar(exportCdfId, "GeoelectricPotentialDifference", CDF_REAL4, startIndex, stopIndex, state->geoPotentialDifference);
-        createVarFrom1DVar(exportCdfId, "MaxAbsGeoelectricPotentialBaselineSlope", CDF_REAL4, startIndex, stopIndex, state->maxAbsGeopotentialSlope);
-        createVarFrom1DVar(exportCdfId, "EhxAdjusted", CDF_REAL4, startIndex, stopIndex, state->exAdjusted);
-        createVarFrom1DVar(exportCdfId, "EhxAdjustmentParameter", CDF_REAL4, startIndex, stopIndex, state->exAdjustmentParameter);
-        createVarFrom1DVar(exportCdfId, "GeoelectricPotentialDetrended", CDF_REAL4, startIndex, stopIndex, state->geoPotentialDetrended);
-        createVarFrom1DVar(exportCdfId, "MaxAbsGeoelectricPotentialDetrendedBaselineSlope", CDF_REAL4, startIndex, stopIndex, state->maxAbsGeopotentialDetrendedSlope);
+        createVarFrom1DVar(exportCdfId, "GeoPotential", CDF_REAL4, startIndex, stopIndex, state->geoPotential);
+        createVarFrom1DVar(exportCdfId, "GeoPotentialDiff", CDF_REAL4, startIndex, stopIndex, state->geoPotentialDifference);
+        createVarFrom1DVar(exportCdfId, "MAGBS", CDF_REAL4, startIndex, stopIndex, state->maxAbsGeopotentialSlope);
+        createVarFrom1DVar(exportCdfId, "EhxAdj", CDF_REAL4, startIndex, stopIndex, state->exAdjusted);
+        createVarFrom1DVar(exportCdfId, "EhxAdjParameter", CDF_REAL4, startIndex, stopIndex, state->exAdjustmentParameter);
+        createVarFrom1DVar(exportCdfId, "GeoPotentialDetrended", CDF_REAL4, startIndex, stopIndex, state->geoPotentialDetrended);
+        createVarFrom1DVar(exportCdfId, "MAGDBS", CDF_REAL4, startIndex, stopIndex, state->maxAbsGeopotentialDetrendedSlope);
         createVarFrom1DVar(exportCdfId, "OrbitRegion", CDF_UINT1, startIndex, stopIndex, state->region);
 
         // add attributes

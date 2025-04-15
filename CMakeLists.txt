@@ -16,7 +16,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 
-CMAKE_MINIMUM_REQUIRED(VERSION 3.30)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.20)
 
 PROJECT(TIICT)
 
