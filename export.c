@@ -838,8 +838,10 @@ int initLogFiles(ProcessorState *state)
 {
     Arguments *a = &state->args;
     int status = makeSureDirExists(a->exportDir, a->exportVersion, "logs");
-    if (status != TIICT_OK)
+    if (status != TIICT_OK) {
+        fprintf(stderr, "Log file directory does not exist.\n");
         return status;
+    }
     sprintf(state->fitLogFilename, "%s/%s/logs/%s%04d%02d%02d.fit", a->exportDir, a->exportVersion, a->satellite, a->year, a->month, a->day);
     sprintf(state->processingLogFilename, "%s/%s/logs/%s%04d%02d%02d.log", a->exportDir, a->exportVersion, a->satellite, a->year, a->month, a->day);
 

@@ -2,7 +2,7 @@
 
     TII Cross-Track Ion Drift Processor: processing.c
 
-    Copyright (C) 2024  Johnathan K Burchill
+    Copyright (C) 2025  Johnathan K Burchill
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -492,15 +492,17 @@ int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, int (*processRegi
 
 }
 
-void updateDataQualityFlags(const char *satellite, uint8_t sensorIndex, uint8_t regionNumber, float driftValue, float mad, long timeIndex, uint16_t *flags, uint32_t *fitInfo)
+void updateDataQualityFlags(const char *satellite, uint8_t sensorIndex, uint8_t regionNumber, float driftValue, float mad, float *density, long timeIndex, uint16_t *flags, uint32_t *fitInfo)
 {
     // Swarm C flags all zero for now
     // Flag is zero if drift magnitude is greater than FLAGS_MAXIMUM_DRIFT_VALUE
     uint16_t flagMask = (1<<sensorIndex);
     bool madOK = (mad < madThreshold(satellite[0], sensorIndex));
     bool magOK = fabs(driftValue) <= FLAGS_MAXIMUM_DRIFT_VALUE;
+    bool niOK = density[timeIndex] >= FLAGS_MINIMUM_ION_DENSITY_VALUE;
     // Currently quality flag is set to 1 only for Swarm A and B viy at middle-to-high latitudes (region 0 or region 2)
-    if (satellite[0] != 'C' && sensorIndex == 2 && (regionNumber == 0 || regionNumber == 2) && madOK && magOK)
+    // and if ion density exceeds threshold
+    if (satellite[0] != 'C' && sensorIndex == 2 && (regionNumber == 0 || regionNumber == 2) && madOK && magOK && niOK)
     {
         flags[timeIndex] |= flagMask;
     }
@@ -512,6 +514,10 @@ void updateDataQualityFlags(const char *satellite, uint8_t sensorIndex, uint8_t 
     if (!magOK)
     {
         fitInfo[timeIndex] |= (FITINFO_DRIFT_MAGNITUDE_EXCEEDED << (sensorIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
+    }
+    if (!niOK)
+    {
+        fitInfo[timeIndex] |= (FITINFO_ION_DENSITY_TOO_LOW << (sensorIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
     }
 
     return;
@@ -1056,7 +1062,7 @@ int parseArguments(int argc, char **argv, ProcessorState *state)
         }
         else if (strcmp(argv[i], "--about") == 0) {
             fprintf(stdout, "tiict - TII Cross-track ion drift processor, version %s.\n", SOFTWARE_VERSION);
-            fprintf(stdout, "Copyright (C) 2024  Johnathan K Burchill\n");
+            fprintf(stdout, "Copyright (C) 2025  Johnathan K Burchill\n");
             fprintf(stdout, "This program comes with ABSOLUTELY NO WARRANTY.\n");
             fprintf(stdout, "This is free software, and you are welcome to redistribute it\n");
             fprintf(stdout, "under the terms of the GNU General Public License.\n");
@@ -1183,7 +1189,13 @@ int shutdown(int status, ProcessorState *state)
         free(state->lpPhiSc);
         state->lpPhiSc = NULL;
     }
+    if (state->lpNi != NULL)
+    {
+        free(state->lpNi);
+        state->lpNi = NULL;
+    }
     // state->potentials is just a pointer to one of the above potentials
+    state->potentials = NULL;
 
     if (state->xhat != NULL)
     {
@@ -1368,7 +1380,7 @@ int velocityBackgroundRemoval(ProcessorState *state)
                 {
                     state->fitInfo[timeIndex] &= ~((FITINFO_OFFSET_NOT_REMOVED | FITINFO_INCOMPLETE_REGION) << (flagIndex * MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT));
                     // Update quality and calibration flags based on thresholds
-                    updateDataQualityFlags(state->args.satellite, flagIndex, fitargs->regionNumber, driftValue, mad, timeIndex, state->flags, state->fitInfo);
+                    updateDataQualityFlags(state->args.satellite, flagIndex, fitargs->regionNumber, driftValue, mad, state->lpNi, timeIndex, state->flags, state->fitInfo);
                 }
             }
         }

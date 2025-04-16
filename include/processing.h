@@ -31,7 +31,8 @@ enum FITINFO_BIT_MASKS {
     FITINFO_INCOMPLETE_REGION = (1 << 1),
     FITINFO_GSL_FIT_ERROR = (1 <<2),
     FITINFO_MAD_EXCEEDED = (1 << 3),
-    FITINFO_DRIFT_MAGNITUDE_EXCEEDED = (1 << 4)
+    FITINFO_DRIFT_MAGNITUDE_EXCEEDED = (1 << 4),
+    FITINFO_ION_DENSITY_TOO_LOW = (1 << 5),
 };
 
 int initQualityData(ProcessorState *state);
@@ -40,7 +41,7 @@ int calibrateFlows(ProcessorState *state);
 int removeOffsetsAndSetFlags(ProcessorState *state, int (*processRegion)(ProcessorState*));
 int removeOffsetsAndSetFlagsForInterval(ProcessorState *state, int (*processRegion)(ProcessorState*));
 
-void updateDataQualityFlags(const char *satellite, uint8_t sensorIndex, uint8_t regionNumber, float driftValue, float mad, long timeIndex, uint16_t *flags, uint32_t *fitInfo);
+void updateDataQualityFlags(const char *satellite, uint8_t sensorIndex, uint8_t regionNumber, float driftValue, float mad, float *density, long timeIndex, uint16_t *flags, uint32_t *fitInfo);
 
 float madThreshold(char satellite, int sensorIndex);
 

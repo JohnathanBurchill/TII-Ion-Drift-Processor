@@ -32,7 +32,7 @@ typedef enum DayType {
 int getLpInputFilename(const char satelliteLetter, long year, long month, long day, const char *path, char *filename);
 int loadLpCalData(ProcessorState *state);
 int getLpData(ProcessorState *state);
-int loadLpInputs(const char *cdfFile, double **lpTime, double **lpPhiScHighGain, double **lpPhiScLowGain, double **lpPhiSc, size_t *numberOfRecords);
+int loadLpInputs(const char *cdfFile, double **lpTime, double **lpPhiScHighGain, double **lpPhiScLowGain, double **lpPhiSc, double **lpNi, size_t *numberOfRecords);
 
 int loadTiiCalData(ProcessorState *state);
 void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state);

@@ -103,6 +103,7 @@ typedef struct ProcessorState {
     float *lpPhiScHighGain;
     float *lpPhiScLowGain;
     float *lpPhiSc;
+    float *lpNi;
     size_t nLpRecs;
     float *potentials;
     bool usePotentials;
