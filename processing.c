@@ -802,6 +802,7 @@ bool downSampleHalfSecond(ProcessorState *state, long *index, long storageIndex,
     float *ectFieldV = state->ectFieldV;
     float *bctField = state->bctField;
     float *potentials = state->potentials;
+    float *ni = state->lpNi;
     float *geoPotential = state->geoPotential;
     float *geoPotentialDifference = state->geoPotentialDifference;
     float *maxAbsGeopotentialSlope = state->maxAbsGeopotentialSlope;
@@ -859,23 +860,23 @@ bool downSampleHalfSecond(ProcessorState *state, long *index, long storageIndex,
         floatBuf[27] += VCORX();
         floatBuf[28] += VCORY();
         floatBuf[29] += VCORZ();
-        if (state->usePotentials)
-            floatBuf[30] += potentials[timeIndex];
+        floatBuf[30] += potentials[timeIndex];
+        floatBuf[31] += ni[timeIndex];
 
-        floatBuf[31] += geoPotential[timeIndex];
+        floatBuf[32] += geoPotential[timeIndex];
         // Take the largest of each 8-sample interval
-        if (floatBuf[32] < maxAbsGeopotentialSlope[timeIndex])
-            floatBuf[32] = maxAbsGeopotentialSlope[timeIndex];
-        floatBuf[33] += geoPotentialDetrended[timeIndex];
+        if (floatBuf[33] < maxAbsGeopotentialSlope[timeIndex])
+            floatBuf[33] = maxAbsGeopotentialSlope[timeIndex];
+        floatBuf[34] += geoPotentialDetrended[timeIndex];
         // Take the largest of each 8-sample interval
-        if (floatBuf[34] < maxAbsGeopotentialDetrendedSlope[timeIndex])
-            floatBuf[34] = maxAbsGeopotentialDetrendedSlope[timeIndex];
+        if (floatBuf[35] < maxAbsGeopotentialDetrendedSlope[timeIndex])
+            floatBuf[35] = maxAbsGeopotentialDetrendedSlope[timeIndex];
         // Take latest region in the half-second interval
-        floatBuf[35] = region[timeIndex];
-        floatBuf[36] = geoPotentialDifference[timeIndex];
-        floatBuf[37] += exAdjusted[timeIndex];
+        floatBuf[36] = region[timeIndex];
+        floatBuf[37] = geoPotentialDifference[timeIndex];
+        floatBuf[38] += exAdjusted[timeIndex];
         // Latest value
-        floatBuf[38] = exAdjustmentParameter[timeIndex];
+        floatBuf[39] = exAdjustmentParameter[timeIndex];
 
         flagBuf &= flags[timeIndex];
         fitInfoBuf |= fitInfo[timeIndex];
@@ -920,16 +921,16 @@ bool downSampleHalfSecond(ProcessorState *state, long *index, long storageIndex,
         *((float*)dataBuffers[10] + (3*storageIndex) + 0) = floatBuf[27] / 8.0; // Vicrxyz
         *((float*)dataBuffers[10] + (3*storageIndex) + 1) = floatBuf[28] / 8.0;
         *((float*)dataBuffers[10] + (3*storageIndex) + 2) = floatBuf[29] / 8.0;
-        if (state->usePotentials)
-            potentials[storageIndex] = floatBuf[30] / 8.0; // Floating potential U_SC
-        geoPotential[storageIndex] = floatBuf[31] / 8.0; // Geoelectric potential H sensor
-        maxAbsGeopotentialSlope[storageIndex] = floatBuf[32]; // Take the maximum value                                                        
-        geoPotentialDetrended[storageIndex] = floatBuf[33] / 8.0; // Geoelectric potential H sensor
-        maxAbsGeopotentialDetrendedSlope[storageIndex] = floatBuf[34]; // Take the maximum value                                                        
-        region[storageIndex] = floatBuf[35]; // Latest region in the sample                                                            
-        geoPotentialDifference[storageIndex] = floatBuf[36]; // Latest sample in the region 
-        exAdjusted[storageIndex] = floatBuf[37] / 8.0;
-        exAdjustmentParameter[storageIndex] = floatBuf[38]; // Latest sample in the region
+        potentials[storageIndex] = floatBuf[30] / 8.0; // Floating potential U_SC
+        ni[storageIndex] = floatBuf[31] / 8.0;
+        geoPotential[storageIndex] = floatBuf[32] / 8.0; // Geoelectric potential H sensor
+        maxAbsGeopotentialSlope[storageIndex] = floatBuf[33]; // Take the maximum value                                                        
+        geoPotentialDetrended[storageIndex] = floatBuf[34] / 8.0; // Geoelectric potential H sensor
+        maxAbsGeopotentialDetrendedSlope[storageIndex] = floatBuf[35]; // Take the maximum value                                                        
+        region[storageIndex] = floatBuf[36]; // Latest region in the sample                                                            
+        geoPotentialDifference[storageIndex] = floatBuf[37]; // Latest sample in the region 
+        exAdjusted[storageIndex] = floatBuf[38] / 8.0;
+        exAdjustmentParameter[storageIndex] = floatBuf[39]; // Latest sample in the region
         // Flags set to 0 at 16 Hz based on magnitude of flow,
         // are not reset at 2 Hz, to ensure integrity of 2 Hz measurements
         // One can review 16 Hz measurements to examine details of flow where even a
