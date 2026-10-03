@@ -94,7 +94,7 @@ int main(int argc, char* argv[])
     // set up info header
     sprintf(infoHeader, "TIICT %c%s %04d-%02d-%02d: ", satellite[0], exportVersion, year, month, day);
     fprintf(stdout, "\n%s-------------------------------------------------\n", infoHeader);
-    fprintf(stdout, "%sVersion 0302 20220519\n", infoHeader);
+    fprintf(stdout, "%sVersion 0303 20261003\n", infoHeader);
     fprintf(stdout, "%sProcessing date: %s\n", infoHeader, asctime(timeParts));
 
     // Confirm requested date has records. Abort otherwise.
@@ -230,9 +230,9 @@ int main(int argc, char* argv[])
                 svy = 548.0;
                 if (innerDomeBias >= -63.0 && innerDomeBias < -59.0)
                 {
-                    shx *= 450.5;
+                    shx = 450.5;
                     shy = 450.5; // Calibration 20210624, inner dome bias at -62 V.
-                    svx *= 451.0;
+                    svx = 451.0;
 		    svy = 525.0; // Calibration 20210624, inner dome bias at -62 V.
                 }
                 break;
@@ -717,7 +717,7 @@ void addAttributes(CDFid id, const char *dataset, const char *satellite, const c
     CDFcreateAttr(id, "Mission_group", GLOBAL_SCOPE, &attrNum);
     addgEntry(id, attrNum, 0, "Swarm");
     CDFcreateAttr(id, "MODS", GLOBAL_SCOPE, &attrNum);
-    addgEntry(id, attrNum, 0, "Second release of version 3, corrects data gaps associated with L0 overlaps.");
+    addgEntry(id, attrNum, 0, "Third release of version 3, uses version 0401 EFI TII calibration files as inputs and fixes Swarm B along-track scale factors at -62 V inner dome bias.");
     CDFcreateAttr(id, "PI_name", GLOBAL_SCOPE, &attrNum);
     addgEntry(id, attrNum, 0, "David Knudsen");   
     CDFcreateAttr(id, "PI_affiliation", GLOBAL_SCOPE, &attrNum);
@@ -1018,7 +1018,7 @@ void loadCalDataFromDate(const DayType dayType, const char *calDir, const char *
         "QDLat",                // 5
         "QDLon",                // 6
         "Latitude",             // 7
-        "Long Tle",             // 8
+        "Longitude",            // 8
         "Radius",               // 9
         "Det H CorVx",          // 10
         "Sat_Vel_N",            // 11
@@ -1027,10 +1027,11 @@ void loadCalDataFromDate(const DayType dayType, const char *calDir, const char *
         "Faceplate_Volt_Mon_H"  // 14
         };
 
-    uint8_t nVars = numzVars;
-    if (nVars != NUM_CAL_VARIABLES)
+    // 0401 calibration files also contain MCP_Voltage_H, MCP_Voltage_V and Bias_Grid_V, which are not loaded
+    uint8_t nVars = NUM_CAL_VARIABLES;
+    if (numzVars != NUM_CAL_FILE_VARIABLES)
     {
-        fprintf(stdout, "%sError: number of calibration variables should be %d. Got %ld. Skipping this date.\n", infoHeader, (uint8_t) NUM_CAL_VARIABLES, numzVars);
+        fprintf(stdout, "%sError: number of calibration variables should be %d. Got %ld. Skipping this date.\n", infoHeader, (uint8_t) NUM_CAL_FILE_VARIABLES, numzVars);
         closeCdf(calCdfId);
         return;
     }
