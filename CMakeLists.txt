@@ -42,9 +42,9 @@ SET(LIBS ${LIBS} ${MATH} ${GSL_LIBRARY} )
 
 INCLUDE_DIRECTORIES(${INCLUDE_DIRS} ${GSL_INCLUDE_DIRS})
 
-ADD_EXECUTABLE(tiict tiict.c utilities.c processing.c)
-TARGET_INCLUDE_DIRECTORIES(tiict PRIVATE)
-TARGET_LINK_LIBRARIES(tiict ${LIBS} -lgslcblas -lcdf)
+ADD_EXECUTABLE(tiict0303 tiict.c utilities.c processing.c)
+TARGET_INCLUDE_DIRECTORIES(tiict0303 PRIVATE)
+TARGET_LINK_LIBRARIES(tiict0303 ${LIBS} -lgslcblas -lcdf)
 
 ADD_EXECUTABLE(tiictinspect tiictinspect.c utilities.c)
 TARGET_INCLUDE_DIRECTORIES(tiictinspect PRIVATE)
@@ -69,7 +69,7 @@ TARGET_LINK_LIBRARIES(tiictbin ${LIBS} -lgslcblas -lcdf)
 
 add_subdirectory(util)
 
-install(TARGETS tiict DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(TARGETS tiict0303 DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(TARGETS tiictinspect DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(TARGETS tiictqualityflags DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(TARGETS tiictbin DESTINATION ${CMAKE_INSTALL_BINDIR})

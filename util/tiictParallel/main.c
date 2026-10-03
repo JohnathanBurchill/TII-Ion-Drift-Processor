@@ -90,7 +90,7 @@ int main(int argc, char *argv[])
     {
         if (strcmp(argv[i], "--about") == 0)
         {
-            fprintf(stdout, "tiictParallel version %s.\n", SOFTWARE_VERSION);
+            fprintf(stdout, "tiictParallel0303 version %s.\n", SOFTWARE_VERSION);
             fprintf(stdout, "Copyright (C) 2022  Johnathan K Burchill\n");
             fprintf(stdout, "This program comes with ABSOLUTELY NO WARRANTY.\n");
             fprintf(stdout, "This is free software, and you are welcome to redistribute it\n");
@@ -121,7 +121,7 @@ int main(int argc, char *argv[])
 	char *calVersion = CALIBRATION_FILE_VERSION;
 	char *exportVersion = EXPORT_VERSION;
 	char *calDir = "/storage/EfiCalCdfs";
-	char *exportDir = "/storage/TCT";
+	char *exportDir = "/swarm_synology/swarm_products/TII/TCT";
 
 	char *date = strdup(startDate);
 	char *d1 = strdup(startDate);
@@ -371,7 +371,7 @@ void *runThread(void *a)
 	// exec TIICT command 
 	int status = 0;
 	char command[5*FILENAME_MAX+256];
-	sprintf(command, "tiict %s %d %d %d %s %s %s %s > %s/%s/TCT16/%s%4d%02d%02d.log 2>&1", args->satLetter, args->year, args->month, args->day, args->calVersion, args->exportVersion, args->calDir, args->exportDir, args->exportDir, args->exportVersion, args->satLetter, args->year, args->month, args->day);
+	sprintf(command, "tiict0303 %s %d %d %d %s %s %s %s > %s/%s/TCT16/%s%4d%02d%02d.log 2>&1", args->satLetter, args->year, args->month, args->day, args->calVersion, args->exportVersion, args->calDir, args->exportDir, args->exportDir, args->exportVersion, args->satLetter, args->year, args->month, args->day);
 	status = system(command);
 	if (WIFEXITED(status) && (WEXITSTATUS(status) == 0))
 	{
