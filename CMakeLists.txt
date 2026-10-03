@@ -16,9 +16,11 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 
+CMAKE_MINIMUM_REQUIRED(VERSION 3.10)
+
 PROJECT(TIICT)
 
-CMAKE_MINIMUM_REQUIRED(VERSION 3.3)
+include(GNUInstallDirs)
 
 ADD_DEFINITIONS(-DHAVE_GETOPT_H)
 
@@ -67,10 +69,10 @@ TARGET_LINK_LIBRARIES(tiictbin ${LIBS} -lgslcblas -lcdf)
 
 add_subdirectory(util)
 
-install(TARGETS tiict DESTINATION $ENV{HOME}/bin)
-install(TARGETS tiictinspect DESTINATION $ENV{HOME}/bin)
-install(TARGETS tiictqualityflags DESTINATION $ENV{HOME}/bin)
-install(TARGETS tiictbin DESTINATION $ENV{HOME}/bin)
-# install(TARGETS tiictfitstatistics DESTINATION $ENV{HOME}/bin)
+install(TARGETS tiict DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(TARGETS tiictinspect DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(TARGETS tiictqualityflags DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(TARGETS tiictbin DESTINATION ${CMAKE_INSTALL_BINDIR})
+# install(TARGETS tiictfitstatistics DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 

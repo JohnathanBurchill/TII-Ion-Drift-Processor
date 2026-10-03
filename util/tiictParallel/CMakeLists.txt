@@ -15,9 +15,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-project(TIICT)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.10)
 
-CMAKE_MINIMUM_REQUIRED(VERSION 3.1)
+project(TIICT)
 
 SET(THREADS_PREFER_PTHREAD_FLAG ON)
 FIND_PACKAGE(Threads REQUIRED)
@@ -25,4 +25,4 @@ FIND_LIBRARY(CURSES ncurses)
 ADD_EXECUTABLE(tiictParallel main.c)
 TARGET_LINK_LIBRARIES(tiictParallel PRIVATE Threads::Threads ${CURSES})
 
-install(TARGETS tiictParallel DESTINATION $ENV{HOME}/bin)
+install(TARGETS tiictParallel DESTINATION ${CMAKE_INSTALL_BINDIR})
