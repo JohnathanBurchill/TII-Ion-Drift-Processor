@@ -33,8 +33,8 @@
 #include <curses.h>
 
 
-#define SOFTWARE_VERSION "1.3"
-#define RELEASE_DATE "14 Nov 2024"
+#define SOFTWARE_VERSION "1.4"
+#define RELEASE_DATE "3 Oct 2026"
 
 #define THREAD_MANAGER_WAIT 100000 // uSeconds
 
@@ -119,7 +119,7 @@ int main(int argc, char *argv[])
             useSatellitePotential = true;
         }
         else if (strcmp(argv[i], "--about") == 0) {
-            fprintf(stdout, "tiictParallel0401 version %s %s.\n", SOFTWARE_VERSION, RELEASE_DATE);
+            fprintf(stdout, "tiictParallel0402 version %s %s.\n", SOFTWARE_VERSION, RELEASE_DATE);
             fprintf(stdout, "Copyright (C) 2024  Johnathan K Burchill\n");
             fprintf(stdout, "This program comes with ABSOLUTELY NO WARRANTY.\n");
             fprintf(stdout, "This is free software, and you are welcome to redistribute it\n");
@@ -324,7 +324,7 @@ exit:
 
 	if (quit == true)
 	{
-		printf("--> Processes may still be running. Use\n\t'for i in `pidof tiict0401`;do kill -9 $i;done'\nto kill them. There may be zip processes running as well.\n");
+		printf("--> Processes may still be running. Use\n\t'for i in `pidof tiict0402`;do kill -9 $i;done'\nto kill them. There may be zip processes running as well.\n");
 	}
 	return 0;
 
@@ -427,7 +427,7 @@ void *runThread(void *a)
 	// run tiict command as a system() call because CDF library is not thread safe
 	int status = 0;
 	char command[3*FILENAME_MAX+256] = {0};
-	sprintf(command, "tiict0401 %s %d %d %d %s %s %s %s %s%s%s%s%s > /dev/null 2>&1 ", args->satLetter, args->year, args->month, args->day, args->calVersion, args->exportVersion, args->calDir, args->lpDir, args->exportDir, !args->export2Hz ? " --no-2hz-export" : "", !args->export16Hz ? " --no-16hz-export" : "", args->useSatellitePotential ? " --use-satellite-potential" : "", args->noZip ? " --no-zip-export" : "");
+	sprintf(command, "tiict0402 %s %d %d %d %s %s %s %s %s%s%s%s%s > /dev/null 2>&1 ", args->satLetter, args->year, args->month, args->day, args->calVersion, args->exportVersion, args->calDir, args->lpDir, args->exportDir, !args->export2Hz ? " --no-2hz-export" : "", !args->export16Hz ? " --no-16hz-export" : "", args->useSatellitePotential ? " --use-satellite-potential" : "", args->noZip ? " --no-zip-export" : "");
 	status = system(command);
 	args->returnValue = status;
 	args->threadRunning = false;

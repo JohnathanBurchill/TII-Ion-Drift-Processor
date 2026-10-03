@@ -413,7 +413,7 @@ void addAttributes(CDFid id, const char *dataset, const char *satellite, const c
     CDFcreateAttr(id, "Mission_group", GLOBAL_SCOPE, &attrNum);
     addgEntry(id, attrNum, 0, "Swarm");
     CDFcreateAttr(id, "MODS", GLOBAL_SCOPE, &attrNum);
-    addgEntry(id, attrNum, 0, "Second release of version 3, corrects data gaps associated with L0 overlaps.");
+    addgEntry(id, attrNum, 0, "Second release of version 4, fixes Swarm B along-track scale factors at -62 V inner dome bias, which are used only when the E-of-R method is turned off.");
     CDFcreateAttr(id, "PI_name", GLOBAL_SCOPE, &attrNum);
     addgEntry(id, attrNum, 0, "David Knudsen");   
     CDFcreateAttr(id, "PI_affiliation", GLOBAL_SCOPE, &attrNum);

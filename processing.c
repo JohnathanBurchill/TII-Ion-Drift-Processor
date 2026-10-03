@@ -174,9 +174,9 @@ int calibrateFlows(ProcessorState *state)
                 svy = 548.0;
                 if (innerDomeBias >= -63.0 && innerDomeBias < -55.0)
                 {
-                    shx *= 450.5;
+                    shx = 450.5;
                     shy = 450.5; // Calibration 20210624, inner dome bias at -62 V.
-                    svx *= 451.0;
+                    svx = 451.0;
 		    svy = 525.0; // Calibration 20210624, inner dome bias at -62 V.
                 }
                 break;
@@ -1124,7 +1124,7 @@ void initHeader(ProcessorState *state)
     // set up info header
     sprintf(infoHeader, "TIICT %c%s %04d-%02d-%02d: ", args->satellite[0], args->exportVersion, args->year, args->month, args->day);
     fprintf(state->processingLogFile, "\n%s-------------------------------------------------\n", infoHeader);
-    fprintf(state->processingLogFile, "%sVersion 0401 20241110\n", infoHeader);
+    fprintf(state->processingLogFile, "%sVersion 0402 20261003\n", infoHeader);
     fprintf(state->processingLogFile, "%sProcessing date: %s", infoHeader, asctime(timeParts));
 
     return;

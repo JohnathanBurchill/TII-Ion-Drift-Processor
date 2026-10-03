@@ -8,3 +8,5 @@
 0303:
 	New calibration results incorporated from Summer 2021 testing.
 	Fix for CDF file attribute.		
+0402:
+	Fixed Swarm B along-track scale factors at -62 V inner dome bias (used only with --do-not-use-eofr-for-along-track-drift).

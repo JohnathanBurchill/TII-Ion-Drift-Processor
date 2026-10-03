@@ -51,9 +51,9 @@ ADD_LIBRARY(Processor processing.c export.c loadData.c utilities.c)
 TARGET_INCLUDE_DIRECTORIES(Processor PRIVATE)
 TARGET_LINK_LIBRARIES(Processor ${LIBS})
 
-ADD_EXECUTABLE(tiict0401 tiict.c processing.c export.c loadData.c)
-TARGET_INCLUDE_DIRECTORIES(tiict0401 PRIVATE)
-TARGET_LINK_LIBRARIES(tiict0401 Processor)
+ADD_EXECUTABLE(tiict0402 tiict.c processing.c export.c loadData.c)
+TARGET_INCLUDE_DIRECTORIES(tiict0402 PRIVATE)
+TARGET_LINK_LIBRARIES(tiict0402 Processor)
 
 ADD_EXECUTABLE(tiictinspect tiictinspect.c)
 TARGET_INCLUDE_DIRECTORIES(tiictinspect PRIVATE)
@@ -74,7 +74,7 @@ TARGET_LINK_LIBRARIES(tiictvariability Utilities ${LIBS})
 
 add_subdirectory(util)
 
-install(TARGETS tiict0401 DESTINATION $ENV{HOME}/bin)
+install(TARGETS tiict0402 DESTINATION $ENV{HOME}/bin)
 install(TARGETS tiictinspect DESTINATION $ENV{HOME}/bin)
 install(TARGETS tiictqualityflags DESTINATION $ENV{HOME}/bin)
 # install(TARGETS tiictfitstatistics DESTINATION $ENV{HOME}/bin)

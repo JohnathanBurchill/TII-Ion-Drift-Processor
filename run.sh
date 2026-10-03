@@ -1,3 +1,3 @@
 #!/bin/sh
 
-(cd build && make) && rm -rf /tmp/0401 && ./build/tiict0401 A 2014 5 1 0302 0401 /storage/EfiCalCdfs /storage/LP /tmp
+(cd build && make) && rm -rf /tmp/0402 && ./build/tiict0402 A 2014 5 1 0302 0402 /storage/EfiCalCdfs /storage/LP /tmp
