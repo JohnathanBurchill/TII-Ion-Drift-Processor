@@ -36,8 +36,11 @@ INCLUDE(GNUInstallDirs)
 
 # GSL
 FIND_PACKAGE(GSL REQUIRED)
-# SDL3
-find_library(SDL3 SDL3 HINTS /usr/local/lib REQUIRED)
+# raylib
+find_library(RAYLIB raylib HINTS /usr/local/lib REQUIRED)
+if(APPLE)
+    SET(RAYLIB ${RAYLIB} "-framework CoreVideo" "-framework IOKit" "-framework Cocoa" "-framework OpenGL" "-framework AudioToolbox" "-framework QuartzCore")
+endif()
 
 # From ChatGPT 18 Nov 2024
 # Set RPATH for build and install
@@ -80,7 +83,7 @@ TARGET_LINK_LIBRARIES(tiict0401 PRIVATE Processor ${LIBS} ${CDF})
 
 ADD_EXECUTABLE(tiictstripchart0401 tiictstripchart.c)
 TARGET_INCLUDE_DIRECTORIES(tiictstripchart0401 PRIVATE)
-TARGET_LINK_LIBRARIES(tiictstripchart0401 PRIVATE ${SDL3} Processor ${LIBS})
+TARGET_LINK_LIBRARIES(tiictstripchart0401 PRIVATE ${RAYLIB} Processor ${LIBS})
 
 ADD_EXECUTABLE(tiictinspect tiictinspect.c)
 TARGET_INCLUDE_DIRECTORIES(tiictinspect PRIVATE)

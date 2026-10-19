@@ -32,6 +32,7 @@
 #include <tiigraphics/video.h>
 
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 
 #include <pthread.h>
@@ -39,9 +40,10 @@
 
 #define MINIMUM_PLOT_HEIGHT 60
 
-#define SDL_MAIN_USE_CALLBACKS 1  /* use the callbacks instead of main() */
-#include <SDL3/SDL.h>
-#include <SDL3/SDL_main.h>
+// raylib also defines an Image type; rename it so that tiigraphics' Image is unaffected
+#define Image RaylibImage
+#include <raylib.h>
+#undef Image
 
 typedef struct AppState {
     ProcessorState *state;
@@ -52,9 +54,9 @@ typedef struct AppState {
     double t0;
     double t1;
     double samplePeriodSeconds;
-    SDL_Window *window;
-    SDL_Renderer *plotRenderer;
-    SDL_Palette *colors;
+    Texture2D plotTexture;
+    Color *plotPixels;
+    Color colors[256];
     bool playing;
     int playbackDirection;
     double playbackRate;
@@ -83,9 +85,14 @@ typedef enum TimeUnit {
     DECADES,
 } TimeUnit_enum;
 
+bool appInit(AppState_t **appstate, int argc, char *argv[]);
+void appKeyPressed(AppState_t *as, int key);
+void appIterate(AppState_t *as);
+void appQuit(AppState_t *as);
+bool shiftKeyDown(void);
+bool controlKeyDown(void);
 Image *helpImage(int width, int height);
 void resetVideoFrames(ProcessorState *state);
-void resetDisplay(AppState_t *as);
 double calculateDeltaT(AppState_t *as, TimeUnit_enum units, int sign);
 void advancePlots(AppState_t *as, double amount, TimeUnit_enum units);
 void rewindPlots(AppState_t *as, double amount, TimeUnit_enum units);
@@ -96,21 +103,40 @@ ProcessorState *copyState(ProcessorState *state, bool copyVariableData);
 void *runProcessorInBackground(void *appstate);
 
 
-SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
+int main(int argc, char *argv[])
+{
+    AppState_t *as = NULL;
+
+    bool initialized = appInit(&as, argc, argv);
+    if (initialized) {
+        while (!WindowShouldClose()) {
+            int key = 0;
+            while ((key = GetKeyPressed()) != KEY_NULL) {
+                appKeyPressed(as, key);
+            }
+            appIterate(as);
+        }
+    }
+    appQuit(as);
+
+    return initialized ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
+bool appInit(AppState_t **appstate, int argc, char *argv[])
 {
 
     AppState_t *as = malloc(sizeof *as);
     if (as == NULL) {
-        SDL_Log("Unable to allocate memory for App state");
-        return SDL_APP_FAILURE;
+        fprintf(stderr, "Unable to allocate memory for App state\n");
+        return false;
     }
-    *appstate = (void*)as;
+    *appstate = as;
     memset(as, 0, sizeof *as);
 
     ProcessorState *state = initState(argc, argv);
     if (state == NULL) {
         fprintf(stderr, "Could not allocate processor state.\n");
-        return SDL_APP_FAILURE;
+        return false;
     }
 
     // New defaults
@@ -131,36 +157,46 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 	if (status)
 	{
 		printf("Could not init processor thread attributes.\n");
-		return SDL_APP_FAILURE;
+		return false;
 	}
 
     // Display 16 Hz data by default
     as->show16Hz = true;
     state->vars = &state->vars16hz;
 
-    if (!SDL_Init(SDL_INIT_VIDEO)) {
-        SDL_Log("Couldn't initialize SDL: %s", SDL_GetError());
-        return SDL_APP_FAILURE;
-    }
+    SetTraceLogLevel(LOG_ERROR);
 
-    SDL_SetLogPriorities(SDL_LOG_PRIORITY_CRITICAL);
+    InitWindow(state->frameWidth, state->frameHeight, "tiictstripchart");
+    if (!IsWindowReady()) {
+        fprintf(stderr, "Couldn't create window\n");
+        return false;
+    }
+    ToggleBorderlessWindowed();
+    // q quits; escape does nothing
+    SetExitKey(KEY_Q);
 
-    if (!SDL_CreateWindowAndRenderer("examples/renderer/clear", state->frameWidth, state->frameHeight, SDL_WINDOW_FULLSCREEN, &as->window, &as->plotRenderer)) {
-        SDL_Log("Couldn't create window/renderer: %s", SDL_GetError());
-        return SDL_APP_FAILURE;
-    }
-    SDL_SetRenderDrawBlendMode(as->plotRenderer, SDL_BLENDMODE_BLEND);
-    as->colors = SDL_CreatePalette(256); // Allocate a 256-color palette
-    if (as->colors == NULL) {
-        fprintf(stderr, "Failed to create a palette: %s\n", SDL_GetError());
-    }
     for (int i = 0; i <= MAX_COLOR_VALUE; i++) {
-        as->colors->colors[i] = (SDL_Color){i, i, i, 255};
+        as->colors[i] = (Color){i, i, i, 255};
     }
-    as->colors->colors[FOREGROUND_COLOR] = (SDL_Color){0, 0, 0, 255};
-    as->colors->colors[FOREGROUND_COLOR + 1] = (SDL_Color){10, 10, 10, 255};
-    as->colors->colors[FOREGROUND_COLOR + 2] = (SDL_Color){20, 20, 20, 255};
-    as->colors->colors[BACKGROUND_COLOR ] = (SDL_Color){255, 255, 255, 255};
+    as->colors[FOREGROUND_COLOR] = (Color){0, 0, 0, 255};
+    as->colors[FOREGROUND_COLOR + 1] = (Color){10, 10, 10, 255};
+    as->colors[FOREGROUND_COLOR + 2] = (Color){20, 20, 20, 255};
+    as->colors[BACKGROUND_COLOR ] = (Color){255, 255, 255, 255};
+
+    // Frames are 8-bit color indexes; plotPixels holds a frame converted through the palette
+    as->plotPixels = calloc((size_t)state->frameWidth * state->frameHeight, sizeof *as->plotPixels);
+    if (as->plotPixels == NULL) {
+        fprintf(stderr, "Unable to allocate memory for plot pixels\n");
+        return false;
+    }
+    as->plotTexture = LoadTextureFromImage((RaylibImage){
+        .data = as->plotPixels,
+        .width = state->frameWidth,
+        .height = state->frameHeight,
+        .mipmaps = 1,
+        .format = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8
+    });
+    SetTextureFilter(as->plotTexture, TEXTURE_FILTER_BILINEAR);
 
     as->state = state;
     as->plotPage = 0;
@@ -176,7 +212,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 
     as->help = helpImage(state->frameWidth, state->frameHeight);
     if (as->help == NULL) {
-        return SDL_APP_FAILURE;
+        return false;
     }
     as->storedFrames = NULL;
     as->storedNVideoFrames = 0;
@@ -184,9 +220,18 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     as->samplePeriodSeconds = 1.0 / 16;
 
     rerunProcessor(as);
-    resetDisplay(as);
 
-    return SDL_APP_CONTINUE;  /* carry on with the program! */
+    return true;
+}
+
+bool shiftKeyDown(void)
+{
+    return IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
+}
+
+bool controlKeyDown(void)
+{
+    return IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
 }
 
 Image *helpImage(int width, int height)
@@ -201,7 +246,7 @@ Image *helpImage(int width, int height)
     Image *help = malloc(sizeof *help);
     int status = allocImage(help, width, height, 1);
     if (status != TIICT_OK) {
-        SDL_Log("Unable to allocate image");
+        fprintf(stderr, "Unable to allocate image\n");
         return NULL;
     }
 
@@ -295,25 +340,20 @@ Image *helpImage(int width, int height)
     return help;
 }
 
-SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
+void appKeyPressed(AppState_t *as, int key)
 {
-    if (event->type == SDL_EVENT_QUIT || (event->type == SDL_EVENT_KEY_UP && event->key.key == SDLK_Q)) {
-        return SDL_APP_SUCCESS;  /* end the program, reporting success to the OS. */
-    }
-
     int status = 0;
-    AppState_t *as = (AppState_t *)appstate;
     int argc = 0;
     char **argv = NULL;
 
     ProcessorState *state = (ProcessorState *)as->state;
     if (state == NULL) {
-        return SDL_APP_CONTINUE;
+        return;
     }
 
     if (state->processorRunning) {
         // Do nothing while processor thread is running
-        return SDL_APP_CONTINUE;
+        return;
     }
 
 
@@ -336,284 +376,279 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
         as->storedNVideoFrames = 0;
     }
 
-    if (event->type == SDL_EVENT_KEY_UP) {
-        switch (event->key.key) {
-            case SDLK_A:
-                state->args.satellite = "A";
-                rerunProcessor(as);
-                break;
-            case SDLK_B:
-                state->args.satellite = "B";
-                rerunProcessor(as);
-                break;
-            case SDLK_C:
-                state->args.satellite = "C";
-                rerunProcessor(as);
-                break;
-            case SDLK_E:
-                // Toggle use of eofr for along-track drift
-                state->useEofR = !state->useEofR;
-                rerunProcessor(as);
-                break;
-            case SDLK_1:
-                state->vars->lpPotentialSource = LP_POTENTIAL_NONE;
-                state->usePotentials = false;
-                rerunProcessor(as);
-                break;
-            case SDLK_2:
-                state->vars->lpPotentialSource = LP_POTENTIAL_U_SC;
-                state->usePotentials = true;
-                rerunProcessor(as);
-                break;
-            case SDLK_3:
-                state->vars->lpPotentialSource = LP_POTENTIAL_LOWGAIN;
-                state->usePotentials = true;
-                rerunProcessor(as);
-                break;
-            case SDLK_4:
-                state->vars->lpPotentialSource = LP_POTENTIAL_HIGHGAIN;
-                state->usePotentials = true;
-                rerunProcessor(as);
-                break;
-            case SDLK_SEMICOLON:
-                as->show16Hz = !as->show16Hz;
-                rerunProcessor(as);
-                break;
-            case SDLK_U:
-                // Update processor results
-                rerunProcessor(as);
-                break;
-            case SDLK_EQUALS:
-                // Plus on regular keboard
-                if (SDL_GetModState() & SDL_KMOD_SHIFT) {
-                    middleTime = (state->plotT0 + state->plotT1) / 2.0;
-                    if (timeRange > 2.0 * 1000) {
-                        timeRange /= 2.0;
-                        state->plotT0 = middleTime - timeRange/2.0;
-                        state->plotT1 = middleTime + timeRange/2.0;
-                        updatePlots(state);
-                    }
-                }
-                break;
-            case SDLK_MINUS:
+    switch (key) {
+        case KEY_A:
+            state->args.satellite = "A";
+            rerunProcessor(as);
+            break;
+        case KEY_B:
+            state->args.satellite = "B";
+            rerunProcessor(as);
+            break;
+        case KEY_C:
+            state->args.satellite = "C";
+            rerunProcessor(as);
+            break;
+        case KEY_E:
+            // Toggle use of eofr for along-track drift
+            state->useEofR = !state->useEofR;
+            rerunProcessor(as);
+            break;
+        case KEY_ONE:
+            state->vars->lpPotentialSource = LP_POTENTIAL_NONE;
+            state->usePotentials = false;
+            rerunProcessor(as);
+            break;
+        case KEY_TWO:
+            state->vars->lpPotentialSource = LP_POTENTIAL_U_SC;
+            state->usePotentials = true;
+            rerunProcessor(as);
+            break;
+        case KEY_THREE:
+            state->vars->lpPotentialSource = LP_POTENTIAL_LOWGAIN;
+            state->usePotentials = true;
+            rerunProcessor(as);
+            break;
+        case KEY_FOUR:
+            state->vars->lpPotentialSource = LP_POTENTIAL_HIGHGAIN;
+            state->usePotentials = true;
+            rerunProcessor(as);
+            break;
+        case KEY_SEMICOLON:
+            as->show16Hz = !as->show16Hz;
+            rerunProcessor(as);
+            break;
+        case KEY_U:
+            // Update processor results
+            rerunProcessor(as);
+            break;
+        case KEY_EQUAL:
+            // Plus on regular keboard
+            if (shiftKeyDown()) {
                 middleTime = (state->plotT0 + state->plotT1) / 2.0;
-                timeRange *= 2.0;
-                if (timeRange > 86400.0 * 1000.0) {
-                    timeRange = 86400.0 * 1000.0;
+                if (timeRange > 2.0 * 1000) {
+                    timeRange /= 2.0;
+                    state->plotT0 = middleTime - timeRange/2.0;
+                    state->plotT1 = middleTime + timeRange/2.0;
+                    updatePlots(state);
                 }
-                state->plotT0 = middleTime - timeRange/2.0;
-                state->plotT1 = middleTime + timeRange/2.0;
-                updatePlots(state);
-                break;
-            case SDLK_K:
-                if (as->plotPage > 0) {
-                    as->plotPage--;
-                }
-                break;
-            case SDLK_J:
-                if (as->plotPage < state->nVideoFrames - 1) {
-                    as->plotPage++;
-                }
-                break;
-            case SDLK_D:
-                // Full day timerange
-                state->plotT0 = as->dayBegin;
-                state->plotT1 = as->dayEnd;
-                updatePlots(state);
-                break;
-            case SDLK_F:
-                // Full file timerange
-                state->plotT0 = as->t0;
-                state->plotT1 = as->t1;
-                updatePlots(state);
-                break;
-            case SDLK_O:
-                // Full orbit (approx.)
-                timeRange = 94.0 * 60.0 * 1000.0;
-                if (SDL_GetModState() & SDL_KMOD_SHIFT) {
-                    // 1/4 orbit timerange
-                    timeRange /= 4.0;
-                }
-                state->plotT0 = as->t0;
-                state->plotT1 = state->plotT0 + timeRange;
-                updatePlots(state);
-                break;
-            case SDLK_PERIOD:
-                // Advance the plot by 10% of timeRange
-                secondsToAdvance = timeRange / 1000.0 / 10.0;
-                if (SDL_GetModState() & SDL_KMOD_SHIFT) {
-                    secondsToAdvance /= 5.0;
-                }
-                if (SDL_GetModState() & (SDL_KMOD_LCTRL | SDL_KMOD_RCTRL)) {
-                    secondsToAdvance /= 5.0;
-                }
-                if (secondsToAdvance < 1.0) {
-                    secondsToAdvance = 1.0;
-                }
-                advancePlots(as, secondsToAdvance, SECONDS);
-                break;
-            case SDLK_COMMA:
-                // Rewind the plot by 10% of timeRange
-                secondsToAdvance = timeRange / 1000.0 / 10.0;
-                if (SDL_GetModState() & SDL_KMOD_SHIFT) {
-                    secondsToAdvance /= 5.0;
-                }
-                if (SDL_GetModState() & (SDL_KMOD_LCTRL | SDL_KMOD_RCTRL)) {
-                    secondsToAdvance /= 5.0;
-                }
-                if (secondsToAdvance < 1.0) {
-                    secondsToAdvance = 1.0;
-                }
-                rewindPlots(as, secondsToAdvance, SECONDS);
-                break;
-            case SDLK_H:
-                // Rewind the plot timerange by the current timerange
-                rewindPlots(as, 1, TIME_RANGES);
-                break;
-            case SDLK_L:
-                // Advance the plot timerange by the current timerange
-                advancePlots(as, 1, TIME_RANGES);
-                break;
-            case SDLK_SPACE:
-                // Toggle playback
-                as->playing = !as->playing;
-                break;
-            case SDLK_R:
-                // Toggle playback direction
-                as->playbackDirection = -as->playbackDirection;
-                break;
-            case SDLK_X:
-                // Toggle playback rate
-                as->playbackRate = as->playbackRate > 1.0 ? 1.0 : 10.0;
-                break;
+            }
+            break;
+        case KEY_MINUS:
+            middleTime = (state->plotT0 + state->plotT1) / 2.0;
+            timeRange *= 2.0;
+            if (timeRange > 86400.0 * 1000.0) {
+                timeRange = 86400.0 * 1000.0;
+            }
+            state->plotT0 = middleTime - timeRange/2.0;
+            state->plotT1 = middleTime + timeRange/2.0;
+            updatePlots(state);
+            break;
+        case KEY_K:
+            if (as->plotPage > 0) {
+                as->plotPage--;
+            }
+            break;
+        case KEY_J:
+            if (as->plotPage < state->nVideoFrames - 1) {
+                as->plotPage++;
+            }
+            break;
+        case KEY_D:
+            // Full day timerange
+            state->plotT0 = as->dayBegin;
+            state->plotT1 = as->dayEnd;
+            updatePlots(state);
+            break;
+        case KEY_F:
+            // Full file timerange
+            state->plotT0 = as->t0;
+            state->plotT1 = as->t1;
+            updatePlots(state);
+            break;
+        case KEY_O:
+            // Full orbit (approx.)
+            timeRange = 94.0 * 60.0 * 1000.0;
+            if (shiftKeyDown()) {
+                // 1/4 orbit timerange
+                timeRange /= 4.0;
+            }
+            state->plotT0 = as->t0;
+            state->plotT1 = state->plotT0 + timeRange;
+            updatePlots(state);
+            break;
+        case KEY_PERIOD:
+            // Advance the plot by 10% of timeRange
+            secondsToAdvance = timeRange / 1000.0 / 10.0;
+            if (shiftKeyDown()) {
+                secondsToAdvance /= 5.0;
+            }
+            if (controlKeyDown()) {
+                secondsToAdvance /= 5.0;
+            }
+            if (secondsToAdvance < 1.0) {
+                secondsToAdvance = 1.0;
+            }
+            advancePlots(as, secondsToAdvance, SECONDS);
+            break;
+        case KEY_COMMA:
+            // Rewind the plot by 10% of timeRange
+            secondsToAdvance = timeRange / 1000.0 / 10.0;
+            if (shiftKeyDown()) {
+                secondsToAdvance /= 5.0;
+            }
+            if (controlKeyDown()) {
+                secondsToAdvance /= 5.0;
+            }
+            if (secondsToAdvance < 1.0) {
+                secondsToAdvance = 1.0;
+            }
+            rewindPlots(as, secondsToAdvance, SECONDS);
+            break;
+        case KEY_H:
+            // Rewind the plot timerange by the current timerange
+            rewindPlots(as, 1, TIME_RANGES);
+            break;
+        case KEY_L:
+            // Advance the plot timerange by the current timerange
+            advancePlots(as, 1, TIME_RANGES);
+            break;
+        case KEY_SPACE:
+            // Toggle playback
+            as->playing = !as->playing;
+            break;
+        case KEY_R:
+            // Toggle playback direction
+            as->playbackDirection = -as->playbackDirection;
+            break;
+        case KEY_X:
+            // Toggle playback rate
+            as->playbackRate = as->playbackRate > 1.0 ? 1.0 : 10.0;
+            break;
 
-            case SDLK_F1:
-                as->storedFrames = state->frames;
-                as->storedNVideoFrames = state->nVideoFrames;
-                state->frames = as->help;
-                state->nVideoFrames = 1;
-                break;
+        case KEY_F1:
+            as->storedFrames = state->frames;
+            as->storedNVideoFrames = state->nVideoFrames;
+            state->frames = as->help;
+            state->nVideoFrames = 1;
+            break;
 
-            case SDLK_F2:
-                // ion drift with potential
-                state->plotCommand = "QDLat,-90,90,1" ";PhiSc,-5,0,1" ";Vixh,-4,4,0.001" ";Vixv,-4,4,0.001" ";Viy,-2,2,0.001" ";Viz,-2,2,0.001";
-                updatePlots(state);
-                break;
-            case SDLK_F3:
-                // ion drift
-                state->plotCommand = "Vixh,-2,2,0.001" ";Vixv,-2,2,0.001" ";Viy,-2,2,0.001" ";Viz,-2,2,0.001";
-                updatePlots(state);
-                break;
-            case SDLK_F4:
-                // electric field
-                state->plotCommand = "QDLat,-90,90,1" ";MLT,0,24,1" ";Exh,-100,100,1" ";Eyh,-100,100,1" ";Ezh,-100,100,1";
-                updatePlots(state);
-                break;
-            case SDLK_F5:
-                // magnetic field
-                state->plotCommand = "BN,-65000,65000,1" ";BE,-65000,65000,1" ";BC,-65000,65000,1" ";Bx,-65000,65000,1" ";By,-65000,65000,1" ";Bz,-65000,65000,1";
-                updatePlots(state);
-                break;
-            case SDLK_F6:
-                // Satellite position
-                state->plotCommand = "Lat,-90,90,1" ";Lon,-180,180,1" ";Radius,6400,7000,0.001" ";Alt,430,520,0.001";
-                updatePlots(state);
-                break;
-            case SDLK_F7:
-                // Satellite velocity
-                state->plotCommand = "VSatN,-8,8,0.001" ";VSatE,-8,8,0.001" ";VSatC,-0.1,0.1,0.001" ";VSatX,-8,8,0.001" ";VSatY,-2,2,0.001" ";VSatZ,-0.5,0.5,0.001" ";VicrX,-0.5,0.5,0.001" ";VicrY,-0.6,0.6,0.001" ";VicrZ,-0.5,0.5,0.001";
-                updatePlots(state);
-                break;
-            case SDLK_F8:
-                // Energy calculations
-                state->plotCommand = "dxh,0,25,1" ";dyh,-5,5,1" ";rh,0,25,1" ";Vixh,-3,3,0.001" ";Enh,0,15,1" ";dxv,0,25,1" ";dyv,-5,5,1" ";rv,0,25,1" ";Vixv,-3,3,0.001" ";Env,0,15,1";
-                updatePlots(state);
-                break;
-            case SDLK_F9:
-                // Geoelectric potential
-                state->plotCommand = "Exh,-50,50,1" ";Geopot,-100,100,0.001" ";ExhAdj,-50,50,1" ";GeopotAdj,-100,100,0.001" ";ExhAdjParam,-1,1,1";
-                updatePlots(state);
-                break;
-            case SDLK_F10:
-                // Moments
-                state->plotCommand = "mxh,0,66,1" ";mxv,0,66,1" ";myh,0,66,1" ";myv,0,66,1";
-                updatePlots(state);
-                break;
-            case SDLK_F11:
-                // Energy
-                state->plotCommand = "EnhRaw,0,30,1" ";EnvRaw,0,30,1" ";Enh,0,30,1" ";Env,0,30,1";
-                updatePlots(state);
-                break;
-            case SDLK_F12:
-                // Voltages
-                state->plotCommand = "VmcpH,-2400,0,1" ";VmcpV,-2400,0,1" ";VbiasH,-105,0,1" ";VbiasV,-105,0,1" ";Vfp,-5,0,1";
-                updatePlots(state);
-                break;
-            case SDLK_Z:
-                if (SDL_GetModState() & SDL_KMOD_SHIFT) {
-                    if (state->defaultPlotHeight > MINIMUM_PLOT_HEIGHT) {
-                        state->defaultPlotHeight -= 30;
-                    }
+        case KEY_F2:
+            // ion drift with potential
+            state->plotCommand = "QDLat,-90,90,1" ";PhiSc,-5,0,1" ";Vixh,-4,4,0.001" ";Vixv,-4,4,0.001" ";Viy,-2,2,0.001" ";Viz,-2,2,0.001";
+            updatePlots(state);
+            break;
+        case KEY_F3:
+            // ion drift
+            state->plotCommand = "Vixh,-2,2,0.001" ";Vixv,-2,2,0.001" ";Viy,-2,2,0.001" ";Viz,-2,2,0.001";
+            updatePlots(state);
+            break;
+        case KEY_F4:
+            // electric field
+            state->plotCommand = "QDLat,-90,90,1" ";MLT,0,24,1" ";Exh,-100,100,1" ";Eyh,-100,100,1" ";Ezh,-100,100,1";
+            updatePlots(state);
+            break;
+        case KEY_F5:
+            // magnetic field
+            state->plotCommand = "BN,-65000,65000,1" ";BE,-65000,65000,1" ";BC,-65000,65000,1" ";Bx,-65000,65000,1" ";By,-65000,65000,1" ";Bz,-65000,65000,1";
+            updatePlots(state);
+            break;
+        case KEY_F6:
+            // Satellite position
+            state->plotCommand = "Lat,-90,90,1" ";Lon,-180,180,1" ";Radius,6400,7000,0.001" ";Alt,430,520,0.001";
+            updatePlots(state);
+            break;
+        case KEY_F7:
+            // Satellite velocity
+            state->plotCommand = "VSatN,-8,8,0.001" ";VSatE,-8,8,0.001" ";VSatC,-0.1,0.1,0.001" ";VSatX,-8,8,0.001" ";VSatY,-2,2,0.001" ";VSatZ,-0.5,0.5,0.001" ";VicrX,-0.5,0.5,0.001" ";VicrY,-0.6,0.6,0.001" ";VicrZ,-0.5,0.5,0.001";
+            updatePlots(state);
+            break;
+        case KEY_F8:
+            // Energy calculations
+            state->plotCommand = "dxh,0,25,1" ";dyh,-5,5,1" ";rh,0,25,1" ";Vixh,-3,3,0.001" ";Enh,0,15,1" ";dxv,0,25,1" ";dyv,-5,5,1" ";rv,0,25,1" ";Vixv,-3,3,0.001" ";Env,0,15,1";
+            updatePlots(state);
+            break;
+        case KEY_F9:
+            // Geoelectric potential
+            state->plotCommand = "Exh,-50,50,1" ";Geopot,-100,100,0.001" ";ExhAdj,-50,50,1" ";GeopotAdj,-100,100,0.001" ";ExhAdjParam,-1,1,1";
+            updatePlots(state);
+            break;
+        case KEY_F10:
+            // Moments
+            state->plotCommand = "mxh,0,66,1" ";mxv,0,66,1" ";myh,0,66,1" ";myv,0,66,1";
+            updatePlots(state);
+            break;
+        case KEY_F11:
+            // Energy
+            state->plotCommand = "EnhRaw,0,30,1" ";EnvRaw,0,30,1" ";Enh,0,30,1" ";Env,0,30,1";
+            updatePlots(state);
+            break;
+        case KEY_F12:
+            // Voltages
+            state->plotCommand = "VmcpH,-2400,0,1" ";VmcpV,-2400,0,1" ";VbiasH,-105,0,1" ";VbiasV,-105,0,1" ";Vfp,-5,0,1";
+            updatePlots(state);
+            break;
+        case KEY_Z:
+            if (shiftKeyDown()) {
+                if (state->defaultPlotHeight > MINIMUM_PLOT_HEIGHT) {
+                    state->defaultPlotHeight -= 30;
                 }
-                else {
-                    if (state->defaultPlotHeight < state->frameHeight - 70) {
-                        state->defaultPlotHeight += 30;
-                    }
+            }
+            else {
+                if (state->defaultPlotHeight < state->frameHeight - 70) {
+                    state->defaultPlotHeight += 30;
                 }
-                if (as->plotPage > state->nVideoFrames - 1) {
-                    as->plotPage = state->nVideoFrames - 1;
+            }
+            if (as->plotPage > state->nVideoFrames - 1) {
+                as->plotPage = state->nVideoFrames - 1;
+            }
+            if (as->plotPage < 0) {
+                as->plotPage = 0;
+            }
+            updatePlots(state);
+            break;
+        case KEY_RIGHT_BRACKET:
+            if (shiftKeyDown()) {
+                if (state->yOffset > -5.0) {
+                    state->yOffset -= 0.1;
                 }
-                if (as->plotPage < 0) {
-                    as->plotPage = 0;
+            }
+            else {
+                if (state->yScaleFactor > 0.1) {
+                    state->yScaleFactor /= 2.0;
                 }
-                updatePlots(state);
-                break;
-            case SDLK_RIGHTBRACKET:
-                if (SDL_GetModState() & SDL_KMOD_SHIFT) {
-                    if (state->yOffset > -5.0) {
-                        state->yOffset -= 0.1;
-                    }
+            }
+            updatePlots(state);
+            break;
+        case KEY_LEFT_BRACKET:
+            if (shiftKeyDown()) {
+                if (state->yOffset < 5.0) {
+                    state->yOffset += 0.1;
                 }
-                else {
-                    if (state->yScaleFactor > 0.1) {
-                        state->yScaleFactor /= 2.0;
-                    }
+            }
+            else {
+                if (state->yScaleFactor < 100) {
+                    state->yScaleFactor *= 2.0;
                 }
-                updatePlots(state);
-                break;
-            case SDLK_LEFTBRACKET:
-                if (SDL_GetModState() & SDL_KMOD_SHIFT) {
-                    if (state->yOffset < 5.0) {
-                        state->yOffset += 0.1;
-                    }
-                }
-                else {
-                    if (state->yScaleFactor < 100) {
-                        state->yScaleFactor *= 2.0;
-                    }
-                }
-                updatePlots(state);
-                break;
-            case SDLK_BACKSLASH:
-                state->yOffset = 0.0;
-                state->yScaleFactor = 1.0;
-                updatePlots(state);
-                break;
-            default:
-                break;
-        }
-
+            }
+            updatePlots(state);
+            break;
+        case KEY_BACKSLASH:
+            state->yOffset = 0.0;
+            state->yScaleFactor = 1.0;
+            updatePlots(state);
+            break;
+        default:
+            break;
     }
 
-    return SDL_APP_CONTINUE;  /* carry on with the program! */
+    return;
 }
 
-SDL_AppResult SDL_AppIterate(void *appstate)
+void appIterate(AppState_t *as)
 {
-    SDL_Surface *indexedSurface = NULL;
-    SDL_Texture *plotTexture = NULL;
-
-    AppState_t *as = (AppState_t*)appstate;
+    BeginDrawing();
+    ClearBackground(as->colors[BACKGROUND_COLOR]);
 
     // Background processor finished, update state
     if (as->newState != NULL) {
@@ -671,28 +706,36 @@ updatedisplay:
             annotate("Updating...", fontSize, state->frameWidth/2 - fontwidth(fontSize)*strlen("Updating...")/2, fontheight(fontSize)+5, &state->frames[as->plotPage]);
         }
 
-        indexedSurface = SDL_CreateSurfaceFrom(state->frameWidth, state->frameHeight, SDL_PIXELFORMAT_INDEX8, state->frames[as->plotPage].pixels, state->frameWidth);
-        SDL_SetSurfacePalette(indexedSurface, as->colors);
-
-        plotTexture = SDL_CreateTextureFromSurface(as->plotRenderer, indexedSurface);
-        SDL_DestroySurface(indexedSurface);
-        SDL_RenderTexture(as->plotRenderer, plotTexture, NULL, NULL);
-        SDL_DestroyTexture(plotTexture);
+        uint8_t *framePixels = state->frames[as->plotPage].pixels;
+        int nPixels = state->frameWidth * state->frameHeight;
+        for (int i = 0; i < nPixels; i++) {
+            as->plotPixels[i] = as->colors[framePixels[i]];
+        }
+        UpdateTexture(as->plotTexture, as->plotPixels);
+        // Scale the frame to fill the window
+        Rectangle source = {0, 0, state->frameWidth, state->frameHeight};
+        Rectangle destination = {0, 0, GetScreenWidth(), GetScreenHeight()};
+        DrawTexturePro(as->plotTexture, source, destination, (Vector2){0, 0}, 0.0f, WHITE);
     }
 
 updatedisplayLast:
 
-    SDL_RenderPresent(as->plotRenderer);
+    EndDrawing();
 
-    return SDL_APP_CONTINUE;
+    return;
 }
 
-void SDL_AppQuit(void *appstate, SDL_AppResult result)
+void appQuit(AppState_t *as)
 {
-    AppState_t *as = (AppState_t*)appstate;
     if (as == NULL) {
         return;
     }
+
+    if (IsWindowReady()) {
+        UnloadTexture(as->plotTexture);
+        CloseWindow();
+    }
+    free(as->plotPixels);
 
     ProcessorState *state = (ProcessorState*)as->state;
     if (state == NULL) {
@@ -719,15 +762,6 @@ void resetVideoFrames(ProcessorState *state)
         state->frames = NULL;
     }
     state->nVideoFrames = 0;
-
-    return;
-}
-
-void resetDisplay(AppState_t *as)
-{
-    // Clear display
-    SDL_SetRenderDrawColor(as->plotRenderer, BACKGROUND_COLOR, BACKGROUND_COLOR, BACKGROUND_COLOR, 255);
-    SDL_RenderClear(as->plotRenderer);
 
     return;
 }
