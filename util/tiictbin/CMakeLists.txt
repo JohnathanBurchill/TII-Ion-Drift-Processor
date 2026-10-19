@@ -20,4 +20,4 @@ project(TIICT)
 ADD_EXECUTABLE(tiictbin tiictbin.c statistics.c)
 TARGET_LINK_LIBRARIES(tiictbin ${LIBS} ${CDF})
 
-install(TARGETS tiictbin DESTINATION $ENV{HOME}/bin)
+install(TARGETS tiictbin DESTINATION ${CMAKE_INSTALL_BINDIR})

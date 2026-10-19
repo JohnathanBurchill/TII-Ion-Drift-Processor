@@ -23,4 +23,4 @@ FIND_LIBRARY(CURSES ncurses)
 ADD_EXECUTABLE(tiictParallel0401 main.c)
 TARGET_LINK_LIBRARIES(tiictParallel0401 PRIVATE Processor ${CDF} Threads::Threads ${CURSES})
 
-install(TARGETS tiictParallel0401 DESTINATION $ENV{HOME}/bin)
+install(TARGETS tiictParallel0401 DESTINATION ${CMAKE_INSTALL_BINDIR})
