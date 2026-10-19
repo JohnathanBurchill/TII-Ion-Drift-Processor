@@ -91,6 +91,7 @@ void appIterate(AppState_t *as);
 void appQuit(AppState_t *as);
 bool shiftKeyDown(void);
 bool controlKeyDown(void);
+double cursorTimeFraction(ProcessorState *state);
 Image *helpImage(int width, int height);
 void resetVideoFrames(ProcessorState *state);
 double calculateDeltaT(AppState_t *as, TimeUnit_enum units, int sign);
@@ -234,6 +235,20 @@ bool controlKeyDown(void)
     return IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
 }
 
+// Position of the cursor along the plot time axis: 0 at plotT0, 1 at plotT1.
+// The middle of the plot is used when the cursor is not over the window.
+double cursorTimeFraction(ProcessorState *state)
+{
+    if (!IsCursorOnScreen()) {
+        return 0.5;
+    }
+    // The frame is scaled to fill the window
+    double frameX = GetMouseX() * (double)state->frameWidth / GetScreenWidth();
+    int plotWidth = state->frameWidth * PLOT_WIDTH_FRACTION;
+
+    return (frameX - PLOT_X0) / plotWidth;
+}
+
 Image *helpImage(int width, int height)
 {
     int x = 50;
@@ -363,7 +378,8 @@ void appKeyPressed(AppState_t *as, int key)
         as->t1 = timesMs[state->vars->nRecs - 1];
     }
     double timeRange = state->plotT1 - state->plotT0;
-    double middleTime = 0.0;
+    double cursorFraction = 0.0;
+    double cursorTime = 0.0;
     double secondsToAdvance = 0.0;
 
     int plotHeightDelta = 0;
@@ -425,23 +441,26 @@ void appKeyPressed(AppState_t *as, int key)
         case KEY_EQUAL:
             // Plus on regular keboard
             if (shiftKeyDown()) {
-                middleTime = (state->plotT0 + state->plotT1) / 2.0;
                 if (timeRange > 2.0 * 1000) {
+                    // Keep the time under the cursor at the same place on the screen
+                    cursorFraction = cursorTimeFraction(state);
+                    cursorTime = state->plotT0 + cursorFraction * timeRange;
                     timeRange /= 2.0;
-                    state->plotT0 = middleTime - timeRange/2.0;
-                    state->plotT1 = middleTime + timeRange/2.0;
+                    state->plotT0 = cursorTime - cursorFraction * timeRange;
+                    state->plotT1 = state->plotT0 + timeRange;
                     updatePlots(state);
                 }
             }
             break;
         case KEY_MINUS:
-            middleTime = (state->plotT0 + state->plotT1) / 2.0;
+            cursorFraction = cursorTimeFraction(state);
+            cursorTime = state->plotT0 + cursorFraction * timeRange;
             timeRange *= 2.0;
             if (timeRange > 86400.0 * 1000.0) {
                 timeRange = 86400.0 * 1000.0;
             }
-            state->plotT0 = middleTime - timeRange/2.0;
-            state->plotT1 = middleTime + timeRange/2.0;
+            state->plotT0 = cursorTime - cursorFraction * timeRange;
+            state->plotT1 = state->plotT0 + timeRange;
             updatePlots(state);
             break;
         case KEY_K:
