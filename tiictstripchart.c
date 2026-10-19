@@ -655,7 +655,7 @@ void appIterate(AppState_t *as)
         copyVariables(&as->state->vars16hz, &as->newState->vars16hz);
         as->state->processorRunning = false;
         as->newState->keepFrames = false;
-        shutdown(as->newState);
+        shutdownProcessor(as->newState);
         free(as->newState);
         as->newState = NULL;
         double *timesMs = as->state->vars->timestamp;
@@ -742,7 +742,7 @@ void appQuit(AppState_t *as)
         return;
     }
     state->keepFrames = false;
-    shutdown(state);
+    shutdownProcessor(state);
     free(state);
     free(as->help);
 	pthread_attr_destroy(&as->attr);
@@ -950,22 +950,22 @@ void *runProcessorInBackground(void *appstate)
     as->state->processorRunning = true;
     status = initProcessor(state);
     if (status != TIICT_OK) {
-        shutdown(state);
+        shutdownProcessor(state);
         goto vis;
     }
     status = initLogFiles(state);
     if (status != TIICT_OK) {
-        shutdown(state);
+        shutdownProcessor(state);
         goto vis;
     }
     status = loadCalData(state);
     if (status != TIICT_OK) {
-        shutdown(state);
+        shutdownProcessor(state);
         goto vis;
     }
     status = loadLpCalData(state);
     if (status != TIICT_OK) {
-        shutdown(state);
+        shutdownProcessor(state);
         goto vis;
     }
     calibrateFlows(state);

@@ -1068,7 +1068,7 @@ cleanup:
     }
     else {
         // free memory
-        status = shutdown(state);
+        status = shutdownProcessor(state);
         free(state);
     }
     printf("9\n");
@@ -1456,7 +1456,7 @@ int checkResult(int status, ProcessorState *state)
             }
         }
         state->returnStatus = status;
-        status = shutdown(state);
+        status = shutdownProcessor(state);
     }
 
     return status;
@@ -1481,7 +1481,7 @@ void closeFiles(ProcessorState *state)
     return;
 }
 
-int shutdown(ProcessorState *state)
+int shutdownProcessor(ProcessorState *state)
 {
     if (state == NULL)
         return(TIICT_ARGS_BAD);

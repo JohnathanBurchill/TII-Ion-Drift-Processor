@@ -62,7 +62,7 @@ void initHeader(ProcessorState *state);
 
 int checkResult(int status, ProcessorState *state);
 void closeFiles(ProcessorState *state);
-int shutdown(ProcessorState *state);
+int shutdownProcessor(ProcessorState *state);
 
 
 int backgroundRemoval(ProcessorState *state);
