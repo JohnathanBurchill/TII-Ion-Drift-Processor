@@ -313,6 +313,10 @@ Image *helpImage(int width, int height)
     y += fontHeight;
     annotate(" \\ - reset y scale and offset", fontSize, x, y, help);
     y += fontHeight;
+    annotate(" 9 - decrease plot point opacity", fontSize, x, y, help);
+    y += fontHeight;
+    annotate(" 0 - increase plot point opacity", fontSize, x, y, help);
+    y += fontHeight;
     annotate(" d - zoom to full day", fontSize, x, y, help);
     y += fontHeight;
     annotate(" f - zoom to full file time range", fontSize, x, y, help);
@@ -656,6 +660,18 @@ void appKeyPressed(AppState_t *as, int key)
             state->yOffset = 0.0;
             state->yScaleFactor = 1.0;
             updatePlots(state);
+            break;
+        case KEY_NINE:
+            if (state->plotPointOpacity > 1.0 / 128.0) {
+                state->plotPointOpacity /= 2.0;
+                updatePlots(state);
+            }
+            break;
+        case KEY_ZERO:
+            if (state->plotPointOpacity < 1.0) {
+                state->plotPointOpacity *= 2.0;
+                updatePlots(state);
+            }
             break;
         default:
             break;

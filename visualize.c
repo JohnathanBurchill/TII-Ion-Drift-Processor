@@ -420,7 +420,7 @@ int visualizeResults(ProcessorState *state)
         snprintf(yr1str, 255, "%.1f", yr1);
 
         if (gotParameter) {
-            drawFloatTimeSeries(&image, v->timestamp, parameter, state->plotT0, state->plotT1, firstIndex, lastIndex, stride, valueScale, valueOffset, yr0, yr1, plotX0, plotYOffset, plotWidth, plotHeight, xLabel, parameterLabel, MAX_COLOR_VALUE + 1, yr0str, yr1str, false, dotSize, fontSize, true, tupleLength, tupleIndex, 0);
+            drawFloatTimeSeries(&image, v->timestamp, parameter, state->plotT0, state->plotT1, firstIndex, lastIndex, stride, valueScale, valueOffset, yr0, yr1, plotX0, plotYOffset, plotWidth, plotHeight, xLabel, parameterLabel, MAX_COLOR_VALUE + 1, yr0str, yr1str, false, dotSize, fontSize, true, tupleLength, tupleIndex, 0, state->plotPointOpacity);
             plotYOffset += plotHeight + plotdy;
             plotsMade++;
         }
@@ -467,7 +467,29 @@ cleanup:
     return TIICT_OK;
 }
 
-void drawFloatTimeSeries(Image *imageBuf, double *times, float *values, double t0, double t1, int firstInd, int lastInd, int stride, float valueScale, float valueOffset, float minValue, float maxValue, int plotX0, int plotY0, int plotWidth, int plotHeight, const char *xLabel, const char *yLabel, int colorIndex, const char *minValueStr, const char *maxValueStr, bool log10Scale, int dotSize, int fontSize, bool axes, int tupleLength, int tupleIndex, int orientation)
+// Fully opaque points are drawn with colorIndex. Otherwise the pixel is darkened
+// as a gray level (color indexes 0 to MAX_COLOR_VALUE), so overlapping points accumulate.
+static void blendPoint(Image *imageBuf, int x, int y, int colorIndex, float opacity)
+{
+    if (opacity >= 1.0) {
+        setBufferColorIndex(imageBuf, x, y, colorIndex);
+        return;
+    }
+    if (x < 0 || x >= imageBuf->width || y < 0 || y >= imageBuf->height) {
+        return;
+    }
+    int gray = imageBuf->pixels[imageBuf->width * y + x];
+    if (gray == BACKGROUND_COLOR) {
+        gray = MAX_COLOR_VALUE;
+    }
+    else if (gray > MAX_COLOR_VALUE) {
+        // Leave text and axes alone
+        return;
+    }
+    setBufferColorIndex(imageBuf, x, y, (int)(gray * (1.0 - opacity)));
+}
+
+void drawFloatTimeSeries(Image *imageBuf, double *times, float *values, double t0, double t1, int firstInd, int lastInd, int stride, float valueScale, float valueOffset, float minValue, float maxValue, int plotX0, int plotY0, int plotWidth, int plotHeight, const char *xLabel, const char *yLabel, int colorIndex, const char *minValueStr, const char *maxValueStr, bool log10Scale, int dotSize, int fontSize, bool axes, int tupleLength, int tupleIndex, int orientation, float opacity)
 {
     int x0, y0;
     int x, y;
@@ -499,24 +521,24 @@ void drawFloatTimeSeries(Image *imageBuf, double *times, float *values, double t
             switch (dotSize)
             {
                 case 2:
-                    setBufferColorIndex(imageBuf, x0, y0, colorIndex);
-                    setBufferColorIndex(imageBuf, x0+1, y0, colorIndex);
-                    setBufferColorIndex(imageBuf, x0+1, y0+1, colorIndex);
-                    setBufferColorIndex(imageBuf, x0, y0+1, colorIndex);
+                    blendPoint(imageBuf, x0, y0, colorIndex, opacity);
+                    blendPoint(imageBuf, x0+1, y0, colorIndex, opacity);
+                    blendPoint(imageBuf, x0+1, y0+1, colorIndex, opacity);
+                    blendPoint(imageBuf, x0, y0+1, colorIndex, opacity);
                     break;
                 case 3:
-                    setBufferColorIndex(imageBuf, x0, y0, colorIndex);
-                    setBufferColorIndex(imageBuf, x0, y0-1, colorIndex);
-                    setBufferColorIndex(imageBuf, x0, y0+1, colorIndex);
-                    setBufferColorIndex(imageBuf, x0+1, y0, colorIndex);
-                    setBufferColorIndex(imageBuf, x0+1, y0-1, colorIndex);
-                    setBufferColorIndex(imageBuf, x0+1, y0+1, colorIndex);
-                    setBufferColorIndex(imageBuf, x0-1, y0, colorIndex);
-                    setBufferColorIndex(imageBuf, x0-1, y0-1, colorIndex);
-                    setBufferColorIndex(imageBuf, x0-1, y0+1, colorIndex);
+                    blendPoint(imageBuf, x0, y0, colorIndex, opacity);
+                    blendPoint(imageBuf, x0, y0-1, colorIndex, opacity);
+                    blendPoint(imageBuf, x0, y0+1, colorIndex, opacity);
+                    blendPoint(imageBuf, x0+1, y0, colorIndex, opacity);
+                    blendPoint(imageBuf, x0+1, y0-1, colorIndex, opacity);
+                    blendPoint(imageBuf, x0+1, y0+1, colorIndex, opacity);
+                    blendPoint(imageBuf, x0-1, y0, colorIndex, opacity);
+                    blendPoint(imageBuf, x0-1, y0-1, colorIndex, opacity);
+                    blendPoint(imageBuf, x0-1, y0+1, colorIndex, opacity);
                     break;
                 default:
-                    setBufferColorIndex(imageBuf, x0, y0, colorIndex);
+                    blendPoint(imageBuf, x0, y0, colorIndex, opacity);
                     break;
             }
         }

@@ -223,6 +223,7 @@ typedef struct ProcessorState {
     int maxPlotsPerScreen;
     float yScaleFactor;
     float yOffset;
+    float plotPointOpacity;
 
     char *videoOutputDir;
     char videoFilename[FILENAME_MAX];
