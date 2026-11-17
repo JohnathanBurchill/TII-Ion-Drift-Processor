@@ -454,18 +454,15 @@ void loadCrossTrackData(const char * filename, uint8_t **dataBuffers, long *numb
 
 }
 
+// Version digits of a file name ending in _MMNN.cdf, for example 5 and 1 for 0501
 uint8_t getMajorVersion(const char *filename)
 {
-    char majorVersionChar = *(filename + strlen(filename)-7);
-    uint8_t majorVersion = (uint8_t) strtol(&majorVersionChar, NULL, 10);
-    return majorVersion;
+    return (uint8_t)(filename[strlen(filename) - 7] - '0');
 }
 
 uint8_t getMinorVersion(const char *filename)
 {
-    char minorVersionChar = *(filename + strlen(filename)-5);
-    uint8_t minorVersion = (uint8_t) strtol(&minorVersionChar, NULL, 10);
-    return minorVersion;
+    return (uint8_t)(filename[strlen(filename) - 5] - '0');
 }
 
 void getFileDate(const char *filename, char *startDate)

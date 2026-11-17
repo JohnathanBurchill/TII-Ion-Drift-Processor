@@ -191,6 +191,7 @@ void loadCrossTrackData(const char * filename, uint8_t **dataBuffers, long *numb
     char validationFileName[CDF_PATHNAME_LEN];
     snprintf(validationFileName, strlen(filename)-3, "%s", filename);
 
+    uint8_t majorVersion = getMajorVersion(filename);
     uint8_t minorVersion = getMinorVersion(filename);
 
     // Open the CDF file with validation
@@ -244,11 +245,11 @@ void loadCrossTrackData(const char * filename, uint8_t **dataBuffers, long *numb
         "QDLatitude",
         "Quality_flags"
     };
-    if (minorVersion == 1)
+    if (majorVersion == 2 && minorVersion == 1)
     {
         variables[2] = "flags";
     }
-    for (uint8_t i = 0; (i<nVars-1) || (i == nVars-1 && minorVersion == 2); i++)
+    for (uint8_t i = 0; i < nVars; i++)
     {
         status = CDFconfirmzVarExistence(calCdfId, variables[i]);
         if (status != CDF_OK)
@@ -263,7 +264,7 @@ void loadCrossTrackData(const char * filename, uint8_t **dataBuffers, long *numb
     long varNum, numValues, numVarBytes;
     long numBytesPrev, numBytesToAdd, numBytesNew;
 
-    for (uint8_t i = 0; (i<nVars-1) || (i == nVars-1 && minorVersion == 2); i++)
+    for (uint8_t i = 0; i < nVars; i++)
     {
         varNum = CDFgetVarNum(calCdfId, variables[i]);
         if (varNum < CDF_OK)
@@ -306,9 +307,13 @@ void loadCrossTrackData(const char * filename, uint8_t **dataBuffers, long *numb
 
 }
 
+// Version digits of a file name ending in _MMNN.cdf, for example 5 and 1 for 0501
+uint8_t getMajorVersion(const char *filename)
+{
+    return (uint8_t)(filename[strlen(filename) - 7] - '0');
+}
+
 uint8_t getMinorVersion(const char *filename)
 {
-    char minorVersionChar = *(filename + strlen(filename)-5);
-    uint8_t minorVersion = (uint8_t) strtol(&minorVersionChar, NULL, 10);
-    return minorVersion;
+    return (uint8_t)(filename[strlen(filename) - 5] - '0');
 }

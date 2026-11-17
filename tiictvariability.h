@@ -41,10 +41,12 @@ void loadCrossTrackData(const char * filename, uint8_t **dataBuffers, long *numb
 #define QDLAT() (MEAS(1, 0))
 #define VIY() (MEAS(2, 0))
 #define VIYERROR() (MEAS(3, 0))
-#define FLAG() ((uint16_t)*((uint16_t*)dataBuffers[4]+(timeIndex)))
+// Quality_flags bits 0 to 3 (ion drift components). From 0501, bits 4 and 5 report attitude and B quality.
+#define FLAG() ((uint16_t)(*((uint16_t*)dataBuffers[4]+(timeIndex)) & 0x0f))
 #define CALFLAG() ((uint32_t)*((uint32_t*)dataBuffers[5]+(timeIndex)))
 
 
+uint8_t getMajorVersion(const char *filename);
 uint8_t getMinorVersion(const char *filename);
 
 

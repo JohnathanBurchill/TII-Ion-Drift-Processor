@@ -120,6 +120,7 @@ int main(int argc, char* argv[])
             // The macros TIME(), QDLAT(), etc. give the value at index timeIndex.
             double epoch0 = TIME();
 
+            uint8_t majorVersion = getMajorVersion(filename);
             uint8_t minorVersion = getMinorVersion(filename);
             // Number of records
             // Include all measurements for Swarm C, which are set to 0 flag always
@@ -128,7 +129,7 @@ int main(int argc, char* argv[])
             {
                 nTotal++;
 
-                if (FLAG() == 4 || (satellite == 'C' && minorVersion == 1) || (satellite == 'C' && fourByteCalFlag == true && (CALFLAG() == 0)))
+                if (FLAG() == 4 || (satellite == 'C' && majorVersion == 2 && minorVersion == 1) || (satellite == 'C' && fourByteCalFlag == true && (CALFLAG() == 0)))
                 {
                     nFlag4++;
                 }
@@ -143,7 +144,7 @@ int main(int argc, char* argv[])
             double meanTime = 0.;
             for (timeIndex = 0; timeIndex < nRecs; timeIndex++)
             {
-                if (FLAG() == 4 || (satellite == 'C' && minorVersion == 1) || (satellite == 'C' && fourByteCalFlag == true && (CALFLAG() == 0)))
+                if (FLAG() == 4 || (satellite == 'C' && majorVersion == 2 && minorVersion == 1) || (satellite == 'C' && fourByteCalFlag == true && (CALFLAG() == 0)))
                 {
                     time[nFlag4] = TIME()/1000.;
                     meanTime += time[nFlag4];
@@ -174,6 +175,7 @@ void loadCrossTrackData(const char * filename, uint8_t **dataBuffers, long *numb
     char validationFileName[CDF_PATHNAME_LEN];
     snprintf(validationFileName, strlen(filename)-3, "%s", filename);
 
+    uint8_t majorVersion = getMajorVersion(filename);
     uint8_t minorVersion = getMinorVersion(filename);
 
     // Open the CDF file with validation
@@ -230,11 +232,11 @@ void loadCrossTrackData(const char * filename, uint8_t **dataBuffers, long *numb
         "Quality_flags",
         "Calibration_flags"
     };
-    if (minorVersion == 1)
+    if (majorVersion == 2 && minorVersion == 1)
     {
         variables[4] = "flags";
     }
-    for (uint8_t i = 0; (i<nVars-1) || (i == nVars-1 && minorVersion == 2); i++)
+    for (uint8_t i = 0; (i<nVars-1) || (i == nVars-1 && (majorVersion > 2 || (majorVersion == 2 && minorVersion == 2))); i++)
     {
         status = CDFconfirmzVarExistence(calCdfId, variables[i]);
         if (status != CDF_OK)
@@ -249,7 +251,7 @@ void loadCrossTrackData(const char * filename, uint8_t **dataBuffers, long *numb
     long varNum, numValues, numVarBytes;
     long numBytesPrev, numBytesToAdd, numBytesNew;
 
-    for (uint8_t i = 0; (i<nVars-1) || (i == nVars-1 && minorVersion == 2); i++)
+    for (uint8_t i = 0; (i<nVars-1) || (i == nVars-1 && (majorVersion > 2 || (majorVersion == 2 && minorVersion == 2))); i++)
     {
         varNum = CDFgetVarNum(calCdfId, variables[i]);
         if (varNum < CDF_OK)
@@ -292,9 +294,13 @@ void loadCrossTrackData(const char * filename, uint8_t **dataBuffers, long *numb
 
 }
 
+// Version digits of a file name ending in _MMNN.cdf, for example 5 and 1 for 0501
+uint8_t getMajorVersion(const char *filename)
+{
+    return (uint8_t)(filename[strlen(filename) - 7] - '0');
+}
+
 uint8_t getMinorVersion(const char *filename)
 {
-    char minorVersionChar = *(filename + strlen(filename)-5);
-    uint8_t minorVersion = (uint8_t) strtol(&minorVersionChar, NULL, 10);
-    return minorVersion;
+    return (uint8_t)(filename[strlen(filename) - 5] - '0');
 }
