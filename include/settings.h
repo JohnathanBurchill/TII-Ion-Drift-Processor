@@ -31,6 +31,9 @@
 #define FLAGS_MINIMUM_ION_DENSITY_VALUE 10000.0 // cm^-3
 #define DEFAULT_VI_ERROR -42.0
 #define MAX_ALLOWED_CDF_GAP_SECONDS 600.0 // CDF export split into separate files at gaps exceeding 10 minutes
+// TII measurement time = cal-file time tag + this shift (s). Cal files whose global attribute
+// TII_Time_Shift_Applied (s) says EfiCal has already applied it get only the remainder.
+#define TII_TIME_SHIFT_SECONDS (1./32 - 0.0875)
 #define NUM_CAL_VARIABLES 22
 #define NUM_EXPORT_VARIABLES 58
 #define NUM_BUFFER_VARIABLES 58

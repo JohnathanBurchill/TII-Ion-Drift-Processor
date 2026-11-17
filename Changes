@@ -33,6 +33,11 @@
 	Sat_Vel_N in the calibration files has a WGS84 geodetic third component, not geocentric. It is converted
 	to geocentric NEC before use (up to 24 m/s in VsatC). This corrects the satellite-track frame, whose x axis
 	was up to 0.18 deg from the satellite velocity in earlier versions.
+	The TII time shift from time tag to measurement time (1/32 - 0.0875 s) is applied as each calibration
+	file is loaded, less any shift the file's global attribute TII_Time_Shift_Applied (s) says EfiCal has
+	already applied (patch sent upstream). With EfiCal applying it, B-VFM, q_NEC_CRF, position, velocity and
+	QD coordinates are evaluated at the measurement time instead of 56.25 ms after it. LP potentials and
+	densities are now interpolated at the shifted times. For files without the attribute the output is unchanged.
 	Swarm quaternion convention, checked against the cal file: with the scalar-last Hamilton matrix R(q),
 	v_CRF = R(q_NEC_CRF) v_NEC and v_CRF = R(q_STR_VFM)^T v_VFM.
 	Cal-file issue passed upstream: the 4 bad quaternions on 2015-10-18 come from interpolating across

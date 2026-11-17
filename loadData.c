@@ -589,6 +589,23 @@ void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state) {
     return;
   }
 
+  // Time shift EfiCal has already applied to the epochs, if the file says so
+  double timeShiftApplied = 0.0;
+  long timeShiftAttrNum = CDFgetAttrNum(calCdfId, "TII_Time_Shift_Applied");
+  if (timeShiftAttrNum >= 0) {
+    long attrDataType = 0;
+    status = CDFgetAttrgEntryDataType(calCdfId, timeShiftAttrNum, 0, &attrDataType);
+    if (status == CDF_OK && attrDataType == CDF_DOUBLE)
+      status = CDFgetAttrgEntry(calCdfId, timeShiftAttrNum, 0, &timeShiftApplied);
+    if (status != CDF_OK || attrDataType != CDF_DOUBLE) {
+      fprintf(state->processingLogFile,
+              "%sError reading TII_Time_Shift_Applied. Skipping this date.\n",
+              infoHeader);
+      closeCdf(calCdfId);
+      return;
+    }
+  }
+
   long varNum, numValues, numVarBytes;
   long numBytesPrev, numBytesToAdd, numBytesNew;
   void *newMem = NULL;
@@ -634,6 +651,15 @@ void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state) {
   }
   // close CDF
   closeCdf(calCdfId);
+  // Epochs to TII measurement times, less any shift EfiCal has applied. Everything interpolated
+  // to TII times afterwards (LP data) then uses these times.
+  double shiftMs = (TII_TIME_SHIFT_SECONDS - timeShiftApplied) * 1000.0;
+  double *epochs = (double *)state->dataBuffers[0] + state->nRecs;
+  for (long i = 0; i < nRecs; i++)
+    epochs[i] += shiftMs;
+  fprintf(state->processingLogFile,
+          "%sTII time shift: %.5f s applied by EfiCal, %.5f s applied here.\n",
+          infoHeader, timeShiftApplied, shiftMs / 1000.0);
   // Number of records obtained for this date
   switch (dayType) {
   case PREVIOUS_DAY:

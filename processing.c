@@ -181,20 +181,13 @@ int calibrateFlows(ProcessorState *state)
     long long timeIndex = 0;
 
     // Strategy is to perform calculations in place in memory without allocating space unecessarily.
-    // Update 
-    //  0) Adjust times by + 1./32 - 0.0875 s
-    //  1) VSatXYZ from km/s to m/s
-    //  2) bias voltage to nearest of -100 V, -62 V or left alone if too different from those values
-    //  3) apply Level 1 calibration with bias dependence
+    // Update
+    //  1) bias voltage to nearest of -100 V, -62 V or left alone if too different from those values
+    //  2) apply Level 1 calibration with bias dependence
+    // Times were shifted to the TII measurement time when the cal files were loaded.
     float value, innerDomeBias;
     float vMcpH = 0.0;
     float vMcpV = 0.0;
-
-    // Adjust times for sample lag
-    for (long timeIndex = 0; timeIndex < state->nRecs; timeIndex++)
-    {
-        ((double*)dataBuffers[0])[timeIndex] += ((1./32 - 0.0875)*1000.); // ms
-    }
 
     // Choose a potential estimate (lpPhiSc, lpPhiScHighGain, or lpPhiScLowGain)
     state->potentials = state->lpPhiSc;
