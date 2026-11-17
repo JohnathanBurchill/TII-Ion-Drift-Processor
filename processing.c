@@ -76,16 +76,18 @@ int initQualityData(ProcessorState *state)
     return TIICT_OK;
 }
 
-// From 0501 the processor rotates the satellite velocity and the corotation
-// velocity into the TII sensor frame itself, with q_NEC_CRF, instead of using
-// the cal-file Det_H__vX and "Det H CorVx". This keeps the velocities on the
-// same attitude source as B. On 2015-10-18 (Swarm A) the computed minus
-// cal-file satellite velocity is 0.2, 6.1 and 16.9 m/s RMS in x, y and z (up to
-// 38 m/s in y), varying around the orbit. The daily RMS and maximum differences are written to
-// the processing log so that this choice can be assessed later.
-// Records whose quaternion fails the norm check keep the cal-file values and
-// have QUALITY_FLAG_ATTITUDE_OK cleared.
-void transformToSensorFrame(ProcessorState *state)
+// The satellite and corotation velocities in the TII sensor frame are the cal-file
+// Det_H__vX and "Det H CorVx" from EfiCal, as in 0401: the GPS (MOD) Earth-fixed velocity
+// and the corotation velocity rotated from NEC with the MAG LR quaternions, with the
+// H detector frame taken as CRF. This needs cal files made after the EfiCal fix for its NEC axes,
+// whose north pointed 50" from the rotation axis (cal_source/EfiCal_NEC_pole_bug_report.md).
+// As a check, the processing log compares them with Sat_Vel_N and the corotation velocity
+// rotated here with q_NEC_CRF: fixed cal files agree to about 0.1 m/s RMS, while older
+// files differ in y by 1 to 3 m/s, and by up to tens of m/s near the geographic poles.
+//
+// Also converts Sat_Vel_N to geocentric NEC, puts the cal-file velocities in m/s,
+// and sets Quality_flags bits 4 and 5.
+void prepareVelocitiesAndFlags(ProcessorState *state)
 {
     uint8_t **dataBuffers = state->dataBuffers;
     double q[4];
@@ -102,6 +104,13 @@ void transformToSensorFrame(ProcessorState *state)
 
     for (long timeIndex = 0; timeIndex < state->nRecs; timeIndex++)
     {
+        // Sat_Vel_N's third component is WGS84 geodetic down, not geocentric centre
+        for (int k = 0; k < 3; k++)
+            vNec[k] = *ADDR(11, k, 3);
+        geodeticToGeocentricNec(LAT(), RADIUS(), vNec);
+        for (int k = 0; k < 3; k++)
+            *ADDR(11, k, 3) = vNec[k];
+
         // Cal-file velocities from km/s to m/s
         for (int k = 0; k < 3; k++)
         {
@@ -125,11 +134,8 @@ void transformToSensorFrame(ProcessorState *state)
         state->flags[timeIndex] |= QUALITY_FLAG_ATTITUDE_OK;
 
         quaternionToMatrix(q, rNecCrf);
-        vNec[0] = VSATN();
-        vNec[1] = VSATE();
-        vNec[2] = VSATC();
         necToSensor(rNecCrf, vNec, vSensor);
-        // Eastward corotation, with the sign used for "Det H CorVx" in the cal files
+        // Westward: "Det H CorVx" is minus the corotation velocity
         vCorNec[0] = 0.0;
         vCorNec[1] = -EARTH_ROTATION_RATE * RADIUS() * cos(LAT() * M_PI / 180.0);
         vCorNec[2] = 0.0;
@@ -137,17 +143,14 @@ void transformToSensorFrame(ProcessorState *state)
 
         for (int k = 0; k < 3; k++)
         {
-            diff = vSensor[k] - *ADDR(3, k, 3);
+            diff = *ADDR(3, k, 3) - vSensor[k];
             sumSquares[0][k] += diff * diff;
             if (fabs(diff) > maxAbsDiff[0][k])
                 maxAbsDiff[0][k] = fabs(diff);
-            diff = vCorSensor[k] - *ADDR(10, k, 3);
+            diff = *ADDR(10, k, 3) - vCorSensor[k];
             sumSquares[1][k] += diff * diff;
             if (fabs(diff) > maxAbsDiff[1][k])
                 maxAbsDiff[1][k] = fabs(diff);
-
-            *ADDR(3, k, 3) = vSensor[k];
-            *ADDR(10, k, 3) = vCorSensor[k];
         }
         nCompared++;
     }
@@ -155,9 +158,9 @@ void transformToSensorFrame(ProcessorState *state)
     const char *names[2] = {"satellite velocity", "corotation velocity"};
     for (int v = 0; v < 2 && nCompared > 0; v++)
     {
-        fprintf(state->processingLogFile, "%sSensor-frame %s from q_NEC_CRF minus cal-file value over %ld records: RMS x %.1f y %.1f z %.1f m/s, max |difference| x %.1f y %.1f z %.1f m/s.\n", infoHeader, names[v], nCompared, sqrt(sumSquares[v][0] / nCompared), sqrt(sumSquares[v][1] / nCompared), sqrt(sumSquares[v][2] / nCompared), maxAbsDiff[v][0], maxAbsDiff[v][1], maxAbsDiff[v][2]);
+        fprintf(state->processingLogFile, "%sCal-file sensor-frame %s minus q_NEC_CRF rotation over %ld records: RMS x %.2f y %.2f z %.2f m/s, max |difference| x %.2f y %.2f z %.2f m/s.\n", infoHeader, names[v], nCompared, sqrt(sumSquares[v][0] / nCompared), sqrt(sumSquares[v][1] / nCompared), sqrt(sumSquares[v][2] / nCompared), maxAbsDiff[v][0], maxAbsDiff[v][1], maxAbsDiff[v][2]);
     }
-    fprintf(state->processingLogFile, "%s%ld records failed the quaternion norm check and keep the cal-file velocities. %ld records have flagged B.\n", infoHeader, nBadAttitude, nBadB);
+    fprintf(state->processingLogFile, "%s%ld records failed the quaternion norm check. %ld records have flagged B.\n", infoHeader, nBadAttitude, nBadB);
 
     return;
 }
@@ -169,8 +172,8 @@ int calibrateFlows(ProcessorState *state)
     if (status != TIICT_OK)
         return status;
 
-    // Sets Quality_flags bits 4 and 5, and puts velocities in m/s
-    transformToSensorFrame(state);
+    // Sets Quality_flags bits 4 and 5, puts velocities in m/s and Sat_Vel_N in geocentric NEC
+    prepareVelocitiesAndFlags(state);
 
     // Do the calibration
     uint8_t **dataBuffers = state->dataBuffers;

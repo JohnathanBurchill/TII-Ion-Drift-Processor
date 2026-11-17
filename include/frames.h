@@ -33,10 +33,9 @@
 //          from the sensor frame by the attitude control deadband (about +-4 deg in yaw).
 //          B, E and IGRF are exported in this frame, as in 0401.
 
-// Rotation from CRF to the TII sensor frame. Taken as the identity for 0501:
-// rotating Sat_Vel_N into CRF with q_NEC_CRF reproduces the cal-file Det_H__vX
-// to within about 0.3 degrees, and the residual varies around the orbit,
-// which points to attitude-source differences rather than a mounting offset.
+// Rotation from CRF to the TII sensor frame: the identity. EfiCal defines the
+// H detector frame as CRF (Rotate_from_CRF_to_Det_HV in Imp_L1_Bin.cs), and the
+// processor maps the V sensor's moments into the H frame.
 extern const double R_CRF_TO_SENSOR[3][3];
 
 double quaternionNorm(const double q[4]);
@@ -55,6 +54,11 @@ void rotateTransposed(const double r[3][3], const double in[3], double out[3]);
 void necToSensor(const double rNecCrf[3][3], const double vNec[3], double vSensor[3]);
 void sensorToNec(const double rNecCrf[3][3], const double vSensor[3], double vNec[3]);
 void vfmToNec(const double rStrVfm[3][3], const double rNecCrf[3][3], const double vVfm[3], double vNec[3]);
+
+// Converts v from WGS84 geodetic (north, east, down) to geocentric NEC components,
+// in place, at geocentric latitude latGeocentricDeg (degrees) and radius r (m).
+// The cal-file Sat_Vel_N has a geodetic third component (up to 24 m/s from geocentric).
+void geodeticToGeocentricNec(double latGeocentricDeg, double r, double v[3]);
 
 // Rows of axes are the satellite-track x, y and z unit vectors in NEC, so
 // rotate(axes, vNec, vTrack) and rotateTransposed(axes, vTrack, vNec) convert between the two.

@@ -458,7 +458,7 @@ void addAttributes(CDFid id, const char *dataset, const char *satellite, const c
     CDFcreateAttr(id, "TEXT", GLOBAL_SCOPE, &attrNum);
     addgEntry(id, attrNum, 0, "Swarm electric field instrument thermal ion imager ion drift and electric field data, with the vector field magnetometer (VFM) magnetic field and the IGRF model field.");
     addgEntry(id, attrNum, 1, "Satellite-track coordinates: X: parallel to the satellite velocity vector; Y: to the right looking forward; Z: nadir. NEC coordinates: north, east, centre.");
-    addgEntry(id, attrNum, 2, "The magnetic field is 50 Hz VFM data averaged over each 16 Hz TII sample. It is rotated from VFM to NEC with the fixed VFM quaternion and the q_NEC_CRF attitude quaternion, then to satellite-track coordinates. The satellite and corotation velocities in the TII sensor frame are rotated from NEC with q_NEC_CRF, taking the TII sensor frame to coincide with the spacecraft common reference frame (CRF).");
+    addgEntry(id, attrNum, 2, "The magnetic field is 50 Hz VFM data averaged over each 16 Hz TII sample. It is rotated from VFM to NEC with the fixed VFM quaternion and the q_NEC_CRF attitude quaternion, then to satellite-track coordinates. The satellite and corotation velocities in the TII sensor frame are taken from the calibration files, in which the TII sensor frame is the spacecraft common reference frame (CRF).");
     addgEntry(id, attrNum, 3, "Knudsen, D.J., Burchill, J.K., Buchert, S.C., Eriksson, A.I., Gill, R., Wahlund, J.E., Ahlen, L., Smith, M. and Moffat, B., 2017. Thermal ion imagers and Langmuir probes in the Swarm electric field instruments. Journal of Geophysical Research: Space Physics, 122(2), pp.2655-2673.");
     addgEntry(id, attrNum, 4, "Burchill, J.K. and Knudsen, D.J, 2020. EFI TII Cross-Track Flow Data Release Notes. Swarm DISC document SW-RN-UoC-GS-004, Revision 6.");
     CDFcreateAttr(id, "Time_resolution", GLOBAL_SCOPE, &attrNum);
@@ -515,9 +515,9 @@ void addAttributes(CDFid id, const char *dataset, const char *satellite, const c
         {"Viy_error", "CDF_FLOAT", "m/s", "Random error estimate for cross-track horizontal ion drift from horizontal TII sensor in satellite-track coordinates. Negative value indicates no estimate available.", -42., 10000.},
         {"Viz", "CDF_FLOAT", "m/s", "Cross-track vertical ion drift from vertical TII sensor in satellite-track coordinates.", -8000., 8000.},
         {"Viz_error", "CDF_FLOAT", "m/s", "Random error estimate for cross-track vertical ion drift from vertical TII sensor in satellite-track coordinates. Negative value indicates no estimate available.", -42., 10000.},
-        {"VsatN", "CDF_FLOAT", "m/s", "Satellite velocity N component in north-east-centre coordinates.", -8000., 8000.},
-        {"VsatE", "CDF_FLOAT", "m/s", "Satellite velocity E component in north-east-centre coordinates.", -8000., 8000.},
-        {"VsatC", "CDF_FLOAT", "m/s", "Satellite velocity C component in north-east-centre coordinates.", -200., 200.},
+        {"VsatN", "CDF_FLOAT", "m/s", "Satellite velocity N component in geocentric north-east-centre coordinates.", -8000., 8000.},
+        {"VsatE", "CDF_FLOAT", "m/s", "Satellite velocity E component in geocentric north-east-centre coordinates.", -8000., 8000.},
+        {"VsatC", "CDF_FLOAT", "m/s", "Satellite velocity C component in geocentric north-east-centre coordinates.", -200., 200.},
         {"Ehx", "CDF_FLOAT", "mV/m", "Electric field x component in satellite-track coordinates, derived from -VxB with along-track ion drift from horizontal sensor.", -400., 400.},
         {"Ehy", "CDF_FLOAT", "mV/m", "Electric field y component in satellite-track coordinates, derived from -VxB with along-track ion drift from horizontal sensor.", -400., 400.},
         {"Ehz", "CDF_FLOAT", "mV/m", "Electric field z component in satellite-track coordinates, derived from -VxB with along-track ion drift from horizontal sensor.", -400., 400.},

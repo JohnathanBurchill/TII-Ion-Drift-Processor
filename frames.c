@@ -97,6 +97,40 @@ void vfmToNec(const double rStrVfm[3][3], const double rNecCrf[3][3], const doub
     return;
 }
 
+// WGS84 geodetic latitude (radians) of a point at geocentric latitude latGeocentric (radians)
+// and distance r (m) from the centre of the Earth
+static double geodeticLatitude(double latGeocentric, double r)
+{
+    const double a = 6378137.0;
+    const double f = 1.0 / 298.257223563;
+    const double e2 = f * (2.0 - f);
+    double p = r * cos(latGeocentric);
+    double z = r * sin(latGeocentric);
+    double lat = atan2(z, p * (1.0 - e2));
+    for (int k = 0; k < 5; k++)
+    {
+        double s = sin(lat);
+        double n = a / sqrt(1.0 - e2 * s * s);
+        double h = p / cos(lat) - n;
+        lat = atan2(z, p * (1.0 - e2 * n / (n + h)));
+    }
+
+    return lat;
+}
+
+void geodeticToGeocentricNec(double latGeocentricDeg, double r, double v[3])
+{
+    double latGeocentric = latGeocentricDeg * M_PI / 180.0;
+    // The geodetic axes are the geocentric axes rotated about east by this angle
+    double d = geodeticLatitude(latGeocentric, r) - latGeocentric;
+    double north = v[0] * cos(d) - v[2] * sin(d);
+    double centre = v[0] * sin(d) + v[2] * cos(d);
+    v[0] = north;
+    v[2] = centre;
+
+    return;
+}
+
 void satelliteTrackAxes(const double vSatNec[3], double axes[3][3])
 {
     double m = sqrt(vSatNec[0]*vSatNec[0] + vSatNec[1]*vSatNec[1] + vSatNec[2]*vSatNec[2]);

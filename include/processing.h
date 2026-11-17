@@ -36,7 +36,7 @@ enum FITINFO_BIT_MASKS {
 };
 
 int initQualityData(ProcessorState *state);
-void transformToSensorFrame(ProcessorState *state);
+void prepareVelocitiesAndFlags(ProcessorState *state);
 int calibrateFlows(ProcessorState *state);
 
 int removeOffsetsAndSetFlags(ProcessorState *state, int (*processRegion)(ProcessorState*));
