@@ -47,11 +47,11 @@ INCLUDE_DIRECTORIES(include ${CMAKE_INSTALL_INCUDEDIR} ${INCLUDE_DIRS}
 ${GSL_INCLUDE_DIRS} /Applications/cdf/cdf/include /usr/local/include)
 
 ADD_LIBRARY(Utilities utilities.c)
-ADD_LIBRARY(Processor processing.c export.c loadData.c utilities.c)
+ADD_LIBRARY(Processor processing.c export.c loadData.c frames.c utilities.c)
 TARGET_INCLUDE_DIRECTORIES(Processor PRIVATE)
 TARGET_LINK_LIBRARIES(Processor ${LIBS})
 
-ADD_EXECUTABLE(tiict0501 tiict.c processing.c export.c loadData.c)
+ADD_EXECUTABLE(tiict0501 tiict.c processing.c export.c loadData.c frames.c)
 TARGET_INCLUDE_DIRECTORIES(tiict0501 PRIVATE)
 TARGET_LINK_LIBRARIES(tiict0501 Processor)
 

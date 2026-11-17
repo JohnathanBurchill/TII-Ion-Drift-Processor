@@ -413,13 +413,13 @@ void addAttributes(CDFid id, const char *dataset, const char *satellite, const c
     CDFcreateAttr(id, "Mission_group", GLOBAL_SCOPE, &attrNum);
     addgEntry(id, attrNum, 0, "Swarm");
     CDFcreateAttr(id, "MODS", GLOBAL_SCOPE, &attrNum);
-    addgEntry(id, attrNum, 0, "Second release of version 4, fixes Swarm B along-track scale factors at -62 V inner dome bias, which are used only when the E-of-R method is turned off.");
+    addgEntry(id, attrNum, 0, "First release of version 5. The magnetic field is 50 Hz VFM data averaged to 16 Hz, rotated by the processor using the attitude quaternions. Adds north-east-centre versions of E, B and the corotation signal, IGRF in satellite-track and north-east-centre coordinates, and Quality_flags bits for attitude (bit 4) and magnetic field (bit 5) quality.");
     CDFcreateAttr(id, "PI_name", GLOBAL_SCOPE, &attrNum);
     addgEntry(id, attrNum, 0, "David Knudsen");   
     CDFcreateAttr(id, "PI_affiliation", GLOBAL_SCOPE, &attrNum);
     addgEntry(id, attrNum, 0, "University of Calgary");
     CDFcreateAttr(id, "Acknowledgement", GLOBAL_SCOPE, &attrNum);
-    addgEntry(id, attrNum, 0, "ESA Swarm EFI TII data are available from https://swarm-diss.eo.esa.int");
+    addgEntry(id, attrNum, 0, "ESA Swarm EFI TII and magnetic field data are available from https://swarm-diss.eo.esa.int");
     CDFcreateAttr(id, "Source_name", GLOBAL_SCOPE, &attrNum);
     sprintf(buf, "Swarm%s>Swarm %s", satellite, satellite);
     addgEntry(id, attrNum, 0, buf);
@@ -436,7 +436,8 @@ void addAttributes(CDFid id, const char *dataset, const char *satellite, const c
     CDFcreateAttr(id, "Generation_date", GLOBAL_SCOPE, &attrNum);
     time_t created;
     time(&created);
-    addgEntry(id, attrNum, 0, ctime(&created));
+    strftime(buf, sizeof buf, "%Y-%m-%dT%H:%M:%SZ", gmtime(&created));
+    addgEntry(id, attrNum, 0, buf);
     CDFcreateAttr(id, "LINK_TEXT", GLOBAL_SCOPE, &attrNum);
     if (highRate)
     {
@@ -453,13 +454,13 @@ void addAttributes(CDFid id, const char *dataset, const char *satellite, const c
     CDFcreateAttr(id, "Instrument_type", GLOBAL_SCOPE, &attrNum);
     addgEntry(id, attrNum, 0, "Electric Fields (space)");
     addgEntry(id, attrNum, 1, "Particles (space)");
-    CDFcreateAttr(id, "Instrument_type", GLOBAL_SCOPE, &attrNum);
-    addgEntry(id, attrNum, 0, "Plasma and Solar Wind");
+    addgEntry(id, attrNum, 2, "Plasma and Solar Wind");
     CDFcreateAttr(id, "TEXT", GLOBAL_SCOPE, &attrNum);
-    addgEntry(id, attrNum, 0, "Swarm electric field instrument thermal ion imager ion drift and electric field data.");
-    addgEntry(id, attrNum, 1, "Satellite-trajectory coordinates: X: parallel to the satellite velocity vector; Y: to the right looking forward; Z: nadir");
-    addgEntry(id, attrNum, 2, "Knudsen, D.J., Burchill, J.K., Buchert, S.C., Eriksson, A.I., Gill, R., Wahlund, J.E., Ahlen, L., Smith, M. and Moffat, B., 2017. Thermal ion imagers and Langmuir probes in the Swarm electric field instruments. Journal of Geophysical Research: Space Physics, 122(2), pp.2655-2673.");
-    addgEntry(id, attrNum, 3, "Burchill, J.K. and Knudsen, D.J, 2020. EFI TII Cross-Track Flow Data Release Notes. Swarm DISC document SW-RN-UoC-GS-004, Revision 6.");
+    addgEntry(id, attrNum, 0, "Swarm electric field instrument thermal ion imager ion drift and electric field data, with the vector field magnetometer (VFM) magnetic field and the IGRF model field.");
+    addgEntry(id, attrNum, 1, "Satellite-track coordinates: X: parallel to the satellite velocity vector; Y: to the right looking forward; Z: nadir. NEC coordinates: north, east, centre.");
+    addgEntry(id, attrNum, 2, "The magnetic field is 50 Hz VFM data averaged over each 16 Hz TII sample. It is rotated from VFM to NEC with the fixed VFM quaternion and the q_NEC_CRF attitude quaternion, then to satellite-track coordinates. The satellite and corotation velocities in the TII sensor frame are rotated from NEC with q_NEC_CRF, taking the TII sensor frame to coincide with the spacecraft common reference frame (CRF).");
+    addgEntry(id, attrNum, 3, "Knudsen, D.J., Burchill, J.K., Buchert, S.C., Eriksson, A.I., Gill, R., Wahlund, J.E., Ahlen, L., Smith, M. and Moffat, B., 2017. Thermal ion imagers and Langmuir probes in the Swarm electric field instruments. Journal of Geophysical Research: Space Physics, 122(2), pp.2655-2673.");
+    addgEntry(id, attrNum, 4, "Burchill, J.K. and Knudsen, D.J, 2020. EFI TII Cross-Track Flow Data Release Notes. Swarm DISC document SW-RN-UoC-GS-004, Revision 6.");
     CDFcreateAttr(id, "Time_resolution", GLOBAL_SCOPE, &attrNum);
     if (highRate)
     {
@@ -523,14 +524,14 @@ void addAttributes(CDFid id, const char *dataset, const char *satellite, const c
         {"Evx", "CDF_FLOAT", "mV/m", "Electric field x component in satellite-track coordinates, derived from -VxB with along-track ion drift from vertical sensor.", -400., 400.},
         {"Evy", "CDF_FLOAT", "mV/m", "Electric field y component in satellite-track coordinates, derived from -VxB with along-track ion drift from vertical sensor.", -400., 400.},
         {"Evz", "CDF_FLOAT", "mV/m", "Electric field z component in satellite-track coordinates, derived from -VxB with along-track ion drift from vertical sensor.", -400., 400.},
-        {"Bx", "CDF_FLOAT", "nT", "Geomagnetic field x component in satellite-track coordinates, derived from the 1 Hz product.", -65000., 65000.},
-        {"By", "CDF_FLOAT", "nT", "Geomagnetic field y component in satellite-track coordinates, derived from the 1 Hz product.", -65000., 65000.},
-        {"Bz", "CDF_FLOAT", "nT", "Geomagnetic field z component in satellite-track coordinates, derived from the 1 Hz product.", -65000., 65000.},
-        {"Vicrx", "CDF_FLOAT", "m/s", "Ion drift corotation signal x component in satellite-track coorinates. This has been removed from ion drift and electric field.", -1000., 1000.},
-        {"Vicry", "CDF_FLOAT", "m/s", "Ion drift corotation signal y component in satellite-track coorinates. This has been removed from ion drift and electric field.", -1000., 1000.},
-        {"Vicrz", "CDF_FLOAT", "m/s", "Ion drift corotation signal z component in satellite-track coorinates. This has been removed from ion drift and electric field.", -1000., 1000.},
+        {"Bx", "CDF_FLOAT", "nT", "Geomagnetic field x component in satellite-track coordinates, from 50 Hz VFM data averaged to 16 Hz.", -65000., 65000.},
+        {"By", "CDF_FLOAT", "nT", "Geomagnetic field y component in satellite-track coordinates, from 50 Hz VFM data averaged to 16 Hz.", -65000., 65000.},
+        {"Bz", "CDF_FLOAT", "nT", "Geomagnetic field z component in satellite-track coordinates, from 50 Hz VFM data averaged to 16 Hz.", -65000., 65000.},
+        {"Vicrx", "CDF_FLOAT", "m/s", "Ion drift corotation signal x component in satellite-track coordinates. This has been removed from ion drift and electric field.", -1000., 1000.},
+        {"Vicry", "CDF_FLOAT", "m/s", "Ion drift corotation signal y component in satellite-track coordinates. This has been removed from ion drift and electric field.", -1000., 1000.},
+        {"Vicrz", "CDF_FLOAT", "m/s", "Ion drift corotation signal z component in satellite-track coordinates. This has been removed from ion drift and electric field.", -1000., 1000.},
         {"U_SC", "CDF_FLOAT", "V", "Satellite floating potential estimate from EXTD LP_HM dataset.", -50., 5.},
-        {"Quality_flags", "CDF_UINT2", "*", "Bitwise flag for each velocity component, where a value of 1 for a particular component signifies that calibration was successful, and that the baseline 1-sigma noise level is less than or equal to 100 m/s at 2 Hz. Electric field quality can be assessed from these flags according to -vxB. Bit0 (least significant) = Vixh, bit1 = Vixv, bit2 = Viy, bit3 = Viz. Refer to the release notes for details.", 0, 65535},
+        {"Quality_flags", "CDF_UINT2", "*", "Bitwise flag for each velocity component, where a value of 1 for a particular component signifies that calibration was successful, and that the baseline 1-sigma noise level is less than or equal to 100 m/s at 2 Hz. Electric field quality can be assessed from these flags according to -vxB. Bit0 (least significant) = Vixh, bit1 = Vixv, bit2 = Viy, bit3 = Viz. Bit4 = attitude OK: the q_NEC_CRF quaternion has unit norm to within 0.001; when 0, B, E, IGRF and the NEC variables are unreliable. Bit5 = magnetic field OK: the VFM measurement and 16 Hz averaging flags are nominal; when 0, B and E are unreliable. Refer to the release notes for details.", 0, 65535},
         {"Calibration_flags", "CDF_UINT4", "*", "Information about the calibration process. Refer to the release notes for details.", 0, 4294967295},
         {"GEPot", "CDF_FLOAT", "V", "Geoelectric potential estimate from Ehx.", -1000000., 1000000.},
         {"GEPotDiff", "CDF_FLOAT", "V", "Geoelectric potential at end of orbit region minus geoelectric potential at beginning of orbit region.", -1000000., 1000000.},
@@ -540,6 +541,24 @@ void addAttributes(CDFid id, const char *dataset, const char *satellite, const c
         {"GEPotDetrended", "CDF_FLOAT", "V", "Geoelectric potential linearly detrended within each orbit region.", -1000000., 1000000.},
         {"MAGDBS", "CDF_FLOAT", "mV/m", "Maximum absolute slope of the mid-latitude detrended geoelectric potential estimates.", -1000000., 1000000.},
         {"OrbitRegion", "CDF_UINT1", "*", "Orbit region poleward or equatorward of plus-or-minus 44.0 degrees quasi-dipole latitude. 0: northern polar ascending; 1: equatorial descending; 2: southern polar descending; 3: equatorial ascending; 255: incomplete or invalid.", 0, 3},
+        {"EhN", "CDF_FLOAT", "mV/m", "Electric field N component in north-east-centre coordinates, derived from -VxB with along-track ion drift from horizontal sensor.", -400., 400.},
+        {"EhE", "CDF_FLOAT", "mV/m", "Electric field E component in north-east-centre coordinates, derived from -VxB with along-track ion drift from horizontal sensor.", -400., 400.},
+        {"EhC", "CDF_FLOAT", "mV/m", "Electric field C component in north-east-centre coordinates, derived from -VxB with along-track ion drift from horizontal sensor.", -400., 400.},
+        {"EvN", "CDF_FLOAT", "mV/m", "Electric field N component in north-east-centre coordinates, derived from -VxB with along-track ion drift from vertical sensor.", -400., 400.},
+        {"EvE", "CDF_FLOAT", "mV/m", "Electric field E component in north-east-centre coordinates, derived from -VxB with along-track ion drift from vertical sensor.", -400., 400.},
+        {"EvC", "CDF_FLOAT", "mV/m", "Electric field C component in north-east-centre coordinates, derived from -VxB with along-track ion drift from vertical sensor.", -400., 400.},
+        {"BN", "CDF_FLOAT", "nT", "Geomagnetic field N component in north-east-centre coordinates, from 50 Hz VFM data averaged to 16 Hz.", -65000., 65000.},
+        {"BE", "CDF_FLOAT", "nT", "Geomagnetic field E component in north-east-centre coordinates, from 50 Hz VFM data averaged to 16 Hz.", -65000., 65000.},
+        {"BC", "CDF_FLOAT", "nT", "Geomagnetic field C component in north-east-centre coordinates, from 50 Hz VFM data averaged to 16 Hz.", -65000., 65000.},
+        {"VicrN", "CDF_FLOAT", "m/s", "Ion drift corotation signal N component in north-east-centre coordinates.", -1000., 1000.},
+        {"VicrE", "CDF_FLOAT", "m/s", "Ion drift corotation signal E component in north-east-centre coordinates.", -1000., 1000.},
+        {"VicrC", "CDF_FLOAT", "m/s", "Ion drift corotation signal C component in north-east-centre coordinates.", -1000., 1000.},
+        {"IGRFx", "CDF_FLOAT", "nT", "IGRF magnetic field x component in satellite-track coordinates.", -65000., 65000.},
+        {"IGRFy", "CDF_FLOAT", "nT", "IGRF magnetic field y component in satellite-track coordinates.", -65000., 65000.},
+        {"IGRFz", "CDF_FLOAT", "nT", "IGRF magnetic field z component in satellite-track coordinates.", -65000., 65000.},
+        {"IGRFN", "CDF_FLOAT", "nT", "IGRF magnetic field N component in north-east-centre coordinates.", -65000., 65000.},
+        {"IGRFE", "CDF_FLOAT", "nT", "IGRF magnetic field E component in north-east-centre coordinates.", -65000., 65000.},
+        {"IGRFC", "CDF_FLOAT", "nT", "IGRF magnetic field C component in north-east-centre coordinates.", -65000., 65000.},
     };
 
     for (uint8_t i = 0; i < NUM_EXPORT_VARIABLES; i++)
@@ -549,6 +568,25 @@ void addAttributes(CDFid id, const char *dataset, const char *satellite, const c
 
     return;
 
+}
+
+// Variables added in 0501, each a vector stored as x, y, z (or N, E, C) triplets
+static void createVariablesAddedIn0501(CDFid id, ProcessorState *state, long startIndex, long stopIndex)
+{
+    char *names[6][3] = {
+        {"EhN", "EhE", "EhC"},
+        {"EvN", "EvE", "EvC"},
+        {"BN", "BE", "BC"},
+        {"VicrN", "VicrE", "VicrC"},
+        {"IGRFx", "IGRFy", "IGRFz"},
+        {"IGRFN", "IGRFE", "IGRFC"}
+    };
+    float *vectors[6] = {state->ectFieldHNec, state->ectFieldVNec, state->bNec, state->vicrNec, state->igrfField, state->igrfNec};
+    for (uint8_t v = 0; v < 6; v++)
+        for (uint8_t k = 0; k < 3; k++)
+            createVarFrom2DVar(id, names[v][k], CDF_REAL4, startIndex, stopIndex, vectors[v], k, 3);
+
+    return;
 }
 
 int exportTCT16Cdfs(ProcessorState *state, double startTime, double stopTime, long startIndex, long stopIndex)
@@ -625,6 +663,7 @@ int exportTCT16Cdfs(ProcessorState *state, double startTime, double stopTime, lo
         createVarFrom1DVar(exportCdfId, "GEPotDetrended", CDF_REAL4, startIndex, stopIndex, state->geoPotentialDetrended);
         createVarFrom1DVar(exportCdfId, "MAGDBS", CDF_REAL4, startIndex, stopIndex, state->maxAbsGeopotentialDetrendedSlope);
         createVarFrom1DVar(exportCdfId, "OrbitRegion", CDF_UINT1, startIndex, stopIndex, state->region);
+        createVariablesAddedIn0501(exportCdfId, state, startIndex, stopIndex);
 
         // add attributes
         addAttributes(exportCdfId, "TCT16", state->args.satellite, state->args.exportVersion, startTime, stopTime);
@@ -758,6 +797,7 @@ int exportTCT02Cdfs(ProcessorState *state, double startTime, double stopTime, lo
         createVarFrom1DVar(exportCdfId, "GEPotDetrended", CDF_REAL4, startIndex, stopIndex, state->geoPotentialDetrended);
         createVarFrom1DVar(exportCdfId, "MAGDBS", CDF_REAL4, startIndex, stopIndex, state->maxAbsGeopotentialDetrendedSlope);
         createVarFrom1DVar(exportCdfId, "OrbitRegion", CDF_UINT1, startIndex, stopIndex, state->region);
+        createVariablesAddedIn0501(exportCdfId, state, startIndex, stopIndex);
 
         // add attributes
         // update start and stop times to the averaged ones

@@ -97,6 +97,7 @@ typedef struct ProcessorState {
     uint8_t * dataBuffers[NUM_CAL_VARIABLES];
     long nRecs;
     long memoryAllocated;
+    double qCrfVfm[4]; // q_STR_VFM: not record varying
 
     // LP data for floating potential
     double *lpTimes;
@@ -115,12 +116,17 @@ typedef struct ProcessorState {
     uint32_t *fitInfo;
     uint8_t *region;
 
-    float *xhat;
-    float *yhat;
-    float *zhat;
+    // Vectors stored as x, y, z (or N, E, C) triplets.
+    // ectFieldH, ectFieldV, bctField and igrfField are in the satellite-track frame.
     float *ectFieldH;
     float *ectFieldV;
     float *bctField;
+    float *igrfField;
+    float *ectFieldHNec;
+    float *ectFieldVNec;
+    float *bNec;
+    float *vicrNec;
+    float *igrfNec;
 
     float *geoPotential;
     float *maxAbsGeopotentialSlope;

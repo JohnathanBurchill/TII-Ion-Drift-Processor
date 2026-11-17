@@ -548,23 +548,19 @@ void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state) {
       "Radius",              // 9
       "Det H CorVx",         // 10
       "Sat_Vel_N",           // 11
-      "B-North",             // 12
+      "B-VFM",               // 12
       "MCP_Voltage_H",       // 13
       "MCP_Voltage_V",       // 14
       "Bias_Grid_H",         // 15
       "Bias_Grid_V",         // 16
-      "Faceplate_Volt_Mon_H" // 17
+      "Faceplate_Volt_Mon_H", // 17
+      "IGRF-VFM",            // 18
+      "q_NEC_CRF",           // 19
+      "B-VFM-Flag",          // 20
+      "B-Avg-Flag"           // 21
   };
 
-  uint8_t nVars = numzVars;
-  if (nVars != NUM_CAL_VARIABLES) {
-    fprintf(state->processingLogFile,
-            "%sError: number of calibration variables should be %d. Got %ld. "
-            "Skipping this date.\n",
-            infoHeader, (uint8_t)NUM_CAL_VARIABLES, numzVars);
-    closeCdf(calCdfId);
-    return;
-  }
+  uint8_t nVars = NUM_CAL_VARIABLES;
   fprintf(state->processingLogFile, "%sChecking calibration file variables...",
           infoHeader);
   for (uint8_t i = 0; i < nVars; i++) {
@@ -582,6 +578,16 @@ void loadTiiCalDataFromDate(const DayType dayType, ProcessorState *state) {
     }
   }
   fprintf(state->processingLogFile, "%sOK\n", infoHeader);
+
+  // VFM to CRF rotation is not record varying, so read its single record
+  status = CDFgetzVarRecordData(calCdfId, CDFgetVarNum(calCdfId, "q_STR_VFM"),
+                                0, state->qCrfVfm);
+  if (status != CDF_OK) {
+    fprintf(state->processingLogFile,
+            "%sError reading q_STR_VFM. Skipping this date.\n", infoHeader);
+    closeCdf(calCdfId);
+    return;
+  }
 
   long varNum, numValues, numVarBytes;
   long numBytesPrev, numBytesToAdd, numBytesNew;
@@ -656,8 +662,8 @@ void setCalibrationFileName(ProcessorState *state, int year, int month,
                             int day) {
   Arguments *a = &state->args;
   snprintf(state->calibrationFileName, CDF_PATHNAME_LEN,
-           "%s/%s/%04d/Swarm_%s/%02d/TiiClbr%s_Swarm_%s_%04d_%02d_%02d.cdf",
-           a->calDir, a->calVersion, year, a->satellite, month, a->calVersion,
+           "%s/%s/Swarm_%s/%04d/TiiClbr%s_Swarm_%s_%04d_%02d_%02d.cdf",
+           a->calDir, a->calVersion, a->satellite, year, a->calVersion,
            a->satellite, year, month, day);
 
   return;

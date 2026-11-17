@@ -10,3 +10,34 @@
 	Fix for CDF file attribute.		
 0402:
 	Fixed Swarm B along-track scale factors at -62 V inner dome bias (used only with --do-not-use-eofr-for-along-track-drift).
+0501:
+	Reads 0501 calibration files from <calDir>/0501/Swarm_X/YYYY/TiiClbr0501_Swarm_X_YYYY_MM_DD.cdf.
+	B is the 50 Hz VFM field averaged to 16 Hz (B-VFM) instead of the 1 Hz field upsampled. The processor
+	rotates it to NEC (VFM to CRF with q_STR_VFM, CRF to NEC with q_NEC_CRF) and then to the satellite-track
+	frame, defined as before by x parallel to the NEC satellite velocity. B, E and IGRF use the same frame as
+	0401. On 2015-10-18 (Swarm A) B agrees with 0401 to within 2 nT RMS per component (54 nT at most, at
+	high latitudes), and E to within 0.4 mV/m RMS (1.8 mV/m at most), mainly from the Viy and Viz changes below.
+	New variables: EhN EhE EhC, EvN EvE EvC, BN BE BC, VicrN VicrE VicrC, and IGRF from the cal file in
+	satellite-track (IGRFx IGRFy IGRFz) and NEC (IGRFN IGRFE IGRFC) coordinates.
+	Quality_flags bit 4: attitude OK, | |q_NEC_CRF| - 1 | <= 0.001. When 0, B, E, IGRF and the NEC variables are unreliable.
+	Quality_flags bit 5: B OK, B-VFM-Flag is 0 and B-Avg-Flag is less than 2. When 0, B and E are unreliable.
+	Users testing Quality_flags for equality (for example == 4) must now mask bits 0 to 3.
+	Decision to assess later: satellite velocity and corotation in the sensor frame are now computed from
+	Sat_Vel_N and position with q_NEC_CRF, not taken from the cal-file Det_H__vX and "Det H CorVx", so they
+	share one attitude source with B. On 2015-10-18 (Swarm A) the computed satellite velocity
+	differs from Det_H__vX by 0.2, 6.1 and 16.9 m/s RMS in x, y and z (up to 38 m/s in y), varying around the
+	orbit; corotation agrees to 0.1 m/s. The processing log reports these differences for every day processed.
+	Records failing the quaternion check keep the cal-file Det_H__vX and "Det H CorVx".
+	Swarm quaternion convention, checked against the cal file: with the scalar-last Hamilton matrix R(q),
+	v_CRF = R(q_NEC_CRF) v_NEC and v_CRF = R(q_STR_VFM)^T v_VFM.
+	Cal-file issue to pass upstream: the 4 bad quaternions on 2015-10-18 come from interpolating across
+	q -> -q sign flips in the 50 Hz attitude, which also corrupts IGRF-VFM at those records.
+	Geoelectric potential integration skips NaN electric field samples (from NaN B).
+	Fixed Calibration_flags, which could carry undefined bits from uninitialized memory.
+	Fixed LP interpolation to TII times: it took the next LP sample instead of interpolating, and read past
+	the end of the LP arrays for TII times after the last LP sample. U_SC and the ion density used for
+	flagging are now linearly interpolated, and are NaN outside the span of the LP data.
+	Global attributes: Instrument_type keeps all three entries (Electric Fields (space) was overwritten);
+	Generation_date is ISO 8601 UTC; TEXT and Acknowledgement describe the magnetic field, IGRF and frames.
+	As in 0401, the ion drifts and the corotation signal are in TII sensor axes, which differ from the
+	satellite-track frame by the attitude control deadband (about +-4 deg in yaw).

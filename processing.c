@@ -26,10 +26,12 @@
 #include "errors.h"
 #include "loadData.h"
 #include "export.h"
+#include "frames.h"
 
 #include <tii/detector.h>
 #include <tii/isp.h>
 
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
@@ -61,6 +63,7 @@ int initQualityData(ProcessorState *state)
         state->viErrors[4*ind+2] = DEFAULT_VI_ERROR;
         state->viErrors[4*ind+3] = DEFAULT_VI_ERROR;
         state->flags[ind] = 0;
+        state->fitInfo[ind] = 0;
         state->region[ind] = 255; // Invalid or incomplete region
         // FITINFO_OFFSET_NOT_REMOVED = 1 and FITINFO_INCOMPLETE_REGION = 1 are the defaults for fitInfo
         // Set for each velocity component
@@ -73,12 +76,101 @@ int initQualityData(ProcessorState *state)
     return TIICT_OK;
 }
 
+// From 0501 the processor rotates the satellite velocity and the corotation
+// velocity into the TII sensor frame itself, with q_NEC_CRF, instead of using
+// the cal-file Det_H__vX and "Det H CorVx". This keeps the velocities on the
+// same attitude source as B. On 2015-10-18 (Swarm A) the computed minus
+// cal-file satellite velocity is 0.2, 6.1 and 16.9 m/s RMS in x, y and z (up to
+// 38 m/s in y), varying around the orbit. The daily RMS and maximum differences are written to
+// the processing log so that this choice can be assessed later.
+// Records whose quaternion fails the norm check keep the cal-file values and
+// have QUALITY_FLAG_ATTITUDE_OK cleared.
+void transformToSensorFrame(ProcessorState *state)
+{
+    uint8_t **dataBuffers = state->dataBuffers;
+    double q[4];
+    double rNecCrf[3][3];
+    double vNec[3], vSensor[3];
+    double vCorNec[3], vCorSensor[3];
+    double diff;
+    // Index 0: satellite velocity, index 1: corotation velocity
+    double sumSquares[2][3] = {0};
+    double maxAbsDiff[2][3] = {0};
+    long nCompared = 0;
+    long nBadAttitude = 0;
+    long nBadB = 0;
+
+    for (long timeIndex = 0; timeIndex < state->nRecs; timeIndex++)
+    {
+        // Cal-file velocities from km/s to m/s
+        for (int k = 0; k < 3; k++)
+        {
+            *ADDR(3, k, 3) *= 1000.0;
+            *ADDR(10, k, 3) *= 1000.0;
+        }
+
+        if (BVFMFLAG() == 0 && BAVGFLAG() < 2)
+            state->flags[timeIndex] |= QUALITY_FLAG_B_OK;
+        else
+            nBadB++;
+
+        for (int k = 0; k < 4; k++)
+            q[k] = QNECCRF(k);
+        // Written so that a NaN norm fails the check
+        if (!(fabs(quaternionNorm(q) - 1.0) <= QUATERNION_NORM_TOLERANCE))
+        {
+            nBadAttitude++;
+            continue;
+        }
+        state->flags[timeIndex] |= QUALITY_FLAG_ATTITUDE_OK;
+
+        quaternionToMatrix(q, rNecCrf);
+        vNec[0] = VSATN();
+        vNec[1] = VSATE();
+        vNec[2] = VSATC();
+        necToSensor(rNecCrf, vNec, vSensor);
+        // Eastward corotation, with the sign used for "Det H CorVx" in the cal files
+        vCorNec[0] = 0.0;
+        vCorNec[1] = -EARTH_ROTATION_RATE * RADIUS() * cos(LAT() * M_PI / 180.0);
+        vCorNec[2] = 0.0;
+        necToSensor(rNecCrf, vCorNec, vCorSensor);
+
+        for (int k = 0; k < 3; k++)
+        {
+            diff = vSensor[k] - *ADDR(3, k, 3);
+            sumSquares[0][k] += diff * diff;
+            if (fabs(diff) > maxAbsDiff[0][k])
+                maxAbsDiff[0][k] = fabs(diff);
+            diff = vCorSensor[k] - *ADDR(10, k, 3);
+            sumSquares[1][k] += diff * diff;
+            if (fabs(diff) > maxAbsDiff[1][k])
+                maxAbsDiff[1][k] = fabs(diff);
+
+            *ADDR(3, k, 3) = vSensor[k];
+            *ADDR(10, k, 3) = vCorSensor[k];
+        }
+        nCompared++;
+    }
+
+    const char *names[2] = {"satellite velocity", "corotation velocity"};
+    for (int v = 0; v < 2 && nCompared > 0; v++)
+    {
+        fprintf(state->processingLogFile, "%sSensor-frame %s from q_NEC_CRF minus cal-file value over %ld records: RMS x %.1f y %.1f z %.1f m/s, max |difference| x %.1f y %.1f z %.1f m/s.\n", infoHeader, names[v], nCompared, sqrt(sumSquares[v][0] / nCompared), sqrt(sumSquares[v][1] / nCompared), sqrt(sumSquares[v][2] / nCompared), maxAbsDiff[v][0], maxAbsDiff[v][1], maxAbsDiff[v][2]);
+    }
+    fprintf(state->processingLogFile, "%s%ld records failed the quaternion norm check and keep the cal-file velocities. %ld records have flagged B.\n", infoHeader, nBadAttitude, nBadB);
+
+    return;
+}
+
 int calibrateFlows(ProcessorState *state)
 {
     // Allocate memory for quality parameters
     int status = initQualityData(state);
     if (status != TIICT_OK)
         return status;
+
+    // Sets Quality_flags bits 4 and 5, and puts velocities in m/s
+    transformToSensorFrame(state);
 
     // Do the calibration
     uint8_t **dataBuffers = state->dataBuffers;
@@ -134,16 +226,6 @@ int calibrateFlows(ProcessorState *state)
             *ADDR(16, 0, 1) = -100.;
         else if(VBIASV() > -65. && VBIASV() < -55.0)
             *ADDR(16, 0, 1) = -62.0;
-
-        // VSatXYZ to m/s
-        *ADDR(3, 0, 3) *= 1000.0;
-        *ADDR(3, 1, 3) *= 1000.0;
-        *ADDR(3, 2, 3) *= 1000.0;
-
-        // VCorot to m/s
-        *ADDR(10, 0, 3) *= 1000.0;
-        *ADDR(10, 1, 3) *= 1000.0;
-        *ADDR(10, 2, 3) *= 1000.0;
 
         // Apply level1 calibration with bias dependence
         // Assumes H and V sensors have same bias, which is okay 
@@ -539,12 +621,15 @@ float madThreshold(char satellite, int sensorIndex)
 int initFields(ProcessorState *state)
 {
     // Set up new memory
-    state->xhat = malloc(state->nRecs * (sizeof *state->xhat) * 3);
-    state->yhat = malloc(state->nRecs * (sizeof *state->yhat) * 3);
-    state->zhat = malloc(state->nRecs * (sizeof *state->zhat) * 3);
     state->ectFieldH = malloc(state->nRecs * (sizeof *state->ectFieldH) * 3);
     state->ectFieldV = malloc(state->nRecs * (sizeof *state->ectFieldV) * 3);
     state->bctField = malloc(state->nRecs * (sizeof *state->bctField) * 3);
+    state->igrfField = malloc(state->nRecs * (sizeof *state->igrfField) * 3);
+    state->ectFieldHNec = malloc(state->nRecs * (sizeof *state->ectFieldHNec) * 3);
+    state->ectFieldVNec = malloc(state->nRecs * (sizeof *state->ectFieldVNec) * 3);
+    state->bNec = malloc(state->nRecs * (sizeof *state->bNec) * 3);
+    state->vicrNec = malloc(state->nRecs * (sizeof *state->vicrNec) * 3);
+    state->igrfNec = malloc(state->nRecs * (sizeof *state->igrfNec) * 3);
     state->geoPotential = malloc(state->nRecs * sizeof *state->geoPotential);
     state->geoPotentialDifference = malloc(state->nRecs * sizeof *state->geoPotentialDifference);
     state->exAdjusted= malloc(state->nRecs * sizeof *state->exAdjusted);
@@ -553,10 +638,26 @@ int initFields(ProcessorState *state)
     state->geoPotentialDetrended = malloc(state->nRecs * sizeof *state->geoPotentialDetrended);
     state->maxAbsGeopotentialDetrendedSlope= malloc(state->nRecs * sizeof *state->maxAbsGeopotentialDetrendedSlope);
 
-    if (state->xhat == NULL || state->yhat == NULL || state->zhat == NULL || state->ectFieldH == NULL || state->ectFieldV == NULL || state->bctField == NULL || state->geoPotential == NULL || state->maxAbsGeopotentialSlope == NULL)
+    if (state->ectFieldH == NULL || state->ectFieldV == NULL || state->bctField == NULL || state->igrfField == NULL || state->ectFieldHNec == NULL || state->ectFieldVNec == NULL || state->bNec == NULL || state->vicrNec == NULL || state->igrfNec == NULL || state->geoPotential == NULL || state->maxAbsGeopotentialSlope == NULL)
         return TIICT_MEMORY;
 
     return TIICT_OK;
+}
+
+static void loadTriplet(const float *in, double out[3])
+{
+    for (int k = 0; k < 3; k++)
+        out[k] = in[k];
+
+    return;
+}
+
+static void storeTriplet(const double in[3], float *out)
+{
+    for (int k = 0; k < 3; k++)
+        out[k] = (float)in[k];
+
+    return;
 }
 
 int calculateFields(ProcessorState *state)
@@ -569,56 +670,71 @@ int calculateFields(ProcessorState *state)
     // Calculate fields
     long long ind;
     uint8_t **dataBuffers = state->dataBuffers;
-    float *xhat = state->xhat;
-    float *yhat = state->yhat;
-    float *zhat = state->zhat;
     float *ectFieldH = state->ectFieldH;
     float *ectFieldV = state->ectFieldV;
     float *bctField = state->bctField;
 
+    double rStrVfm[3][3];
+    quaternionToMatrix(state->qCrfVfm, rStrVfm);
+    double rNecCrf[3][3];
+    double track[3][3];
+    double q[4];
+    double v[3];
+    double nec[3];
+    double out[3];
+
     long timeIndex = 0;
-    float magVsat = sqrtf(VSATN()*VSATN() + VSATE()*VSATE() + VSATC() * VSATC());
 
     for (timeIndex = 0; timeIndex < state->nRecs; timeIndex++)
     {
-        // Calculate xhat, yhat, zhat
-        // xhat parallel to satellite velocity 
-        magVsat = sqrtf(VSATN()*VSATN() + VSATE()*VSATE() + VSATC() * VSATC());
         ind = 3*timeIndex;
-        xhat[ind + 0] = VSATN() / magVsat;
-        xhat[ind + 1] = VSATE() / magVsat;
-        xhat[ind + 2] = VSATC() / magVsat;
-        // yhat is xhat cross {0, 0, -1}
-        yhat[ind + 0] = -xhat[ind + 1];
-        yhat[ind + 1] = xhat[ind + 0];
-        yhat[ind + 2] = 0.0;
-        float magyhat = sqrtf(yhat[ind + 0] * yhat[ind + 0] + yhat[ind + 1] * yhat[ind + 1] + yhat[ind + 2] * yhat[ind + 2]);
-        yhat[ind + 0] /= magyhat;
-        yhat[ind + 1] /= magyhat;
-        yhat[ind + 2] /= magyhat;
-        // zhat is the cross-product of x into y
-        zhat[ind+0] = xhat[ind+1] * yhat[ind+2] - xhat[ind+2] * yhat[ind+1];
-        zhat[ind+1] = -1.0 * xhat[ind+0] * yhat[ind+2] + xhat[ind+2] * yhat[ind+0];
-        zhat[ind+2] = xhat[ind+0] * yhat[ind+1] - xhat[ind+1] * yhat[ind+0];
-        float magzhat = sqrtf(zhat[ind + 0] * zhat[ind + 0] + zhat[ind + 1] * zhat[ind + 1] + zhat[ind + 2] * zhat[ind + 2]);
-        zhat[ind + 0] /= magzhat;
-        zhat[ind + 1] /= magzhat;
-        zhat[ind + 2] /= magzhat;
 
-        // B field in cross-track frame, nT:
-        bctField[ind + 0] = BN() * xhat[ind + 0] + BE() * xhat[ind + 1] + BC() * xhat[ind + 2];
-        bctField[ind + 1] = BN() * yhat[ind + 0] + BE() * yhat[ind + 1] + BC() * yhat[ind + 2];
-        bctField[ind + 2] = BN() * zhat[ind + 0] + BE() * zhat[ind + 1] + BC() * zhat[ind + 2];
+        // Where q_NEC_CRF failed the norm check this uses the normalized
+        // quaternion, and QUALITY_FLAG_ATTITUDE_OK is clear.
+        for (int k = 0; k < 4; k++)
+            q[k] = QNECCRF(k);
+        quaternionToMatrix(q, rNecCrf);
+        v[0] = VSATN();
+        v[1] = VSATE();
+        v[2] = VSATC();
+        satelliteTrackAxes(v, track);
 
-        // E field from H sensor X, in cross-track frame, mV/m:
+        // B and IGRF from VFM to NEC with the quaternions, then onto the satellite-track axes, nT
+        for (int k = 0; k < 3; k++)
+            v[k] = BVFM(k);
+        vfmToNec(rStrVfm, rNecCrf, v, nec);
+        storeTriplet(nec, &state->bNec[ind]);
+        rotate(track, nec, out);
+        storeTriplet(out, &bctField[ind]);
+        for (int k = 0; k < 3; k++)
+            v[k] = IGRFVFM(k);
+        vfmToNec(rStrVfm, rNecCrf, v, nec);
+        storeTriplet(nec, &state->igrfNec[ind]);
+        rotate(track, nec, out);
+        storeTriplet(out, &state->igrfField[ind]);
+
+        // E field from H sensor X, in satellite-track frame, mV/m:
         ectFieldH[ind + 0] = -1.0 * (MYH() * bctField[ind + 2] - MYV() * bctField[ind + 1]) / 1000000000.0 * 1000.0; 
         ectFieldH[ind + 1] = -1.0 * (-1.0 * MXH() * bctField[ind + 2] + MYV() * bctField[ind + 0]) / 1000000000.0 * 1000.0; 
         ectFieldH[ind + 2] = -1.0 * (MXH() * bctField[ind + 1] - MYH() * bctField[ind + 0]) / 1000000000.0 * 1000.0; 
 
-        // E field from V sensor X, in cross-track frame, mV/m:
+        // E field from V sensor X, in satellite-track frame, mV/m:
         ectFieldV[ind + 0] = -1.0 * (MYH() * bctField[ind + 2] - MYV() * bctField[ind + 1]) / 1000000000.0 * 1000.0; 
         ectFieldV[ind + 1] = -1.0 * (-1.0 * MXV() * bctField[ind + 2] + MYV() * bctField[ind + 0]) / 1000000000.0 * 1000.0; 
-        ectFieldV[ind + 2] = -1.0 * (MXV() * bctField[ind + 1] - MYH() * bctField[ind + 0]) / 1000000000.0 * 1000.0; 
+        ectFieldV[ind + 2] = -1.0 * (MXV() * bctField[ind + 1] - MYH() * bctField[ind + 0]) / 1000000000.0 * 1000.0;
+
+        // E in NEC from the satellite-track axes
+        loadTriplet(&ectFieldH[ind], v);
+        rotateTransposed(track, v, nec);
+        storeTriplet(nec, &state->ectFieldHNec[ind]);
+        loadTriplet(&ectFieldV[ind], v);
+        rotateTransposed(track, v, nec);
+        storeTriplet(nec, &state->ectFieldVNec[ind]);
+
+        // Corotation signal from the sensor frame, as in 0401, to NEC
+        loadTriplet(ADDR(10, 0, 3), v);
+        sensorToNec(rNecCrf, v, nec);
+        storeTriplet(nec, &state->vicrNec[ind]);
 
     }
 
@@ -659,6 +775,10 @@ int integrateField(ProcessorState *state, float *sourceField, int sourceStride, 
         nextContribution = signfactor * (absoluteValue ? fabsf(previousField) : previousField) * deltaTime;
         if (vsDistance)
             nextContribution *= magVsat;
+        // B, and so E, is NaN where the 0501 cal file's 50 Hz averaging had too few points.
+        // Skip those samples so the rest of the region's potential stays defined.
+        if (!isfinite(nextContribution))
+            nextContribution = 0.0;
         targetPotential[timeIndex] = targetPotential[timeIndex-1] + nextContribution;
         previousTime = currentTime;
         previousMagVsat = magVsat;
@@ -742,41 +862,31 @@ int regionMetrics(ProcessorState *state, long startInd, long stopInd, float *par
     return TIICT_OK;
 }
 
-// Copied and modified from TRACIS interpolate.c
+// Linear interpolation of values at increasing times onto increasing requestedTimes.
+// Requested times outside the span of times get NaN: there are no data there.
 void interpolate(double *times, double *values, size_t nVals, double *requestedTimes, long nRequestedValues, float *newValues)
 {
-    
-    size_t lastIndex = 0;
-    double thisTime = 0;
-    double t1 = 0, t2 = 0, dt = 0;
+    // Index of the first time after the requested time
+    size_t next = 0;
     double fraction = 0;
-    double v1 = 0, v2 = 0, dv = 0;
-    double x = 0, y = 0, z = 0;
-    double rad = 0;
-    double lat = 0;
-    double lon = 0;
-    for (size_t i = 0; i < nRequestedValues; i++)
+    for (long i = 0; i < nRequestedValues; i++)
     {
-        thisTime = requestedTimes[i];
-        // 
-        while (times[lastIndex] <= thisTime && lastIndex < nVals) 
+        double thisTime = requestedTimes[i];
+        while (next < nVals && times[next] <= thisTime)
+            next++;
+        if (next > 0 && times[next - 1] == thisTime)
         {
-            lastIndex++;
+            newValues[i] = (float)values[next - 1];
         }
-        // Extrapolate earlier or later, or the times are the same
-        if (times[lastIndex] >= thisTime || lastIndex == nVals - 1)
+        else if (next == 0 || next == nVals)
         {
-            newValues[i] = (float)values[lastIndex];
+            newValues[i] = NAN;
         }
-        // Interpolate
         else
         {
-            t1 = times[lastIndex];
-            t2 = times[lastIndex+1];
-            // Assumes t2 > t1
-            dt = thisTime - t1;
-            fraction = dt / (t2 - t1);
-            newValues[i] = (float)(values[lastIndex] + (values[lastIndex+1] - values[lastIndex]) * fraction);
+            // times[next - 1] < thisTime < times[next]
+            fraction = (thisTime - times[next - 1]) / (times[next] - times[next - 1]);
+            newValues[i] = (float)(values[next - 1] + (values[next] - values[next - 1]) * fraction);
         }
     }
 
@@ -801,6 +911,8 @@ bool downSampleHalfSecond(ProcessorState *state, long *index, long storageIndex,
     float *ectFieldH = state->ectFieldH;
     float *ectFieldV = state->ectFieldV;
     float *bctField = state->bctField;
+    // Vectors added in 0501, averaged in this order into floatBuf[40] onward
+    float *newVectors[6] = {state->igrfField, state->ectFieldHNec, state->ectFieldVNec, state->bNec, state->vicrNec, state->igrfNec};
     float *potentials = state->potentials;
     float *ni = state->lpNi;
     float *geoPotential = state->geoPotential;
@@ -877,6 +989,9 @@ bool downSampleHalfSecond(ProcessorState *state, long *index, long storageIndex,
         floatBuf[38] += exAdjusted[timeIndex];
         // Latest value
         floatBuf[39] = exAdjustmentParameter[timeIndex];
+        for (int v = 0; v < 6; v++)
+            for (int k = 0; k < 3; k++)
+                floatBuf[40 + 3 * v + k] += newVectors[v][timeIndex * 3 + k];
 
         flagBuf &= flags[timeIndex];
         fitInfoBuf |= fitInfo[timeIndex];
@@ -931,6 +1046,9 @@ bool downSampleHalfSecond(ProcessorState *state, long *index, long storageIndex,
         geoPotentialDifference[storageIndex] = floatBuf[37]; // Latest sample in the region 
         exAdjusted[storageIndex] = floatBuf[38] / 8.0;
         exAdjustmentParameter[storageIndex] = floatBuf[39]; // Latest sample in the region
+        for (int v = 0; v < 6; v++)
+            for (int k = 0; k < 3; k++)
+                newVectors[v][storageIndex * 3 + k] = floatBuf[40 + 3 * v + k] / 8.0;
         // Flags set to 0 at 16 Hz based on magnitude of flow,
         // are not reset at 2 Hz, to ensure integrity of 2 Hz measurements
         // One can review 16 Hz measurements to examine details of flow where even a
@@ -1198,20 +1316,11 @@ int shutdown(int status, ProcessorState *state)
     // state->potentials is just a pointer to one of the above potentials
     state->potentials = NULL;
 
-    if (state->xhat != NULL)
+    float **vectors[6] = {&state->igrfField, &state->ectFieldHNec, &state->ectFieldVNec, &state->bNec, &state->vicrNec, &state->igrfNec};
+    for (int v = 0; v < 6; v++)
     {
-        free(state->xhat);
-        state->xhat = NULL;
-    }
-    if (state->yhat != NULL)
-    {
-        free(state->yhat);
-        state->yhat = NULL;
-    }
-    if (state->zhat != NULL)
-    {
-        free(state->zhat);
-        state->zhat = NULL;
+        free(*vectors[v]);
+        *vectors[v] = NULL;
     }
     if (state->ectFieldH != NULL)
     {

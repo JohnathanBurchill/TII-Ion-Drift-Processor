@@ -43,13 +43,19 @@
 #define VSATN() (MEAS(11, 0, 3))
 #define VSATE() (MEAS(11, 1, 3))
 #define VSATC() (MEAS(11, 2, 3))
-#define BN() (MEAS(12, 0, 3))
-#define BE() (MEAS(12, 1, 3))
-#define BC() (MEAS(12, 2, 3))
 #define VMCPH() (MEAS(13, 0, 1))
 #define VMCPV() (MEAS(14, 0, 1))
 #define VBIASH() (MEAS(15, 0, 1))
 #define VBIASV() (MEAS(16, 0, 1))
 #define VFP() (MEAS(17, 0, 1))
+
+// Double and uint8 variables from the 0501 calibration files
+#define MEASD(n, m, d) (*((double*)dataBuffers[(n)] + ((d)*timeIndex + (m))))
+#define MEASU8(n) (*((uint8_t*)dataBuffers[(n)] + timeIndex))
+#define BVFM(m) (MEASD(12, (m), 3))
+#define IGRFVFM(m) (MEASD(18, (m), 3))
+#define QNECCRF(m) (MEASD(19, (m), 4))
+#define BVFMFLAG() (MEASU8(20))
+#define BAVGFLAG() (MEASU8(21))
 
 #endif // INDEXING_H

@@ -21,8 +21,8 @@
 #ifndef SETTINGS_H
 #define SETTINGS_H
 
-#define SOFTWARE_VERSION "1.5"
-#define SOFTWARE_VERSION_STRING "TIICT 2026-10-03"
+#define SOFTWARE_VERSION "1.6"
+#define SOFTWARE_VERSION_STRING "TIICT 2026-11-16"
 #define SECONDS_OF_DATA_REQUIRED_FOR_PROCESSING 300 // 5 minutes
 #define SECONDS_OF_DATA_REQUIRED_FOR_EXPORTING 60 // 1 minutes
 #define SECONDS_OF_BOUNDARY_DATA_REQUIRED_FOR_PROCESSING 1500 // 25 minutes to ensure coverage of each fit region
@@ -31,9 +31,15 @@
 #define FLAGS_MINIMUM_ION_DENSITY_VALUE 10000.0 // cm^-3
 #define DEFAULT_VI_ERROR -42.0
 #define MAX_ALLOWED_CDF_GAP_SECONDS 600.0 // CDF export split into separate files at gaps exceeding 10 minutes
-#define NUM_CAL_VARIABLES 18
-#define NUM_EXPORT_VARIABLES 40
-#define NUM_BUFFER_VARIABLES 40
+#define NUM_CAL_VARIABLES 22
+#define NUM_EXPORT_VARIABLES 58
+#define NUM_BUFFER_VARIABLES 58
+
+// Quality_flags bits 4 and 5. As for bits 0 to 3, 1 means good.
+#define QUALITY_FLAG_ATTITUDE_OK (1 << 4) // | |q_NEC_CRF| - 1 | <= QUATERNION_NORM_TOLERANCE
+#define QUALITY_FLAG_B_OK (1 << 5) // B-VFM-Flag is 0 and B-Avg-Flag is less than 2
+#define QUATERNION_NORM_TOLERANCE 1.0e-3
+#define EARTH_ROTATION_RATE 7.292115e-5 // rad/s
 
 #define MAX_NUMBER_OF_FITINFO_BITS_PER_COMPONENT 8
 #define GSL_FIT_MAXIMUM_ITERATIONS 500

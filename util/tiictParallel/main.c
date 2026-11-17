@@ -33,8 +33,8 @@
 #include <curses.h>
 
 
-#define SOFTWARE_VERSION "1.4"
-#define RELEASE_DATE "3 Oct 2026"
+#define SOFTWARE_VERSION "1.5"
+#define RELEASE_DATE "16 Nov 2026"
 
 #define THREAD_MANAGER_WAIT 100000 // uSeconds
 
