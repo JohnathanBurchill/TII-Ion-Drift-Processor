@@ -1124,7 +1124,7 @@ void initHeader(ProcessorState *state)
     // set up info header
     sprintf(infoHeader, "TIICT %c%s %04d-%02d-%02d: ", args->satellite[0], args->exportVersion, args->year, args->month, args->day);
     fprintf(state->processingLogFile, "\n%s-------------------------------------------------\n", infoHeader);
-    fprintf(state->processingLogFile, "%sVersion 0402 20261003\n", infoHeader);
+    fprintf(state->processingLogFile, "%sVersion 0501 20261116\n", infoHeader);
     fprintf(state->processingLogFile, "%sProcessing date: %s", infoHeader, asctime(timeParts));
 
     return;
